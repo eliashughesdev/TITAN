@@ -43,7 +43,7 @@ jobs:
                 artifacts/sbom/dotnet-packages.txt
 
       - name: Upload dependency inventory
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: titanmdm-dotnet-dependencies
           path: artifacts/sbom/dotnet-packages.txt
