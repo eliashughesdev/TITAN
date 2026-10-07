@@ -1,0 +1,345 @@
+.compliance-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+}
+
+.compliance-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.compliance-header h1 {
+  margin: 4px 0;
+  color: #0f172a;
+  font-size: 28px;
+}
+
+.compliance-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.compliance-eyebrow {
+  color: #4f63d8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.compliance-actions {
+  display: flex;
+  gap: 9px;
+}
+
+.compliance-primary,
+.compliance-secondary,
+.compliance-evaluate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compliance-primary {
+  border: 1px solid #4f63d8;
+  background: #4f63d8;
+  color: white;
+}
+
+.compliance-secondary,
+.compliance-evaluate {
+  border: 1px solid #dbe2ef;
+  background: white;
+  color: #334155;
+}
+
+.compliance-primary:disabled,
+.compliance-evaluate:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.compliance-message {
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.compliance-message.success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.compliance-message.error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.compliance-stats {
+  display: grid;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compliance-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 90px;
+  padding: 15px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+  background: white;
+}
+
+.compliance-stat.good {
+  border-color: #bbf7d0;
+}
+
+.compliance-stat.danger {
+  border-color: #fecaca;
+}
+
+.compliance-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #eef2ff;
+  color: #4f63d8;
+}
+
+.compliance-stat > div:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.compliance-stat span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.compliance-stat strong {
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.compliance-panel {
+  overflow: hidden;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: white;
+}
+
+.compliance-panel-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e8edf5;
+}
+
+.compliance-panel-header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.compliance-panel-header strong {
+  color: #172554;
+}
+
+.compliance-panel-header span {
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.compliance-device {
+  border-bottom: 1px solid #edf1f6;
+}
+
+.compliance-device-main {
+  display: grid;
+  grid-template-columns:
+    30px minmax(170px, 1.5fr)
+    115px 90px 75px 140px 105px;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+}
+
+.compliance-expand {
+  display: flex;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.compliance-device-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.compliance-device-name strong {
+  color: #172554;
+}
+
+.compliance-device-name span {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.compliance-status,
+.compliance-risk {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.compliance-status.compliant,
+.compliance-risk.low {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.compliance-status.noncompliant,
+.compliance-risk.high,
+.compliance-risk.critical {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.compliance-risk.medium {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.compliance-score,
+.compliance-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.compliance-score strong {
+  color: #0f172a;
+}
+
+.compliance-score span,
+.compliance-checks span {
+  font-size: 10px;
+}
+
+.compliance-checks .passed {
+  color: #047857;
+}
+
+.compliance-checks .failed {
+  color: #b91c1c;
+}
+
+.compliance-findings {
+  padding: 0 16px 16px 56px;
+  background: #f8fafc;
+}
+
+.compliance-finding {
+  display: flex;
+  gap: 11px;
+  margin-top: 9px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: white;
+}
+
+.compliance-finding.pass {
+  border-left: 3px solid #10b981;
+}
+
+.compliance-finding.fail {
+  border-left: 3px solid #ef4444;
+}
+
+.compliance-finding-icon {
+  color: #64748b;
+}
+
+.compliance-finding-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compliance-finding-title span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.compliance-finding p {
+  margin: 4px 0;
+  color: #475569;
+  font-size: 12px;
+}
+
+.compliance-finding small {
+  color: #94a3b8;
+}
+
+.compliance-empty,
+.compliance-no-findings {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+@media (max-width: 1150px) {
+  .compliance-stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .compliance-device-main {
+    grid-template-columns:
+      30px minmax(170px, 1fr)
+      100px 80px;
+  }
+
+  .compliance-score,
+  .compliance-checks {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .compliance-page {
+    padding: 16px;
+  }
+
+  .compliance-header {
+    flex-direction: column;
+  }
+
+  .compliance-stats {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,312 @@
+.helpdesk-attachments {
+  overflow: hidden;
+}
+
+.helpdesk-attachments__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.helpdesk-attachments__header > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.helpdesk-attachments__header svg {
+  color: #6268df;
+}
+
+.helpdesk-attachments__header h2 {
+  margin: 0 0 3px;
+  font-size: 16px;
+}
+
+.helpdesk-attachments__header p {
+  margin: 0;
+  color: #79859b;
+  font-size: 11px;
+}
+
+.helpdesk-attachments__header > span {
+  display: grid;
+  min-width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef0ff;
+  color: #5c62d5;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.helpdesk-attachments__refresh {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #dde4ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #58667d;
+  cursor: pointer;
+}
+
+.helpdesk-attachments__empty {
+  padding: 22px;
+  border: 1px dashed #dae2ec;
+  border-radius: 11px;
+  background: #fafcff;
+  color: #7a879a;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ============================================================
+   SIGNATURE
+   ============================================================ */
+
+.helpdesk-signature-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.helpdesk-signature-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e0e5ee;
+  border-radius: 11px;
+  background: #fafbff;
+  color: #3d4b63;
+  text-align: left;
+  cursor: pointer;
+}
+
+.helpdesk-signature-card:hover {
+  border-color: #c7cbee;
+  background: #f7f7ff;
+}
+
+.helpdesk-signature-card__icon {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: #eef0ff;
+  color: #6268dd;
+}
+
+.helpdesk-signature-card > div {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.helpdesk-signature-card strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helpdesk-signature-card small {
+  color: #7d899c;
+  font-size: 9px;
+}
+
+.helpdesk-signature-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #f5f7ff;
+  color: #66728a;
+  font-size: 9px;
+}
+
+/* ============================================================
+   NORMAL ATTACHMENTS
+   ============================================================ */
+
+.helpdesk-attachments__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.helpdesk-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px;
+  border: 1px solid #e2e7ef;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+.helpdesk-attachment-row__icon {
+  display: grid;
+  flex: 0 0 37px;
+  width: 37px;
+  height: 37px;
+  place-items: center;
+  border-radius: 9px;
+  background: #eef0ff;
+  color: #6067d8;
+}
+
+.helpdesk-attachment-row__info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.helpdesk-attachment-row__info strong {
+  overflow: hidden;
+  color: #33415b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helpdesk-attachment-row__info small {
+  color: #7c899c;
+  font-size: 9px;
+}
+
+.helpdesk-attachment-row__actions {
+  display: flex;
+  gap: 7px;
+}
+
+.helpdesk-attachment-row__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid #dce3ec;
+  border-radius: 7px;
+  background: #fff;
+  color: #56647b;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ============================================================
+   PREVIEW
+   ============================================================ */
+
+.helpdesk-preview {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: rgb(16 24 40 / 70%);
+  backdrop-filter: blur(4px);
+}
+
+.helpdesk-preview__dialog {
+  display: flex;
+  width: min(1050px, 96vw);
+  height: min(780px, 92vh);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 30px 80px
+    rgb(15 23 42 / 35%);
+}
+
+.helpdesk-preview__dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 14px 17px;
+  border-bottom: 1px solid #e4e8ef;
+}
+
+.helpdesk-preview__dialog header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.helpdesk-preview__dialog header strong {
+  font-size: 12px;
+}
+
+.helpdesk-preview__dialog header span {
+  color: #7b8799;
+  font-size: 9px;
+}
+
+.helpdesk-preview__dialog header button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: #f4f6f9;
+  cursor: pointer;
+}
+
+.helpdesk-preview__body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  overflow: auto;
+  padding: 18px;
+  background: #f3f5f8;
+}
+
+.helpdesk-preview__body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.helpdesk-preview__body iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 9px;
+  background: #fff;
+}
+
+@media (max-width: 700px) {
+  .helpdesk-attachment-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .helpdesk-attachment-row__actions {
+    width: 100%;
+  }
+
+  .helpdesk-attachment-row__actions button {
+    flex: 1;
+    justify-content: center;
+  }
+}

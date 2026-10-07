@@ -1,0 +1,1171 @@
+.login-page {
+  width: 100%;
+  min-height: 100vh;
+
+  display: grid;
+  grid-template-columns:
+    minmax(460px, 1.08fr)
+    minmax(540px, 0.92fr);
+
+  background:
+    linear-gradient(
+      135deg,
+      #eef3ff 0%,
+      #f7f9fd 48%,
+      #ffffff 100%
+    );
+}
+
+.login-brand {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  min-height: 100vh;
+
+  padding:
+    52px
+    64px;
+
+  overflow: hidden;
+
+  color: #ffffff;
+
+  background:
+    radial-gradient(
+      circle at 20% 15%,
+      rgba(112, 135, 255, 0.26),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 85% 85%,
+      rgba(111, 85, 255, 0.20),
+      transparent 32%
+    ),
+    linear-gradient(
+      145deg,
+      #17295d 0%,
+      #142653 42%,
+      #0f1e47 100%
+    );
+}
+
+.login-brand::before {
+  content: "";
+
+  position: absolute;
+  top: -120px;
+  right: -140px;
+
+  width: 340px;
+  height: 340px;
+
+  border-radius: 999px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+}
+
+.login-brand::after {
+  content: "";
+
+  position: absolute;
+  left: -120px;
+  bottom: -180px;
+
+  width: 420px;
+  height: 420px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(97, 124, 255, 0.08);
+
+  filter: blur(2px);
+}
+
+.login-brand__content {
+  position: relative;
+  z-index: 2;
+
+  width: 100%;
+  max-width: 660px;
+
+  display: flex;
+  flex-direction: column;
+
+  min-height: 82vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand__mark {
+  width: 44px;
+  height: 44px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 44px;
+
+  border-radius: 13px;
+
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      135deg,
+      #6d83ff,
+      #4968ee
+    );
+
+  font-size: 20px;
+  font-weight: 800;
+
+  box-shadow:
+    0 14px 30px rgba(61, 91, 222, 0.32);
+}
+
+.brand strong {
+  display: block;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.brand span {
+  display: block;
+  margin-top: 2px;
+
+  color:
+    rgba(212, 223, 250, 0.64);
+
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.login-brand__hero {
+  margin: auto 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 17px;
+
+  color: #9cb0ff;
+
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.login-brand__hero h1 {
+  margin: 0;
+  max-width: 560px;
+
+  color: #ffffff;
+
+  font-size:
+    clamp(40px, 4vw, 62px);
+
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  font-weight: 760;
+}
+
+.login-brand__hero p {
+  max-width: 540px;
+
+  margin:
+    22px 0 28px;
+
+  color:
+    rgba(221, 230, 250, 0.76);
+
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.platforms {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.platforms > div {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  padding:
+    0 13px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.10);
+
+  border-radius: 12px;
+
+  color:
+    rgba(242, 246, 255, 0.88);
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  backdrop-filter: blur(10px);
+
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.platforms svg {
+  color: #8da4ff;
+}
+
+.login-brand__footer {
+  margin-top: auto;
+
+  color:
+    rgba(192, 205, 236, 0.50);
+
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ================= RIGHT SIDE ================= */
+
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 100vh;
+
+  padding:
+    32px 36px;
+}
+
+.login-scene {
+  width: 100%;
+  max-width: 560px;
+
+  display: flex;
+  justify-content: center;
+}
+
+.login-card-scene {
+  position: relative;
+
+  width: min(100%, 460px);
+
+  padding-top: 180px;
+  padding-bottom: 26px;
+}
+
+.login-card {
+  position: relative;
+  z-index: 3;
+
+  width: 100%;
+
+  padding:
+    34px;
+
+  border:
+    1px solid
+    rgba(149, 169, 205, 0.24);
+
+  border-radius: 24px;
+
+  background:
+    rgba(255, 255, 255, 0.96);
+
+  box-shadow:
+    0 26px 70px rgba(25, 44, 84, 0.13);
+}
+
+.login-card::before {
+  content: "";
+
+  position: absolute;
+  inset: -1px;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.75),
+      rgba(255, 255, 255, 0)
+    );
+
+  pointer-events: none;
+}
+
+.login-card__mobile-brand {
+  display: none;
+}
+
+.login-card__heading {
+  position: relative;
+  z-index: 2;
+
+  margin-bottom: 28px;
+}
+
+.login-icon {
+  width: 48px;
+  height: 48px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 18px;
+
+  border-radius: 14px;
+
+  color: var(--titan-primary);
+  background: var(--titan-primary-soft);
+}
+
+.login-card__heading h2 {
+  margin: 0;
+
+  color: var(--titan-text);
+
+  font-size: 26px;
+  letter-spacing: -0.025em;
+}
+
+.login-card__heading p {
+  margin: 8px 0 0;
+
+  color: var(--titan-text-3);
+
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.login-form {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  color: var(--titan-text-2);
+
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 46px;
+
+  box-sizing: border-box;
+
+  padding:
+    0 13px;
+
+  border:
+    1px solid
+    rgba(143, 163, 201, 0.34);
+
+  border-radius: 11px;
+
+  outline: none;
+
+  color: var(--titan-text);
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff,
+      #fbfcff
+    );
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.login-form input:focus {
+  border-color:
+    rgba(79, 108, 247, 0.52);
+
+  background: #ffffff;
+
+  box-shadow:
+    0 0 0 4px rgba(79, 108, 247, 0.09);
+}
+
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  padding-right: 46px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 6px;
+
+  width: 36px;
+  height: 36px;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+
+  color: var(--titan-text-4);
+  background: transparent;
+
+  cursor: pointer;
+
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.password-toggle:hover:not(:disabled) {
+  color: var(--titan-primary);
+  background: var(--titan-primary-soft);
+}
+
+.login-error {
+  padding:
+    11px 13px;
+
+  border:
+    1px solid
+    rgba(217, 76, 99, 0.18);
+
+  border-radius: 10px;
+
+  color: #a93448;
+  background: var(--titan-danger-soft);
+
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.login-submit {
+  min-height: 46px;
+
+  border:
+    1px solid
+    var(--titan-primary);
+
+  border-radius: 11px;
+
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      180deg,
+      #5d78fb,
+      #4664ef
+    );
+
+  box-shadow:
+    0 12px 24px rgba(79, 108, 247, 0.22);
+
+  font-size: 12px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    filter 160ms ease;
+}
+
+.login-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+
+  box-shadow:
+    0 15px 30px rgba(79, 108, 247, 0.27);
+}
+
+.login-submit:disabled,
+.password-toggle:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.login-security {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  margin-top: 20px;
+
+  color: var(--titan-text-4);
+  font-size: 10px;
+}
+
+.login-security svg {
+  color: var(--titan-success);
+}
+
+/* ================= TRANSITION ================= */
+
+.login-transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(89, 118, 255, 0.14),
+      rgba(245, 248, 255, 0.72) 48%,
+      rgba(245, 248, 255, 0.92) 100%
+    );
+
+  backdrop-filter: blur(10px);
+
+  animation:
+    titanLoginOverlayIn 180ms ease-out;
+}
+
+.login-transition-overlay__portal {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+
+  border-radius: 999px;
+
+  border:
+    3px solid
+    rgba(93, 119, 251, 0.24);
+
+  box-shadow:
+    0 0 0 18px rgba(93, 119, 251, 0.07),
+    0 0 44px rgba(93, 119, 251, 0.20);
+
+  animation:
+    titanPortalPulse 0.9s ease-in-out infinite;
+}
+
+.login-transition-overlay__portal::before,
+.login-transition-overlay__portal::after {
+  content: "";
+
+  position: absolute;
+  inset: 16px;
+
+  border-radius: inherit;
+
+  border:
+    1px dashed
+    rgba(93, 119, 251, 0.26);
+}
+
+.login-transition-overlay__portal::after {
+  inset: 38px;
+
+  border-style: solid;
+  border-color:
+    rgba(132, 212, 255, 0.34);
+}
+
+.login-transition-overlay__content {
+  position: relative;
+  z-index: 2;
+
+  min-width: 260px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+
+  text-align: center;
+
+  padding:
+    18px 22px;
+}
+
+.login-transition-overlay__content h3 {
+  margin: 0;
+
+  color: var(--titan-text);
+
+  font-size: 18px;
+}
+
+.login-transition-overlay__content p {
+  margin: 0;
+
+  color: var(--titan-text-3);
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.login-page--transitioning .login-card {
+  transform:
+    scale(0.995);
+  filter: saturate(0.96);
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 980px) {
+  .login-page {
+    grid-template-columns: 1fr;
+  }
+
+  .login-brand {
+    display: none;
+  }
+
+  .login-panel {
+    padding: 20px;
+  }
+
+  .login-card-scene {
+    width: min(100%, 430px);
+    padding-top: 155px;
+  }
+
+  .login-card__mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    margin-bottom: 28px;
+  }
+
+  .login-card__mobile-brand strong {
+    color: var(--titan-text);
+    font-size: 16px;
+  }
+
+  .login-card__mobile-brand span {
+    color: var(--titan-text-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .login-panel {
+    padding: 14px;
+  }
+
+  .login-card-scene {
+    width: min(100%, 100%);
+    padding-top: 132px;
+  }
+
+  .login-card {
+    padding:
+      24px 20px;
+
+    border-radius: 18px;
+  }
+
+  .login-transition-overlay__portal {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+/* ================= MOTION ================= */
+
+@keyframes titanLoginOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes titanPortalPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.82;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-transition-overlay,
+  .login-transition-overlay__portal {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   TITAN ACCESS TRANSITION — T2
+   ============================================================ */
+
+.login-titan-transition {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 9999;
+
+  display: grid;
+  place-items: center;
+
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at center,
+      #203a86 0%,
+      #132657 34%,
+      #09142f 72%,
+      #050b1b 100%
+    );
+
+  animation:
+    titanTransitionEnter
+    .22s ease-out;
+}
+
+.login-titan-transition__grid {
+  position: absolute;
+
+  inset:
+    -30%;
+
+  opacity: .18;
+
+  background-image:
+    linear-gradient(
+      rgba(
+        116,
+        151,
+        255,
+        .20
+      )
+      1px,
+      transparent
+      1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(
+        116,
+        151,
+        255,
+        .20
+      )
+      1px,
+      transparent
+      1px
+    );
+
+  background-size:
+    42px 42px;
+
+  transform:
+    perspective(700px)
+    rotateX(63deg)
+    translateY(26%);
+
+  animation:
+    titanGridMove
+    1.3s linear infinite;
+}
+
+.login-titan-transition__beam {
+  position: absolute;
+
+  left: 50%;
+  top: -30%;
+
+  width: 190px;
+  height: 160%;
+
+  transform:
+    translateX(-50%);
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(
+        96,
+        155,
+        255,
+        .12
+      ),
+      rgba(
+        170,
+        224,
+        255,
+        .30
+      ),
+      rgba(
+        96,
+        155,
+        255,
+        .12
+      ),
+      transparent
+    );
+
+  filter:
+    blur(16px);
+
+  animation:
+    titanBeamPulse
+    .8s ease-in-out infinite;
+}
+
+.login-titan-transition__ring {
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  border:
+    1px solid
+    rgba(
+      135,
+      178,
+      255,
+      .32
+    );
+
+  border-radius: 999px;
+
+  transform:
+    translate(
+      -50%,
+      -50%
+    );
+
+  box-shadow:
+    0
+    0
+    30px
+    rgba(
+      77,
+      127,
+      255,
+      .10
+    );
+}
+
+.login-titan-transition__ring--1 {
+  width: 270px;
+  height: 270px;
+
+  animation:
+    titanRingPulse
+    1s ease-in-out infinite;
+}
+
+.login-titan-transition__ring--2 {
+  width: 390px;
+  height: 390px;
+
+  animation:
+    titanRingPulse
+    1s .14s ease-in-out infinite;
+}
+
+.login-titan-transition__ring--3 {
+  width: 530px;
+  height: 530px;
+
+  animation:
+    titanRingPulse
+    1s .28s ease-in-out infinite;
+}
+
+.login-titan-transition__content {
+  position: relative;
+
+  z-index: 4;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  min-width: 330px;
+
+  color: #fff;
+
+  text-align: center;
+
+  animation:
+    titanContentEnter
+    .40s ease-out;
+}
+
+.login-titan-transition__mark {
+  width: 72px;
+  height: 72px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 17px;
+
+  border:
+    1px solid
+    rgba(
+      150,
+      194,
+      255,
+      .46
+    );
+
+  border-radius: 22px;
+
+  color: #fff;
+
+  background:
+    linear-gradient(
+      135deg,
+      #6e8dff,
+      #4163e8
+    );
+
+  box-shadow:
+    0
+    0
+    0
+    8px
+    rgba(
+      84,
+      119,
+      255,
+      .08
+    ),
+    0
+    15px
+    50px
+    rgba(
+      39,
+      91,
+      228,
+      .40
+    );
+
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.login-titan-transition__content > span {
+  color:
+    #9eb6ff;
+
+  font-size: 10px;
+  font-weight: 850;
+
+  letter-spacing:
+    .24em;
+}
+
+.login-titan-transition__content h2 {
+  margin:
+    8px 0 4px;
+
+  color: #fff;
+
+  font-size: 25px;
+  font-weight: 750;
+
+  letter-spacing:
+    -.02em;
+}
+
+.login-titan-transition__content p {
+  margin: 0;
+
+  color:
+    rgba(
+      220,
+      230,
+      255,
+      .70
+    );
+
+  font-size: 11px;
+}
+
+.login-titan-transition__progress {
+  width: 260px;
+  height: 4px;
+
+  overflow: hidden;
+
+  margin-top: 22px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      .09
+    );
+}
+
+.login-titan-transition__progress span {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #6987ff,
+      #9de1ff
+    );
+
+  transform-origin: left;
+
+  animation:
+    titanProgress
+    1.2s ease-out forwards;
+}
+
+@keyframes titanTransitionEnter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes titanGridMove {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+
+  to {
+    background-position:
+      0 42px,
+      42px 0;
+  }
+}
+
+@keyframes titanBeamPulse {
+  0%,
+  100% {
+    opacity: .45;
+  }
+
+  50% {
+    opacity: .92;
+  }
+}
+
+@keyframes titanRingPulse {
+  0% {
+    opacity: .12;
+
+    transform:
+      translate(
+        -50%,
+        -50%
+      )
+      scale(.90);
+  }
+
+  55% {
+    opacity: .55;
+  }
+
+  100% {
+    opacity: 0;
+
+    transform:
+      translate(
+        -50%,
+        -50%
+      )
+      scale(1.12);
+  }
+}
+
+@keyframes titanContentEnter {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(8px)
+      scale(.98);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+@keyframes titanProgress {
+  from {
+    transform:
+      scaleX(0);
+  }
+
+  to {
+    transform:
+      scaleX(1);
+  }
+}

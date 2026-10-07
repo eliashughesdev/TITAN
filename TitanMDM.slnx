@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/agents/" />
+  <Folder Name="/agents/windows/">
+    <Project Path="agents/windows/TitanMDM.RemoteHost/TitanMDM.RemoteHost.csproj" />
+    <Project Path="agents/windows/TitanMDM.WindowsAgent/TitanMDM.WindowsAgent.csproj" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/backend/">
+    <Project Path="src/backend/TitanMDM.Api/TitanMDM.Api.csproj" />
+    <Project Path="src/backend/TitanMDM.Application/TitanMDM.Application.csproj" />
+    <Project Path="src/backend/TitanMDM.Domain/TitanMDM.Domain.csproj" />
+    <Project Path="src/backend/TitanMDM.Infrastructure/TitanMDM.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TitanMDM.IntegrationTests/TitanMDM.IntegrationTests.csproj" />
+    <Project Path="tests/TitanMDM.UnitTests/TitanMDM.UnitTests.csproj" />
+  </Folder>
+</Solution>

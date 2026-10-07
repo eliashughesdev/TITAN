@@ -1,0 +1,175 @@
+.kiosk-platform-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 10px;
+}
+
+.kiosk-platform-tabs > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #dbe2ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #64748b;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kiosk-platform-tabs > button.active {
+  border-color: #4f63d8;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.kiosk-platform-tabs button > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-platform-tabs span {
+  font-size: 10px;
+  opacity: .75;
+}
+
+.kiosk-windows-app-inputs {
+  display: grid;
+  grid-template-columns: .7fr 1fr 1.3fr auto;
+  gap: 8px;
+}
+
+.kiosk-profile {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #edf1f6;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kiosk-profile.selected {
+  margin: 2px 0;
+  padding-left: 8px;
+  padding-right: 8px;
+  border: 1px solid #818cf8;
+  border-radius: 9px;
+  background: #eef2ff;
+}
+
+.kiosk-windows-deployment {
+  padding: 18px;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.kiosk-windows-deployment > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.kiosk-windows-deployment > header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kiosk-windows-deployment > header span {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.kiosk-deployment-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.kiosk-deployment-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.kiosk-deployment-grid input,
+.kiosk-deployment-grid select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #dbe2ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.kiosk-deployment-actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.kiosk-deployment-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #4f63d8;
+  border-radius: 8px;
+  background: #4f63d8;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kiosk-deployment-actions button:nth-child(2) {
+  border-color: #dbe2ef;
+  background: #fff;
+  color: #334155;
+}
+
+.kiosk-deployment-actions button.danger {
+  margin-left: auto;
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.kiosk-deployment-actions button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.kiosk-android-preserved {
+  padding: 20px;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.kiosk-android-preserved > p {
+  color: #64748b;
+}
+
+@media (max-width: 900px) {
+  .kiosk-windows-app-inputs,
+  .kiosk-deployment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kiosk-platform-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kiosk-deployment-actions {
+    flex-direction: column;
+  }
+
+  .kiosk-deployment-actions button.danger {
+    margin-left: 0;
+  }
+}

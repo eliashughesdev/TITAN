@@ -1,0 +1,342 @@
+.titan-settings,
+.entra-settings {
+  width: min(100%, 1440px);
+  min-width: 0;
+  margin-inline: auto;
+  color: #17233b;
+}
+
+.titan-settings *,
+.entra-settings *,
+.titan-settings *::before,
+.entra-settings *::before,
+.titan-settings *::after,
+.entra-settings *::after {
+  box-sizing: border-box;
+}
+
+.titan-settings__header {
+  padding: 32px;
+  border: 1px solid #dce5f5;
+  border-radius: 22px;
+  background: linear-gradient(115deg, #ffffff 42%, #eff3ff);
+  box-shadow: 0 12px 32px rgb(31 54 101 / 6%);
+}
+
+.titan-settings__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #5364e9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.titan-settings__header h1 {
+  margin: 14px 0 8px;
+  color: #17233b;
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.15;
+}
+
+.titan-settings__header p,
+.titan-settings__section-heading p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.titan-settings__section {
+  margin-top: 24px;
+  padding: 26px;
+  border: 1px solid #e0e7f3;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(31 54 101 / 4%);
+}
+
+.titan-settings__section-heading h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.titan-settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.titan-settings__card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 112px;
+  padding: 20px;
+  border: 1px solid #dce4f7;
+  border-radius: 16px;
+  background: #f8faff;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.titan-settings__card:hover {
+  transform: translateY(-2px);
+  border-color: #8795f2;
+  box-shadow: 0 12px 24px rgb(70 81 171 / 10%);
+}
+
+.titan-settings__card:focus-visible {
+  outline: 3px solid #5364e9;
+  outline-offset: 3px;
+}
+
+.titan-settings__card-icon {
+  display: grid;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #e9edff;
+  color: #5364e9;
+}
+
+.titan-settings__card-content {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.titan-settings__card-content strong {
+  font-size: 16px;
+}
+
+.titan-settings__card-content > span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.titan-settings__card-arrow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #5364e9;
+}
+
+/* Pantalla de Microsoft Entra ID */
+
+.entra-settings {
+  gap: 20px;
+}
+
+.entra-settings .titan-section-card {
+  min-width: 0;
+  padding: 26px;
+  border: 1px solid #e0e7f3;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(31 54 101 / 5%);
+}
+
+.entra-settings .titan-section-card h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.entra-settings .titan-section-card > p {
+  margin: 6px 0 14px;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.entra-settings .helpdesk-entra-form {
+  display: grid;
+  gap: 18px;
+}
+
+.entra-settings .helpdesk-entra-form > label:not(.helpdesk-check) {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entra-settings .helpdesk-entra-form > label:not(.helpdesk-check) input,
+.entra-settings .helpdesk-entra-form > label:not(.helpdesk-check) select,
+.entra-settings .helpdesk-create__row > input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 13px;
+  border: 1px solid #ccd6e8;
+  border-radius: 11px;
+  background: #fff;
+  color: #17233b;
+  font: inherit;
+  font-weight: 400;
+}
+
+.entra-settings .helpdesk-entra-form input:focus,
+.entra-settings .helpdesk-entra-form select:focus,
+.entra-settings .helpdesk-create__row > input:focus {
+  outline: 3px solid rgb(83 100 233 / 15%);
+  border-color: #6475ef;
+}
+
+.entra-settings .helpdesk-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  margin: 0;
+  color: #334155;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.entra-settings .helpdesk-check input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #5364e9;
+}
+
+.entra-settings .helpdesk-create__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entra-settings .helpdesk-create__row > input {
+  flex: 1 1 280px;
+}
+
+.entra-settings .titan-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid #5364e9;
+  border-radius: 11px;
+  background: #5364e9;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.entra-settings .titan-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #4554cb;
+}
+
+.entra-settings .titan-button--ghost {
+  border-color: #d7dff0;
+  background: #fff;
+  color: #334155;
+}
+
+.entra-settings .titan-button--ghost:hover:not(:disabled) {
+  background: #f2f5ff;
+}
+
+.entra-settings .titan-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.entra-settings .helpdesk-table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.entra-settings .helpdesk-table th,
+.entra-settings .helpdesk-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #e8edf6;
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.entra-settings .helpdesk-table th {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.entra-settings .helpdesk-table tbody tr:hover {
+  background: #f8faff;
+}
+
+.entra-settings .helpdesk-table td {
+  overflow-wrap: anywhere;
+}
+
+.entra-settings .helpdesk-table td .titan-button {
+  white-space: nowrap;
+}
+
+.entra-settings .helpdesk-ok,
+.entra-settings .helpdesk-error {
+  padding: 13px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.entra-settings .helpdesk-ok {
+  border: 1px solid #b7e2c6;
+  background: #f0fbf3;
+  color: #166534;
+}
+
+.entra-settings .helpdesk-error {
+  border: 1px solid #f1bfc4;
+  background: #fff1f2;
+  color: #b42332;
+}
+
+@media (max-width: 760px) {
+  .titan-settings__header,
+  .titan-settings__section,
+  .entra-settings .titan-section-card {
+    padding: 18px;
+  }
+
+  .entra-settings .helpdesk-create__row {
+    align-items: stretch;
+  }
+
+  .entra-settings .helpdesk-create__row > input,
+  .entra-settings .helpdesk-create__row .titan-button {
+    flex: 1 1 100%;
+  }
+}

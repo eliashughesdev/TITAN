@@ -1,0 +1,49 @@
+name: SBOM
+
+on:
+  workflow_dispatch:
+
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+
+  dotnet-sbom:
+
+    name: Generate .NET dependency inventory
+
+    runs-on: windows-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore TitanMDM.slnx
+
+      - name: Generate dependency inventory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/sbom | Out-Null
+
+          dotnet list TitanMDM.slnx package `
+            --include-transitive `
+            | Out-File `
+                -Encoding utf8 `
+                artifacts/sbom/dotnet-packages.txt
+
+      - name: Upload dependency inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: titanmdm-dotnet-dependencies
+          path: artifacts/sbom/dotnet-packages.txt

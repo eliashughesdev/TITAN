@@ -1,0 +1,26 @@
+namespace TitanMDM.Application.Devices;
+
+public sealed record DeviceDetailsDto(
+    Guid Id,
+    Guid OrganizationId,
+    string DeviceName,
+    string Platform,
+    string Status,
+    string ComplianceStatus,
+    string SerialNumber,
+    string? Imei,
+    string? Manufacturer,
+    string? Model,
+    string? OperatingSystem,
+    string? OperatingSystemVersion,
+    string? AgentVersion,
+    string? IpAddress,
+    string? MacAddress,
+    string? AssignedUser,
+    string? Department,
+    int? BatteryLevel,
+    bool IsManaged,
+    DateTime? EnrolledAtUtc,
+    DateTime? LastSeenAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);

@@ -1,0 +1,335 @@
+.titan-agent-chat {
+  --chat-ink: #192b46;
+  --chat-muted: #697b96;
+  --chat-line: #e2eaf5;
+  --chat-blue: #2868e8;
+
+  position: fixed;
+  right: clamp(12px, 3vw, 34px);
+  bottom: clamp(18px, 4vw, 38px);
+  z-index: 1100;
+
+  display: flex;
+  flex-direction: column;
+
+  width: min(420px, calc(100vw - 24px));
+  height: min(620px, calc(100dvh - 36px));
+  min-height: 360px;
+
+  overflow: hidden;
+  border: 1px solid rgba(198, 215, 239, 0.9);
+  border-radius: 28px;
+
+  color: var(--chat-ink);
+  background: #fff;
+
+  box-shadow:
+    0 28px 75px rgba(21, 51, 98, 0.21),
+    0 5px 18px rgba(21, 51, 98, 0.08);
+}
+
+.titan-agent-chat *,
+.titan-agent-chat *::before,
+.titan-agent-chat *::after {
+  box-sizing: border-box;
+}
+
+.titan-agent-chat__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+
+  min-height: 76px;
+  padding: 14px 16px;
+
+  color: #fff;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(140, 210, 255, 0.35), transparent 48%),
+    linear-gradient(125deg, #102e66 0%, #245bd0 58%, #3779ed 100%);
+}
+
+.titan-agent-chat__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+
+  width: 44px;
+  height: 44px;
+
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 16px;
+
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.25);
+
+  font-size: 23px;
+}
+
+.titan-agent-chat__identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.titan-agent-chat__identity strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.titan-agent-chat__identity span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titan-agent-chat__close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+
+  width: 34px;
+  height: 34px;
+  padding: 0;
+
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.titan-agent-chat__close:hover {
+  background: rgba(255, 255, 255, 0.23);
+}
+
+.titan-agent-chat__context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+
+  min-height: 38px;
+  padding: 8px 18px;
+
+  border-bottom: 1px solid var(--chat-line);
+
+  color: var(--chat-muted);
+  background: #f8fbff;
+
+  font-size: 11px;
+}
+
+.titan-agent-chat__status-dot {
+  display: inline-block;
+  flex: 0 0 7px;
+
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+
+  background: #27b67a;
+  box-shadow: 0 0 0 3px rgba(39, 182, 122, 0.13);
+}
+
+.titan-agent-chat__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+
+  min-height: 0;
+  padding: 20px 17px;
+  overflow-y: auto;
+
+  background:
+    radial-gradient(circle at 0% 0%, rgba(224, 238, 255, 0.55), transparent 35%),
+    #fff;
+
+  scrollbar-color: #c9d7ec transparent;
+  scrollbar-width: thin;
+}
+
+.titan-agent-chat__message {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  max-width: 88%;
+}
+
+.titan-agent-chat__message--assistant {
+  align-self: flex-start;
+}
+
+.titan-agent-chat__message--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.titan-agent-chat__bubble {
+  padding: 12px 15px;
+  border-radius: 18px;
+
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.titan-agent-chat__message--assistant .titan-agent-chat__bubble {
+  border: 1px solid #e4ebf6;
+  border-bottom-left-radius: 6px;
+
+  color: #2d3d56;
+  background: #f3f7fd;
+}
+
+.titan-agent-chat__message--user .titan-agent-chat__bubble {
+  border-bottom-right-radius: 6px;
+
+  color: #fff;
+  background: linear-gradient(135deg, #235ed4, #3982ef);
+  box-shadow: 0 5px 13px rgba(36, 100, 220, 0.17);
+}
+
+.titan-agent-chat__message-meta {
+  padding: 0 4px;
+
+  color: #8a98ac;
+  font-size: 10px;
+}
+
+.titan-agent-chat__error {
+  flex: 0 0 auto;
+  margin: 0 17px 10px;
+  padding: 10px 12px;
+
+  border: 1px solid #ffd5d5;
+  border-radius: 12px;
+
+  color: #9d3030;
+  background: #fff5f5;
+
+  font-size: 12px;
+}
+
+.titan-agent-chat__composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+
+  padding: 13px 15px max(15px, env(safe-area-inset-bottom));
+
+  border-top: 1px solid var(--chat-line);
+  background: #fff;
+}
+
+.titan-agent-chat__input {
+  display: block;
+  flex: 1 1 auto;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 120px;
+
+  padding: 11px 14px;
+
+  resize: vertical;
+
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  outline: none;
+
+  color: var(--chat-ink);
+  background: #f7f9fd;
+
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.titan-agent-chat__input::placeholder {
+  color: #8b99ae;
+}
+
+.titan-agent-chat__input:focus {
+  border-color: #75a5f2;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(64, 126, 232, 0.12);
+}
+
+.titan-agent-chat__send {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  border: 0;
+  border-radius: 15px;
+
+  color: #fff;
+  background: linear-gradient(145deg, #307af0, #2059ce);
+  box-shadow: 0 5px 13px rgba(37, 101, 219, 0.24);
+
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.titan-agent-chat__send:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.titan-agent-chat__send:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.titan-agent-chat__hint {
+  flex: 0 0 auto;
+  padding: 0 17px 12px;
+
+  color: #8794a8;
+  background: #fff;
+
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .titan-agent-chat {
+    right: 8px;
+    bottom: 8px;
+
+    width: calc(100vw - 16px);
+    height: min(650px, calc(100dvh - 16px));
+
+    border-radius: 23px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-agent-chat *,
+  .titan-agent-chat *::before,
+  .titan-agent-chat *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

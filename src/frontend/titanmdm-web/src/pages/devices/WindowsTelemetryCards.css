@@ -1,0 +1,150 @@
+.windows-telemetry-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.windows-telemetry-card {
+  min-height: 105px;
+  padding: 13px;
+  border: 1px solid #e4e8ef;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.windows-telemetry-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.windows-telemetry-card__header > svg {
+  color: #2563eb;
+}
+
+.windows-telemetry-card__header span {
+  color: #667085;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.windows-telemetry-card strong {
+  display: block;
+  margin-top: 12px;
+  color: #1d2939;
+  font-size: 18px;
+}
+
+.windows-telemetry-card small {
+  display: block;
+  margin-top: 5px;
+  color: #98a2b3;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.windows-telemetry-state {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #98a2b3;
+}
+
+.windows-telemetry-state--success {
+  background: #22c55e;
+}
+
+.windows-telemetry-state--warning {
+  background: #f59e0b;
+}
+
+.windows-telemetry-state--danger {
+  background: #ef4444;
+}
+
+.windows-telemetry-state--unknown {
+  background: #94a3b8;
+}
+
+.windows-telemetry-card--success {
+  border-color: #bbf7d0;
+  background: #fbfffc;
+}
+
+.windows-telemetry-card--warning {
+  border-color: #fde68a;
+  background: #fffdf7;
+}
+
+.windows-telemetry-card--danger {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.windows-update-history {
+  margin-top: 14px;
+  overflow: auto;
+  border: 1px solid #e5e9ef;
+  border-radius: 10px;
+}
+
+.windows-update-history table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+}
+
+.windows-update-history th {
+  padding: 9px 11px;
+  color: #667085;
+  background: #f8fafc;
+  border-bottom: 1px solid #e4e7ec;
+  text-align: left;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.windows-update-history td {
+  padding: 9px 11px;
+  border-bottom: 1px solid #eef1f4;
+  color: #475467;
+  font-size: 9px;
+}
+
+.windows-telemetry-empty {
+  padding: 28px;
+  color: #98a2b3;
+  text-align: center;
+  font-size: 9px;
+}
+
+.windows-telemetry-section-title {
+  margin: 18px 0 8px;
+  color: #344054;
+  font-size: 11px;
+}
+
+@media (max-width: 1200px) {
+  .windows-telemetry-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 650px) {
+  .windows-telemetry-grid {
+    grid-template-columns: 1fr;
+  }
+}

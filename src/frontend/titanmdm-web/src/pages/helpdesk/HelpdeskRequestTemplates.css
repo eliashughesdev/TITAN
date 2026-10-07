@@ -1,0 +1,198 @@
+.hrt {
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 17px;
+  padding: 14px;
+  border: 1px solid #e0e5f2;
+  border-radius: 13px;
+  background: #fafbff;
+}
+
+.hrt__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #4f5ed3;
+}
+
+.hrt__title div {
+  min-width: 0;
+}
+
+.hrt__title strong,
+.hrt__title span {
+  display: block;
+}
+
+.hrt__title strong {
+  color: #263750;
+  font-size: 11px;
+}
+
+.hrt__title span {
+  margin-top: 3px;
+  color: #78859a;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.hrt-template-selector {
+  display: grid;
+  gap: 6px;
+}
+
+.hrt-template-selector > span,
+.hrt-template-panel label > span,
+.hrt-template-panel > label {
+  color: #43536b;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.hrt select,
+.hrt input,
+.hrt textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #d2dae8;
+  border-radius: 9px;
+  background: #fff;
+  color: #293950;
+  font: inherit;
+}
+
+.hrt textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.hrt-template-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d9ddfb;
+  border-radius: 11px;
+  background: #f8f8ff;
+}
+
+.hrt-template-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.hrt-template-panel__header strong,
+.hrt-template-panel__header small {
+  display: block;
+}
+
+.hrt-template-panel__header strong {
+  color: #34445e;
+  font-size: 11px;
+}
+
+.hrt-template-panel__header small {
+  margin-top: 3px;
+  color: #7a8699;
+  font-size: 8px;
+}
+
+.hrt-template-panel__header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid #dfe4ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #6d798c;
+  cursor: pointer;
+}
+
+.hrt-template-description {
+  margin: 0;
+  color: #65738a;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.hrt-template-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.hrt__questions {
+  display: grid;
+  gap: 10px;
+}
+
+.hrt__questions label {
+  display: grid;
+  gap: 5px;
+}
+
+.hrt__questions small {
+  justify-self: end;
+  color: #8a94a5;
+  font-size: 8px;
+}
+
+.hrt-template-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  border-top: 1px solid #e4e7f4;
+  padding-top: 11px;
+}
+
+.hrt-template-footer > div {
+  display: grid;
+  gap: 4px;
+}
+
+.hrt-template-footer small {
+  color: #8290a5;
+  font-size: 8px;
+}
+
+.hrt__complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #178058;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.hrt select:focus-visible,
+.hrt input:focus-visible,
+.hrt textarea:focus-visible,
+.hrt button:focus-visible {
+  outline: 3px solid rgb(88 99 223 / 18%);
+  outline-offset: 2px;
+}
+
+.hrt button:disabled,
+.hrt input:disabled,
+.hrt textarea:disabled,
+.hrt select:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 620px) {
+  .hrt-template-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hrt-template-footer button {
+    width: 100%;
+  }
+}

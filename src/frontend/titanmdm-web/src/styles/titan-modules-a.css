@@ -1,0 +1,2352 @@
+/* ================================================================
+   TITANMDM ENTERPRISE UI
+   UX-A
+
+   Modules:
+   - Devices
+   - Groups & Fleet
+   - Enrollment
+   - Policies
+
+   Exterior:
+   Dynamics-inspired enterprise shell
+
+   Interior:
+   ManageEngine-inspired operational workspace
+   ================================================================ */
+
+
+/* ================================================================
+   SHARED MODULE LANGUAGE
+   ================================================================ */
+
+.devices-page,
+.fleet-page,
+.enrollment-page,
+.policies-page {
+  width: 100%;
+  max-width: 1720px;
+  margin: 0 auto;
+  color: var(--titan-text);
+}
+
+/* headings */
+
+.devices-heading,
+.fleet-header,
+.enrollment-heading,
+.policies-header {
+  position: relative;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 22px;
+
+  margin-bottom: 20px;
+  padding: 21px 22px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius:
+    var(--titan-radius-lg);
+
+  background:
+    radial-gradient(
+      circle at 88% 10%,
+      rgba(100, 119, 255, 0.11),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(248, 251, 255, 0.91)
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  animation:
+    titan-module-enter
+    260ms ease-out;
+}
+
+.devices-heading::after,
+.fleet-header::after,
+.enrollment-heading::after,
+.policies-header::after {
+  content: "";
+
+  position: absolute;
+
+  left: 22px;
+  bottom: 0;
+
+  width: 52px;
+  height: 3px;
+
+  border-radius:
+    999px 999px 0 0;
+
+  background:
+    linear-gradient(
+      90deg,
+      var(--workspace-primary),
+      var(--titan-accent)
+    );
+}
+
+/* eyebrow */
+
+.devices-heading__eyebrow,
+.fleet-eyebrow,
+.enrollment-eyebrow {
+  display: inline-flex;
+  align-items: center;
+
+  margin:
+    0
+    0
+    7px;
+
+  color:
+    var(--workspace-primary);
+
+  font-size: 10px;
+  font-weight: 850;
+
+  letter-spacing:
+    0.14em;
+
+  text-transform:
+    uppercase;
+}
+
+/* h1 */
+
+.devices-heading h1,
+.fleet-header h1,
+.enrollment-heading h1,
+.policies-title h1 {
+  margin: 0;
+
+  color:
+    var(--titan-text);
+
+  font-size:
+    clamp(
+      25px,
+      2vw,
+      31px
+    );
+
+  line-height: 1.1;
+  font-weight: 780;
+
+  letter-spacing:
+    -0.025em;
+}
+
+/* descriptions */
+
+.devices-heading p,
+.fleet-header p,
+.enrollment-description,
+.policies-title p {
+  max-width: 760px;
+
+  margin:
+    7px
+    0
+    0;
+
+  color:
+    var(--titan-text-3);
+
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+
+/* ================================================================
+   COMMON BUTTON TREATMENT
+   ================================================================ */
+
+.devices-refresh-button,
+.devices-android-sync-button,
+.fleet-primary,
+.fleet-secondary,
+.fleet-danger,
+.enrollment-refresh-button,
+.enrollment-copy-button,
+.enrollment-action-button,
+.enrollment-primary-button,
+.policy-button {
+  min-height: 40px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  padding:
+    0
+    14px;
+
+  border-radius: 11px;
+
+  font-family:
+    var(--titan-font-sans);
+
+  font-size: 11px;
+  font-weight: 750;
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.devices-refresh-button:hover:not(:disabled),
+.fleet-secondary:hover:not(:disabled),
+.enrollment-refresh-button:hover:not(:disabled),
+.policy-button--secondary:hover:not(:disabled) {
+  transform:
+    translateY(-1px);
+
+  border-color:
+    var(--titan-border-strong);
+
+  background: #fff;
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+.devices-refresh-button,
+.fleet-secondary,
+.enrollment-refresh-button,
+.policy-button--secondary {
+  border:
+    1px solid
+    var(--titan-border-strong);
+
+  color:
+    var(--titan-text-2);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.9
+    );
+}
+
+.devices-android-sync-button,
+.fleet-primary,
+.enrollment-primary-button,
+.enrollment-copy-button,
+.policy-button--primary {
+  border:
+    1px solid
+    var(--workspace-primary);
+
+  color: #fff;
+
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(
+        in srgb,
+        var(--workspace-primary)
+        88%,
+        white
+      ),
+      var(--workspace-primary)
+    );
+
+  box-shadow:
+    0 8px 20px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      22%,
+      transparent
+    );
+}
+
+.devices-android-sync-button:hover:not(:disabled),
+.fleet-primary:hover:not(:disabled),
+.enrollment-primary-button:hover:not(:disabled),
+.enrollment-copy-button:hover:not(:disabled),
+.policy-button--primary:hover:not(:disabled) {
+  transform:
+    translateY(-1px);
+
+  filter:
+    brightness(1.04);
+
+  box-shadow:
+    0 12px 24px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      27%,
+      transparent
+    );
+}
+
+.fleet-danger,
+.enrollment-action-button {
+  border:
+    1px solid
+    rgba(
+      217,
+      76,
+      99,
+      0.22
+    );
+
+  color:
+    var(--titan-danger);
+
+  background:
+    var(--titan-danger-soft);
+}
+
+.fleet-danger:hover:not(:disabled),
+.enrollment-action-button:hover:not(:disabled) {
+  transform:
+    translateY(-1px);
+
+  background:
+    #ffe8ed;
+}
+
+.devices-refresh-button:disabled,
+.devices-android-sync-button:disabled,
+.fleet-primary:disabled,
+.fleet-secondary:disabled,
+.fleet-danger:disabled,
+.enrollment-refresh-button:disabled,
+.enrollment-primary-button:disabled,
+.enrollment-action-button:disabled,
+.policy-button:disabled {
+  opacity: 0.5;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+
+/* ================================================================
+   SHARED INPUTS / SELECTS
+   ================================================================ */
+
+.devices-search,
+.policy-search,
+.fleet-search {
+  border:
+    1px solid
+    rgba(
+      143,
+      163,
+      201,
+      0.3
+    );
+
+  border-radius: 12px;
+
+  background:
+    rgba(
+      248,
+      251,
+      255,
+      0.92
+    );
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.devices-search:focus-within,
+.policy-search:focus-within,
+.fleet-search:focus-within {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      50%,
+      white
+    );
+
+  background: #fff;
+
+  box-shadow:
+    0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      9%,
+      transparent
+    );
+}
+
+.devices-search input,
+.policy-search input,
+.fleet-search input {
+  border: 0;
+
+  outline: none;
+
+  background:
+    transparent;
+
+  color:
+    var(--titan-text);
+
+  font-family:
+    var(--titan-font-sans);
+}
+
+.devices-toolbar select,
+.policy-toolbar select,
+.fleet-form-grid select,
+.fleet-form-grid input,
+.fleet-dynamic-rule select,
+.fleet-builder > label input,
+.enrollment-field input,
+.enrollment-field select {
+  min-height: 41px;
+
+  border:
+    1px solid
+    rgba(
+      143,
+      163,
+      201,
+      0.32
+    );
+
+  border-radius: 10px;
+
+  outline: none;
+
+  color:
+    var(--titan-text-2);
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.devices-toolbar select:focus,
+.policy-toolbar select:focus,
+.fleet-form-grid select:focus,
+.fleet-form-grid input:focus,
+.fleet-dynamic-rule select:focus,
+.fleet-builder > label input:focus,
+.enrollment-field input:focus,
+.enrollment-field select:focus {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      48%,
+      white
+    );
+
+  background: #fff;
+
+  box-shadow:
+    0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      9%,
+      transparent
+    );
+}
+
+
+/* ================================================================
+   DEVICES
+   ================================================================ */
+
+.devices-page {
+  animation:
+    titan-module-fade
+    220ms ease;
+}
+
+.devices-heading__actions {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+
+  flex-wrap: wrap;
+}
+
+/* KPIs */
+
+.devices-summary {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 13px;
+
+  margin-bottom: 18px;
+}
+
+.devices-summary-card {
+  position: relative;
+
+  min-height: 104px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+
+  padding:
+    16px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.98
+      ),
+      rgba(
+        248,
+        251,
+        255,
+        0.92
+      )
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  transition:
+    transform 170ms ease,
+    box-shadow 170ms ease,
+    border-color 170ms ease;
+}
+
+.devices-summary-card::before {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  width: 3px;
+  height: 100%;
+
+  background:
+    var(--workspace-primary);
+
+  opacity: 0;
+
+  transition:
+    opacity 170ms ease;
+}
+
+.devices-summary-card:hover {
+  transform:
+    translateY(-2px);
+
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      20%,
+      var(--titan-border)
+    );
+
+  box-shadow:
+    var(--titan-shadow-md);
+}
+
+.devices-summary-card:hover::before {
+  opacity: 1;
+}
+
+.devices-summary-card__icon {
+  width: 44px;
+  height: 44px;
+
+  flex: 0 0 44px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 13px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+.devices-summary-card__icon--online {
+  color: #159a6c;
+
+  background:
+    #eafaf3;
+}
+
+.devices-summary-card__icon--offline {
+  color: #cc751c;
+
+  background:
+    #fff5e8;
+}
+
+.devices-summary-card__icon--compliant {
+  color: #159451;
+
+  background:
+    #ebfaef;
+}
+
+.devices-summary-card span {
+  color:
+    var(--titan-text-3);
+
+  font-size: 10px;
+  font-weight: 750;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:
+    0.04em;
+}
+
+.devices-summary-card strong {
+  margin-top: 4px;
+
+  color:
+    var(--titan-text);
+
+  font-size: 26px;
+  font-weight: 780;
+
+  letter-spacing:
+    -0.03em;
+}
+
+.devices-summary-card small {
+  color:
+    var(--titan-text-4);
+
+  font-size: 10px;
+}
+
+/* panel */
+
+.devices-panel,
+.android-inventory-panel {
+  overflow: hidden;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius:
+    var(--titan-radius-lg);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.95
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+.devices-toolbar {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding:
+    14px
+    16px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      153,
+      172,
+      204,
+      0.16
+    );
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+/* table */
+
+.devices-table th {
+  padding:
+    11px
+    15px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      152,
+      171,
+      203,
+      0.17
+    );
+
+  color:
+    var(--titan-text-3);
+
+  background:
+    #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  letter-spacing:
+    0.06em;
+}
+
+.devices-table td {
+  padding:
+    13px
+    15px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      156,
+      174,
+      205,
+      0.13
+    );
+
+  color:
+    var(--titan-text-2);
+
+  font-size: 11px;
+
+  transition:
+    background 150ms ease;
+}
+
+.devices-table tbody tr {
+  transition:
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.devices-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      3%,
+      white
+    );
+
+  box-shadow:
+    inset 3px 0
+    var(--workspace-primary);
+}
+
+.device-row-clickable {
+  cursor: pointer;
+}
+
+.device-platform-icon {
+  width: 37px;
+  height: 37px;
+
+  border-radius: 11px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+.device-identity strong {
+  color:
+    var(--titan-text);
+
+  font-size: 11px;
+}
+
+.device-identity span,
+.device-identity small {
+  color:
+    var(--titan-text-4);
+
+  font-size: 9px;
+}
+
+/* badges */
+
+.device-status,
+.device-compliance {
+  min-height: 25px;
+
+  padding:
+    0
+    8px;
+
+  border-radius: 999px;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.device-status--online {
+  color: #137b58;
+
+  background:
+    #eaf9f2;
+}
+
+.device-status--offline {
+  color: #5f6f87;
+
+  background:
+    #f0f3f7;
+}
+
+.device-status--pending,
+.device-status--enrolling {
+  color: #9c6710;
+
+  background:
+    #fff7e8;
+}
+
+.device-status--locked,
+.device-status--quarantined,
+.device-status--wiped {
+  color: #b8394d;
+
+  background:
+    #fff0f2;
+}
+
+/* Android internal workspace */
+
+.android-inventory-panel__header {
+  padding:
+    17px
+    18px;
+
+  background:
+    radial-gradient(
+      circle at right,
+      rgba(
+        22,
+        163,
+        74,
+        0.07
+      ),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfefc
+    );
+}
+
+.android-inventory-panel__logo {
+  border-radius: 13px;
+
+  color: #168b47;
+
+  background:
+    #ebf9f0;
+
+  box-shadow:
+    inset
+    0
+    0
+    0
+    1px
+    #d6f1df;
+}
+
+.android-inventory-metrics {
+  gap: 10px;
+
+  padding:
+    16px
+    18px;
+}
+
+.android-inventory-metrics > div {
+  min-height: 72px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f8fbff
+    );
+
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.android-inventory-metrics > div:hover {
+  transform:
+    translateY(-1px);
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+
+/* ================================================================
+   GROUPS & FLEET
+   ================================================================ */
+
+.fleet-page {
+  padding: 0;
+
+  animation:
+    titan-module-fade
+    220ms ease;
+}
+
+.fleet-stats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      5,
+      minmax(0, 1fr)
+    );
+
+  gap: 11px;
+
+  margin-bottom: 2px;
+}
+
+.fleet-stat {
+  position: relative;
+
+  min-height: 82px;
+
+  display: grid;
+
+  grid-template-columns:
+    42px
+    1fr;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding:
+    13px
+    14px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fbff
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.fleet-stat:hover {
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    var(--titan-shadow-md);
+}
+
+.fleet-stat > div {
+  width: 38px;
+  height: 38px;
+
+  border-radius: 12px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+.fleet-stat span {
+  color:
+    var(--titan-text-3);
+
+  font-size: 9px;
+  font-weight: 750;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:
+    0.04em;
+}
+
+.fleet-stat strong {
+  color:
+    var(--titan-text);
+
+  font-size: 19px;
+  font-weight: 800;
+}
+
+/* layout */
+
+.fleet-layout {
+  display: grid;
+
+  grid-template-columns:
+    255px
+    minmax(
+      0,
+      1fr
+    );
+
+  gap: 13px;
+}
+
+.fleet-groups,
+.fleet-builder,
+.fleet-devices,
+.fleet-command-center,
+.fleet-selected-group {
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius:
+    16px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.96
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+.fleet-groups {
+  padding: 13px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.98
+      ),
+      rgba(
+        248,
+        250,
+        255,
+        0.96
+      )
+    );
+}
+
+.fleet-panel-title > div {
+  color:
+    var(--titan-text);
+}
+
+/* group item */
+
+.fleet-group {
+  position: relative;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 11px;
+
+  background:
+    transparent;
+
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.fleet-group:hover {
+  transform:
+    translateX(2px);
+
+  border-color:
+    var(--titan-border);
+
+  background: #fff;
+}
+
+.fleet-group.selected {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      25%,
+      white
+    );
+
+  background:
+    var(--workspace-soft);
+
+  box-shadow:
+    inset 3px 0
+    var(--workspace-primary);
+}
+
+/* builder */
+
+.fleet-builder {
+  padding:
+    16px
+    18px;
+}
+
+.fleet-dynamic-rule {
+  border:
+    1px solid
+    rgba(
+      153,
+      171,
+      204,
+      0.17
+    );
+
+  border-radius: 13px;
+
+  background:
+    #f8faff;
+}
+
+/* selected group */
+
+.fleet-selected-group {
+  padding:
+    15px
+    17px;
+
+  background:
+    radial-gradient(
+      circle at 85% 0,
+      rgba(
+        93,
+        112,
+        255,
+        0.075
+      ),
+      transparent 28%
+    ),
+    #fff;
+}
+
+.fleet-rule-summary span {
+  min-height: 25px;
+
+  display: inline-flex;
+  align-items: center;
+
+  border:
+    1px solid
+    rgba(
+      143,
+      163,
+      201,
+      0.24
+    );
+
+  border-radius: 999px;
+
+  background:
+    #f5f8fc;
+
+  color:
+    var(--titan-text-3);
+
+  font-size: 9px;
+}
+
+/* devices */
+
+.fleet-devices {
+  overflow: hidden;
+}
+
+.fleet-devices-header {
+  padding:
+    14px
+    16px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      153,
+      172,
+      204,
+      0.15
+    );
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.fleet-table th {
+  color:
+    var(--titan-text-3);
+
+  background:
+    #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.fleet-table td {
+  border-bottom:
+    1px solid
+    rgba(
+      151,
+      170,
+      203,
+      0.13
+    );
+
+  color:
+    var(--titan-text-2);
+
+  font-size: 10px;
+}
+
+.fleet-table tbody tr {
+  transition:
+    background 140ms ease;
+}
+
+.fleet-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      3%,
+      white
+    );
+}
+
+/* command center */
+
+.fleet-command-center {
+  position: sticky;
+
+  bottom: 10px;
+
+  z-index: 8;
+
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      14%,
+      var(--titan-border)
+    );
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.94
+    );
+
+  backdrop-filter:
+    blur(16px);
+
+  box-shadow:
+    0 15px 35px
+    rgba(
+      31,
+      48,
+      88,
+      0.09
+    );
+}
+
+.fleet-command-ready {
+  border-color:
+    rgba(
+      30,
+      169,
+      113,
+      0.15
+    );
+
+  color: #167751;
+
+  background:
+    #edf9f3;
+}
+
+.fleet-command-warning {
+  border-color:
+    rgba(
+      209,
+      140,
+      20,
+      0.17
+    );
+
+  color: #99620b;
+
+  background:
+    #fff8eb;
+}
+
+
+/* ================================================================
+   ENROLLMENT
+   ================================================================ */
+
+.enrollment-page {
+  animation:
+    titan-module-fade
+    220ms ease;
+}
+
+.enrollment-heading {
+  margin-bottom: 0;
+}
+
+/* stats */
+
+.enrollment-stats {
+  gap: 13px;
+}
+
+.enrollment-stat-card {
+  position: relative;
+
+  padding:
+    16px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fbff
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.enrollment-stat-card:hover {
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    var(--titan-shadow-md);
+}
+
+.enrollment-stat-card::after {
+  content: "";
+
+  position: absolute;
+
+  right: -20px;
+  bottom: -30px;
+
+  width: 90px;
+  height: 90px;
+
+  border-radius: 999px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      5%,
+      transparent
+    );
+}
+
+.enrollment-stat-card span {
+  color:
+    var(--titan-text-3);
+
+  font-size: 10px;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:
+    0.04em;
+}
+
+.enrollment-stat-card strong {
+  margin-top: 6px;
+
+  color:
+    var(--titan-text);
+
+  font-size: 27px;
+}
+
+/* panels */
+
+.enrollment-panel {
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius:
+    16px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.96
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+.enrollment-panel-header {
+  padding:
+    17px
+    19px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      151,
+      171,
+      204,
+      0.15
+    );
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.enrollment-panel-header h2 {
+  color:
+    var(--titan-text);
+
+  font-size: 16px;
+}
+
+.enrollment-panel-header p {
+  color:
+    var(--titan-text-3);
+
+  font-size: 11px;
+}
+
+.enrollment-form {
+  gap: 15px;
+
+  padding:
+    19px;
+}
+
+.enrollment-field label {
+  color:
+    var(--titan-text-2);
+
+  font-size: 10px;
+
+  text-transform:
+    uppercase;
+
+  letter-spacing:
+    0.04em;
+}
+
+.enrollment-platform-info {
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      15%,
+      white
+    );
+
+  border-radius: 12px;
+
+  background:
+    var(--workspace-soft);
+}
+
+/* secrets */
+
+.enrollment-token-value {
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 11px;
+
+  background:
+    #f6f8fc;
+}
+
+.enrollment-secret-details div {
+  border:
+    1px solid
+    rgba(
+      150,
+      170,
+      204,
+      0.15
+    );
+
+  border-radius: 11px;
+
+  background:
+    #f8faff;
+}
+
+/* table */
+
+.enrollment-table th {
+  color:
+    var(--titan-text-3);
+
+  background:
+    #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.enrollment-table td {
+  border-bottom:
+    1px solid
+    rgba(
+      151,
+      171,
+      204,
+      0.14
+    );
+
+  color:
+    var(--titan-text-2);
+
+  font-size: 10px;
+}
+
+.enrollment-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      3%,
+      white
+    );
+}
+
+/* Android Enterprise */
+
+.android-enterprise-hero {
+  position: relative;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 18px;
+
+  background:
+    radial-gradient(
+      circle at right,
+      rgba(
+        22,
+        163,
+        74,
+        0.08
+      ),
+      transparent 35%
+    ),
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fcfa
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+}
+
+.android-enterprise-logo {
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #22ad58,
+      #15823f
+    );
+
+  box-shadow:
+    0 10px 24px
+    rgba(
+      22,
+      163,
+      74,
+      0.19
+    );
+}
+
+.android-readiness-card {
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fbff
+    );
+
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.android-readiness-card:hover {
+  transform:
+    translateY(-1px);
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+
+/* ================================================================
+   POLICIES
+   ================================================================ */
+
+.policies-page {
+  animation:
+    titan-module-fade
+    220ms ease;
+}
+
+.policies-header {
+  margin-bottom: 17px;
+}
+
+.policies-title__icon {
+  width: 44px;
+  height: 44px;
+
+  border-radius: 13px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+
+  box-shadow:
+    inset
+    0
+    0
+    0
+    1px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      10%,
+      transparent
+    );
+}
+
+/* KPI */
+
+.policy-kpis {
+  gap: 12px;
+
+  margin-bottom: 16px;
+}
+
+.policy-kpis article {
+  position: relative;
+
+  min-height: 82px;
+
+  padding:
+    14px
+    16px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fbff
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.policy-kpis article:hover {
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    var(--titan-shadow-md);
+}
+
+.policy-kpis svg {
+  color:
+    var(--workspace-primary);
+}
+
+.policy-kpis span {
+  color:
+    var(--titan-text-3);
+
+  font-size: 9px;
+
+  font-weight: 750;
+
+  letter-spacing:
+    0.04em;
+
+  text-transform:
+    uppercase;
+}
+
+.policy-kpis strong {
+  color:
+    var(--titan-text);
+
+  font-size: 19px;
+}
+
+/* toolbar */
+
+.policy-toolbar {
+  padding:
+    10px;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 14px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.88
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+/* table */
+
+.policy-table-card {
+  overflow: visible;
+
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 16px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.96
+    );
+
+  box-shadow:
+    var(--titan-shadow-sm);
+}
+
+.policy-table th {
+  padding:
+    11px
+    14px;
+
+  color:
+    var(--titan-text-3);
+
+  background:
+    #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+
+  letter-spacing:
+    0.055em;
+}
+
+.policy-table td {
+  padding:
+    13px
+    14px;
+
+  border-bottom:
+    1px solid
+    rgba(
+      152,
+      171,
+      203,
+      0.13
+    );
+
+  color:
+    var(--titan-text-2);
+
+  font-size: 10px;
+}
+
+.policy-table tbody tr {
+  transition:
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.policy-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      3%,
+      white
+    );
+
+  box-shadow:
+    inset
+    3px
+    0
+    var(--workspace-primary);
+}
+
+.policy-name {
+  cursor: pointer;
+}
+
+.policy-name strong {
+  color:
+    var(--titan-text);
+
+  font-size: 10px;
+}
+
+.policy-platform-icon {
+  border-radius: 10px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+/* menu */
+
+.policy-menu {
+  border:
+    1px solid
+    var(--titan-border);
+
+  border-radius: 14px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.98
+    );
+
+  box-shadow:
+    var(--titan-shadow-lg);
+
+  backdrop-filter:
+    blur(18px);
+}
+
+.policy-menu__header {
+  background:
+    #f8faff;
+}
+
+.policy-menu__content > button {
+  border-radius: 9px;
+}
+
+.policy-menu__content > button:hover,
+.policy-menu__content > button:focus-visible {
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+.policy-menu__icon {
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+
+/* ================================================================
+   NOTICES
+   ================================================================ */
+
+.devices-error,
+.fleet-message,
+.enrollment-alert,
+.policy-notice {
+  border-radius: 12px;
+
+  box-shadow:
+    0 8px 18px
+    rgba(
+      30,
+      47,
+      82,
+      0.035
+    );
+
+  animation:
+    titan-notice-enter
+    200ms ease-out;
+}
+
+.fleet-message.success,
+.policy-notice--success {
+  border:
+    1px solid
+    rgba(
+      30,
+      169,
+      113,
+      0.2
+    );
+
+  color:
+    #176c4b;
+
+  background:
+    #ecfaf3;
+}
+
+.fleet-message.error,
+.policy-notice--error,
+.devices-error,
+.enrollment-alert-error {
+  border:
+    1px solid
+    rgba(
+      217,
+      76,
+      99,
+      0.2
+    );
+
+  color:
+    #a93448;
+
+  background:
+    #fff1f3;
+}
+
+
+/* ================================================================
+   CHECKBOXES
+   ================================================================ */
+
+.devices-page input[type="checkbox"],
+.fleet-page input[type="checkbox"],
+.enrollment-page input[type="checkbox"],
+.policies-page input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+
+  accent-color:
+    var(--workspace-primary);
+
+  cursor: pointer;
+}
+
+
+/* ================================================================
+   FOCUS
+   ================================================================ */
+
+.devices-page button:focus-visible,
+.fleet-page button:focus-visible,
+.enrollment-page button:focus-visible,
+.policies-page button:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--workspace-primary)
+      12%,
+      transparent
+    );
+}
+
+
+/* ================================================================
+   MOTION
+   ================================================================ */
+
+@keyframes titan-module-enter {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+}
+
+@keyframes titan-module-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes titan-notice-enter {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+}
+
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
+@media (
+  max-width: 1250px
+) {
+  .devices-summary {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .fleet-stats {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (
+  max-width: 1050px
+) {
+  .fleet-layout {
+    grid-template-columns:
+      1fr;
+  }
+
+  .fleet-groups {
+    min-height: auto;
+  }
+
+  .fleet-groups {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+
+    gap: 7px;
+  }
+
+  .fleet-panel-title {
+    grid-column:
+      1 / -1;
+  }
+}
+
+@media (
+  max-width: 820px
+) {
+  .devices-heading,
+  .fleet-header,
+  .enrollment-heading,
+  .policies-header {
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+  .devices-heading__actions,
+  .policies-header__actions {
+    width: 100%;
+  }
+
+  .policy-kpis,
+  .enrollment-stats {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .fleet-stats {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .policy-toolbar,
+  .devices-toolbar {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+  .devices-search {
+    width: 100%;
+  }
+}
+
+@media (
+  max-width: 620px
+) {
+  .devices-summary,
+  .policy-kpis,
+  .enrollment-stats,
+  .fleet-stats {
+    grid-template-columns:
+      1fr;
+  }
+
+  .fleet-groups {
+    grid-template-columns:
+      1fr;
+  }
+
+  .devices-refresh-button,
+  .devices-android-sync-button,
+  .enrollment-refresh-button,
+  .policy-button {
+    width: 100%;
+  }
+
+  .fleet-command-center {
+    position: static;
+  }
+}
+
+
+/* ================================================================
+   REDUCED MOTION
+   ================================================================ */
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  .devices-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .devices-heading,
+  .fleet-header,
+  .enrollment-heading,
+  .policies-header,
+  .devices-summary-card,
+  .fleet-stat,
+  .enrollment-stat-card,
+  .policy-kpis article {
+    animation: none !important;
+
+    transition: none !important;
+
+    transform: none !important;
+  }
+}

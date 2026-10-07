@@ -1,0 +1,589 @@
+.windows-control-page {
+  width: 100%;
+  max-width: 1600px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 auto;
+}
+
+.windows-control-loading,
+.windows-control-error-page {
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #667085;
+}
+
+.windows-control-spin {
+  animation: windows-control-spin 0.9s linear infinite;
+}
+
+@keyframes windows-control-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.windows-control-back {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  color: #667085;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.windows-control-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid #e1e7ef;
+  border-radius: 14px;
+  background:
+    radial-gradient(
+      circle at 92% 0%,
+      rgba(37, 99, 235, 0.09),
+      transparent 28%
+    ),
+    #ffffff;
+}
+
+.windows-control-device {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.windows-control-device__icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #2563eb;
+  background: #eef4ff;
+}
+
+.windows-control-eyebrow {
+  color: #2563eb;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.windows-control-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.windows-control-title h1 {
+  margin: 0;
+  color: #172033;
+  font-size: 23px;
+}
+
+.windows-control-device p {
+  margin: 5px 0 0;
+  color: #7c8799;
+  font-size: 10px;
+}
+
+.windows-control-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 800;
+  background: #f2f4f7;
+}
+
+.windows-control-status--online {
+  color: #15803d;
+  background: #ecfdf3;
+}
+
+.windows-control-status--offline {
+  color: #b42318;
+  background: #fff1f0;
+}
+
+.windows-control-hero__actions,
+.windows-control-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.windows-control-primary,
+.windows-control-secondary,
+.windows-control-card button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.windows-control-primary {
+  border: 1px solid #2563eb;
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.windows-control-secondary {
+  border: 1px solid #dce3ec;
+  color: #344054;
+  background: #ffffff;
+}
+
+.windows-control-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.windows-control-notice--success {
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.windows-control-notice--error {
+  border: 1px solid #fecaca;
+  color: #b42318;
+  background: #fff5f5;
+}
+
+.windows-control-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.windows-control-kpis article {
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #e5e9ef;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.windows-control-kpis svg {
+  color: #2563eb;
+}
+
+.windows-control-kpis span {
+  display: block;
+  color: #8490a2;
+  font-size: 8px;
+}
+
+.windows-control-kpis strong {
+  display: block;
+  margin-top: 3px;
+  color: #1d2939;
+  font-size: 15px;
+}
+
+.windows-control-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 5px;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.windows-control-tabs button {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 7px;
+  color: #697586;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.windows-control-tabs button.active {
+  color: #2563eb;
+  background: #eef4ff;
+}
+
+.windows-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.windows-control-single {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.windows-control-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e3e8ef;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow:
+    0 4px 15px
+    rgba(15, 23, 42, 0.03);
+}
+
+.windows-control-card--wide {
+  grid-column: 1 / -1;
+}
+
+.windows-control-card > header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.windows-control-card > header > svg {
+  color: #2563eb;
+}
+
+.windows-control-card > header h2 {
+  flex: 1;
+  margin: 0;
+  color: #263247;
+  font-size: 12px;
+}
+
+.windows-control-card > header > span {
+  color: #98a2b3;
+  font-size: 8px;
+}
+
+.windows-control-card > header button,
+.windows-control-form-stack button {
+  border: 1px solid #cfd8e6;
+  color: #2563eb;
+  background: #f7faff;
+}
+
+.windows-control-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.windows-control-fields > div {
+  min-height: 58px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.windows-control-fields span {
+  display: block;
+  color: #8a95a6;
+  font-size: 8px;
+}
+
+.windows-control-fields strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: #273248;
+  font-size: 10px;
+}
+
+.windows-control-command-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.windows-control-command-grid button {
+  min-height: 72px;
+  justify-content: flex-start;
+  padding: 11px;
+  text-align: left;
+}
+
+.windows-control-command-grid strong,
+.windows-control-command-grid span {
+  display: block;
+}
+
+.windows-control-command-grid strong {
+  color: #344054;
+  font-size: 9px;
+}
+
+.windows-control-command-grid span {
+  margin-top: 3px;
+  color: #98a2b3;
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.windows-control-json {
+  max-height: 520px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 13px;
+  border: 1px solid #e4e7ec;
+  border-radius: 9px;
+  color: #d0d5dd;
+  background: #101828;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 9px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.windows-control-form-stack {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.windows-control-form-stack input,
+.windows-control-filter {
+  min-height: 35px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  color: #344054;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.windows-control-filter {
+  width: 190px;
+}
+
+.windows-control-danger-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.windows-control-danger-actions button.danger,
+.windows-row-danger {
+  border-color: #fecaca !important;
+  color: #b42318 !important;
+  background: #fff5f5 !important;
+}
+
+.windows-control-table-wrapper {
+  width: 100%;
+  overflow: auto;
+  padding-top: 12px;
+}
+
+.windows-control-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.windows-control-table th {
+  padding: 9px 10px;
+  border-bottom: 1px solid #e4e7ec;
+  color: #667085;
+  background: #f8fafc;
+  text-align: left;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.windows-control-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #eef1f4;
+  color: #475467;
+  font-size: 9px;
+  vertical-align: middle;
+}
+
+.windows-control-table td strong {
+  color: #263247;
+}
+
+.windows-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.windows-row-actions button,
+.windows-row-danger {
+  min-height: 28px !important;
+  padding: 0 8px !important;
+  font-size: 8px !important;
+}
+
+.windows-command-list {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.windows-command-item {
+  padding: 11px;
+  border: 1px solid #e5e9ef;
+  border-radius: 9px;
+  background: #fafbfd;
+}
+
+.windows-command-item__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.windows-command-item__main > strong {
+  color: #273248;
+  font-size: 10px;
+}
+
+.windows-command-status {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #475467;
+  background: #eef2f6;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.windows-command-status--success {
+  color: #15803d;
+  background: #ecfdf3;
+}
+
+.windows-command-status--failed,
+.windows-command-status--timeout {
+  color: #b42318;
+  background: #fff1f0;
+}
+
+.windows-command-status--executing,
+.windows-command-status--sent,
+.windows-command-status--delivered {
+  color: #175cd3;
+  background: #eff8ff;
+}
+
+.windows-command-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  color: #98a2b3;
+  font-size: 7px;
+}
+
+.windows-command-item pre {
+  max-height: 240px;
+  overflow: auto;
+  margin: 9px 0 0;
+  padding: 9px;
+  border-radius: 7px;
+  color: #d0d5dd;
+  background: #101828;
+  font-size: 8px;
+  white-space: pre-wrap;
+}
+
+.windows-control-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px 10px;
+  color: #98a2b3;
+  font-size: 8px;
+}
+
+@media (max-width: 1200px) {
+  .windows-control-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .windows-control-command-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .windows-control-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .windows-control-grid,
+  .windows-control-kpis,
+  .windows-control-command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .windows-control-fields,
+  .windows-control-danger-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .windows-control-inline-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .windows-control-filter {
+    width: 100%;
+  }
+}
+
+.windows-command-details {
+  margin-top: 9px;
+}
+
+.windows-command-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #2563eb;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.windows-command-details pre {
+  margin-top: 8px;
+}

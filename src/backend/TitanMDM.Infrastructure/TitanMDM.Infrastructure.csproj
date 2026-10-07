@@ -1,0 +1,61 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TitanMDM.Domain\TitanMDM.Domain.csproj" />
+    <ProjectReference Include="..\TitanMDM.Application\TitanMDM.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+
+    <PackageReference
+      Include="DocumentFormat.OpenXml"
+      Version="3.3.0" />
+
+    <PackageReference
+      Include="Google.Apis.Auth"
+      Version="1.73.0" />
+
+    <PackageReference
+      Include="Microsoft.AspNetCore.Authentication.JwtBearer"
+      Version="10.0.12" />
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore"
+      Version="10.0.12" />
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.Design"
+      Version="10.0.12">
+
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+
+      <PrivateAssets>
+        all
+      </PrivateAssets>
+
+    </PackageReference>
+
+    <PackageReference
+      Include="Microsoft.EntityFrameworkCore.SqlServer"
+      Version="10.0.12" />
+
+  </ItemGroup>
+
+</Project>

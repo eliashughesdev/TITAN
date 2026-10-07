@@ -1,0 +1,898 @@
+.helpdesk-mail-page {
+  width: min(100%, 1460px);
+  margin-inline: auto;
+  color: #26364f;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+
+.helpdesk-mail-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.helpdesk-mail-hero h1 {
+  margin: 7px 0;
+  font-size: clamp(27px, 3vw, 36px);
+}
+
+.helpdesk-mail-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: #71809a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.helpdesk-mail-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5668c9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .07em;
+}
+
+.helpdesk-mail-refresh,
+.helpdesk-mail-inline-action {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dce3ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #53627a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.helpdesk-mail-refresh {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.helpdesk-mail-inline-action {
+  margin-left: auto;
+  padding: 8px 11px;
+  font-size: 10px;
+}
+
+/* ============================================================
+   LOADING / FEEDBACK
+   ============================================================ */
+
+.helpdesk-mail-loading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 22px;
+  color: #71809a;
+}
+
+.helpdesk-mail-message {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.helpdesk-mail-message--error {
+  border: 1px solid rgb(220 38 38 / 18%);
+  background: rgb(220 38 38 / 6%);
+  color: #b42318;
+}
+
+.helpdesk-mail-message--success {
+  border: 1px solid rgb(22 163 74 / 18%);
+  background: rgb(22 163 74 / 6%);
+  color: #166534;
+}
+
+/* ============================================================
+   METRICS
+   ============================================================ */
+
+.helpdesk-mail-metrics {
+  display: grid;
+  gap: 11px;
+  margin-bottom: 18px;
+}
+
+.helpdesk-mail-metrics--enterprise {
+  grid-template-columns:
+    repeat(8, minmax(0, 1fr));
+}
+
+.helpdesk-mail-metrics article {
+  display: grid;
+  grid-template-columns:
+    auto 1fr;
+  gap: 7px 8px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e3e9f1;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.helpdesk-mail-metrics svg {
+  color: #6674c8;
+}
+
+.helpdesk-mail-metrics span {
+  overflow: hidden;
+  color: #71809a;
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.helpdesk-mail-metrics strong {
+  grid-column: 1 / -1;
+  color: #2f3e58;
+  font-size: 24px;
+}
+
+.helpdesk-mail-metric--danger {
+  border-color: rgb(220 38 38 / 25%) !important;
+  background: rgb(220 38 38 / 4%) !important;
+}
+
+.helpdesk-mail-metric--danger svg,
+.helpdesk-mail-metric--danger strong {
+  color: #b42318;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.helpdesk-mail-card {
+  margin-bottom: 17px;
+  padding: 23px;
+  border: 1px solid #e2e8f0;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow:
+    0 5px 20px
+    rgb(31 54 101 / 4%);
+}
+
+.helpdesk-mail-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 19px;
+}
+
+.helpdesk-mail-card__header--actions {
+  align-items: center;
+}
+
+.helpdesk-mail-card__header > span {
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  height: 40px;
+  border-radius: 11px;
+  background: #eef1ff;
+  color: #5969c7;
+}
+
+.helpdesk-mail-card__header h2 {
+  margin: 1px 0 4px;
+  font-size: 17px;
+}
+
+.helpdesk-mail-card__header p {
+  margin: 0;
+  color: #71809a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   GRID / FIELDS
+   ============================================================ */
+
+.helpdesk-mail-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.helpdesk-mail-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.helpdesk-mail-field--wide {
+  grid-column: span 2;
+}
+
+.helpdesk-mail-field--full {
+  grid-column: 1 / -1;
+}
+
+.helpdesk-mail-field > span {
+  color: #3a4962;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.helpdesk-mail-field > small {
+  color: #71809a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.helpdesk-mail-field input,
+.helpdesk-mail-field select,
+.helpdesk-mail-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 41px;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  outline: none;
+  background: #fff;
+  color: #34435e;
+  font: inherit;
+  font-size: 12px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.helpdesk-mail-field textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.helpdesk-mail-field input:focus,
+.helpdesk-mail-field select:focus,
+.helpdesk-mail-field textarea:focus {
+  border-color: #7c6dd1;
+  box-shadow:
+    0 0 0 3px
+    rgb(118 86 214 / 8%);
+}
+
+.helpdesk-mail-readonly {
+  box-sizing: border-box;
+  min-height: 41px;
+  padding: 10px;
+  border: 1px solid #e1e7ef;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #53627a;
+  font-size: 12px;
+}
+
+.helpdesk-mail-input-suffix {
+  display: flex;
+}
+
+.helpdesk-mail-input-suffix input {
+  border-radius: 9px 0 0 9px;
+}
+
+.helpdesk-mail-input-suffix span {
+  display: grid;
+  min-width: 40px;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   MAIN SWITCHES
+   ============================================================ */
+
+.helpdesk-mail-switches {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 18px;
+}
+
+.helpdesk-mail-switches > label {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid #e4e9f1;
+  border-radius: 12px;
+  background: #fafbfe;
+  cursor: pointer;
+}
+
+.helpdesk-mail-switches input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.helpdesk-mail-switch {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 23px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: 150ms ease;
+}
+
+.helpdesk-mail-switch::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 1px 4px
+    rgb(15 23 42 / 18%);
+  content: '';
+  transition: transform 150ms ease;
+}
+
+.helpdesk-mail-switches
+input:checked
++
+.helpdesk-mail-switch {
+  background: #6474ce;
+}
+
+.helpdesk-mail-switches
+input:checked
++
+.helpdesk-mail-switch::after {
+  transform:
+    translateX(19px);
+}
+
+.helpdesk-mail-switches label > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.helpdesk-mail-switches strong {
+  font-size: 12px;
+}
+
+.helpdesk-mail-switches small {
+  color: #71809a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* ============================================================
+   POLICY SWITCHES
+   ============================================================ */
+
+.helpdesk-mail-policy-switches {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin-bottom: 18px;
+}
+
+.helpdesk-mail-policy-switches label {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e3e9f1;
+  border-radius: 12px;
+  background: #fafbfe;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.helpdesk-mail-policy-switches label:hover {
+  border-color: #cfd6f0;
+  transform: translateY(-1px);
+}
+
+.helpdesk-mail-policy-switches input {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  accent-color: #6456ca;
+}
+
+.helpdesk-mail-policy-switches svg {
+  flex: 0 0 auto;
+  color: #6575cb;
+}
+
+.helpdesk-mail-policy-switches div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.helpdesk-mail-policy-switches strong {
+  color: #36455e;
+  font-size: 11px;
+}
+
+.helpdesk-mail-policy-switches small {
+  color: #71809a;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* ============================================================
+   RUNTIME
+   ============================================================ */
+
+.helpdesk-mail-runtime {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.helpdesk-mail-runtime > article {
+  padding: 16px;
+  border: 1px solid #e4e9f0;
+  border-radius: 13px;
+  background: #fafbfe;
+}
+
+.helpdesk-mail-runtime__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  color: #41516c;
+}
+
+.helpdesk-mail-runtime dl {
+  margin: 0 0 12px;
+}
+
+.helpdesk-mail-runtime dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #e9edf4;
+}
+
+.helpdesk-mail-runtime dt {
+  color: #71809a;
+  font-size: 10px;
+}
+
+.helpdesk-mail-runtime dd {
+  margin: 0;
+  color: #3d4b63;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.helpdesk-mail-runtime__error,
+.helpdesk-mail-runtime__ok {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 9px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.helpdesk-mail-runtime__error {
+  background: rgb(220 38 38 / 6%);
+  color: #b42318;
+}
+
+.helpdesk-mail-runtime__ok {
+  background: rgb(22 163 74 / 6%);
+  color: #166534;
+}
+
+/* ============================================================
+   GRAPH TEST
+   ============================================================ */
+
+.helpdesk-mail-diagnostic {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.helpdesk-mail-diagnostic button,
+.helpdesk-mail-savebar button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border: 1px solid #d7d4ef;
+  border-radius: 9px;
+  background: #6655c7;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.helpdesk-mail-diagnostic span {
+  color: #71809a;
+  font-size: 10px;
+}
+
+.helpdesk-mail-test {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 11px;
+}
+
+.helpdesk-mail-test > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.helpdesk-mail-test strong {
+  font-size: 11px;
+}
+
+.helpdesk-mail-test span {
+  font-size: 10px;
+}
+
+.helpdesk-mail-test--success {
+  border: 1px solid rgb(22 163 74 / 18%);
+  background: rgb(22 163 74 / 6%);
+  color: #166534;
+}
+
+.helpdesk-mail-test--error {
+  border: 1px solid rgb(220 38 38 / 18%);
+  background: rgb(220 38 38 / 6%);
+  color: #b42318;
+}
+
+/* ============================================================
+   ACTIVITY TABLE
+   ============================================================ */
+
+.helpdesk-mail-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e3e9f1;
+  border-radius: 12px;
+}
+
+.helpdesk-mail-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.helpdesk-mail-table th,
+.helpdesk-mail-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf1f6;
+  text-align: left;
+  vertical-align: top;
+}
+
+.helpdesk-mail-table th {
+  background: #f8fafc;
+  color: #71809a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.helpdesk-mail-table td {
+  color: #45536c;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.helpdesk-mail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.helpdesk-mail-table tbody tr:hover {
+  background: #fafbff;
+}
+
+.helpdesk-mail-table__sender {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  color: #35445d;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helpdesk-mail-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #53627a;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.helpdesk-mail-status--accepted {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.helpdesk-mail-status--ignored {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.helpdesk-mail-status--failed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.helpdesk-mail-reason {
+  display: block;
+  max-width: 340px;
+}
+
+.helpdesk-mail-reason-code {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 8px;
+  font-family: monospace;
+}
+
+.helpdesk-mail-ticket-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #eef1ff;
+  color: #5969c7;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.helpdesk-mail-empty {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px dashed #dce3ec;
+  border-radius: 12px;
+  background: #fbfcfe;
+  color: #71809a;
+  text-align: center;
+}
+
+.helpdesk-mail-empty svg {
+  color: #8995d2;
+}
+
+.helpdesk-mail-empty strong {
+  color: #485771;
+  font-size: 12px;
+}
+
+.helpdesk-mail-empty span {
+  max-width: 420px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* ============================================================
+   SUMMARY
+   ============================================================ */
+
+.helpdesk-mail-summary {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.helpdesk-mail-summary article {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid #e4e9f1;
+  border-radius: 11px;
+  background: #fafbfe;
+}
+
+.helpdesk-mail-summary span {
+  color: #71809a;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.helpdesk-mail-summary strong {
+  color: #3b4a63;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* ============================================================
+   SAVE BAR
+   ============================================================ */
+
+.helpdesk-mail-savebar {
+  position: sticky;
+  z-index: 20;
+  bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 14px 16px;
+  border: 1px solid #ddd9f3;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow:
+    0 12px 35px
+    rgb(30 41 59 / 13%);
+  backdrop-filter:
+    blur(10px);
+}
+
+.helpdesk-mail-savebar > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+/* ============================================================
+   DISABLED
+   ============================================================ */
+
+.helpdesk-mail-refresh:disabled,
+.helpdesk-mail-inline-action:disabled,
+.helpdesk-mail-diagnostic button:disabled,
+.helpdesk-mail-savebar button:disabled,
+.helpdesk-mail-field input:disabled,
+.helpdesk-mail-field select:disabled,
+.helpdesk-mail-field textarea:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1280px) {
+  .helpdesk-mail-metrics--enterprise {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+  }
+
+  .helpdesk-mail-policy-switches {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .helpdesk-mail-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .helpdesk-mail-summary {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .helpdesk-mail-hero {
+    flex-direction: column;
+  }
+
+  .helpdesk-mail-refresh {
+    width: 100%;
+  }
+
+  .helpdesk-mail-metrics--enterprise {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .helpdesk-mail-grid,
+  .helpdesk-mail-switches,
+  .helpdesk-mail-runtime,
+  .helpdesk-mail-policy-switches {
+    grid-template-columns: 1fr;
+  }
+
+  .helpdesk-mail-field--wide,
+  .helpdesk-mail-field--full {
+    grid-column: auto;
+  }
+
+  .helpdesk-mail-card__header--actions {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .helpdesk-mail-inline-action {
+    width: 100%;
+    margin-left: 52px;
+  }
+
+  .helpdesk-mail-savebar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .helpdesk-mail-savebar button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .helpdesk-mail-metrics--enterprise,
+  .helpdesk-mail-summary {
+    grid-template-columns: 1fr;
+  }
+}

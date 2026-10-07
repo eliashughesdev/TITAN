@@ -1,0 +1,185 @@
+.workspace-insights {
+  padding: 18px;
+
+  border: 1px solid #e2e7ef;
+  border-radius: 14px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 5px 18px
+    rgba(15, 23, 42, 0.035);
+}
+
+.workspace-insights__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 18px;
+
+  padding-bottom: 14px;
+
+  border-bottom: 1px solid #edf1f5;
+}
+
+.workspace-insights__header span {
+  display: block;
+
+  color: var(--workspace-primary);
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+}
+
+.workspace-insights__header h2 {
+  margin: 4px 0 0;
+
+  color: #253147;
+
+  font-size: 15px;
+}
+
+.workspace-insights__header p {
+  margin: 5px 0 0;
+
+  color: #8a95a6;
+
+  font-size: 9px;
+}
+
+.workspace-insights__header > svg {
+  color: var(--workspace-primary);
+}
+
+.workspace-insights-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 9px;
+
+  padding-top: 14px;
+}
+
+.workspace-insight-card {
+  min-height: 91px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  padding: 12px;
+
+  border: 1px solid #edf0f4;
+  border-radius: 10px;
+
+  background: #fafbfd;
+}
+
+.workspace-insight-card__icon {
+  width: 37px;
+  height: 37px;
+
+  flex: 0 0 37px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  color: var(--workspace-primary);
+  background: var(--workspace-soft);
+}
+
+.workspace-insight-card span {
+  display: block;
+
+  color: #778396;
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.workspace-insight-card strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: #1d2939;
+
+  font-size: 20px;
+  line-height: 1;
+}
+
+.workspace-insight-card small {
+  display: block;
+
+  margin-top: 6px;
+
+  color: #98a2b3;
+
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.workspace-insight-card--success
+.workspace-insight-card__icon {
+  color: #15803d;
+  background: #edfdf3;
+}
+
+.workspace-insight-card--warning
+.workspace-insight-card__icon {
+  color: #b54708;
+  background: #fff6e8;
+}
+
+.workspace-insight-card--danger
+.workspace-insight-card__icon {
+  color: #b42318;
+  background: #fff0ef;
+}
+
+@media (max-width: 1300px) {
+  .workspace-insights-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+}
+
+@media (max-width: 950px) {
+  .workspace-insights-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+}
+
+@media (max-width: 620px) {
+  .workspace-insights-grid {
+    grid-template-columns:
+      1fr;
+  }
+}

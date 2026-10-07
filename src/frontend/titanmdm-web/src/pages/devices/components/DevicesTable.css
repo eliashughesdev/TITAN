@@ -1,0 +1,86 @@
+.wit .wit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fbff;
+}
+
+.wit .wit-actions > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.wit .wit-actions strong {
+  font-size: 13px;
+  color: #172b4d;
+}
+
+.wit .wit-actions span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.wit .wit-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wit .wit-actions button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.wit .wit-device-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2563eb;
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wit .wit-device-link:hover {
+  text-decoration: underline;
+}
+
+.wit .wit-managed {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.wit input[type=checkbox] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+.wit code {
+  white-space: nowrap;
+  color: #475569;
+  font-size: 12px;
+}
+
+.wit button:focus-visible,
+.wit input:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+}

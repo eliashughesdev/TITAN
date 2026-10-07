@@ -1,0 +1,214 @@
+"""Catálogo de permisos por operación."""
+
+from __future__ import annotations
+from typing import Any, Iterable
+
+ALL_OPERATIONS: tuple[str, ...] = (
+    "users.read",
+    "users.write",
+    "users.delete",
+    "roles.read",
+    "roles.write",
+    "attendance.read",
+    "reports.read",
+    "reports.export",
+    "exports.read",
+    "payroll.run",
+    "remote_punch",
+    "schema.admin",
+    "settings.read",
+    "settings.write",
+    "collaborators.read",
+    "collaborators.write",
+    "collaborators.sync",
+    "schedules.read",
+    "schedules.write",
+    "inventory.read",
+    "inventory.write",
+    "bulk.execute",
+    "sync.read",
+    "sync.run",
+    "devices.read",
+    "devices.write",
+    "devices.delete",
+    "zk.read",
+    "zk.clone",
+    "zk.move",
+    "zk.enroll",
+    "zk.delete",
+    "zk.push",
+    "zk.sync",
+)
+
+ADMIN_ROLES = frozenset({"super_admin", "admin"})
+
+# Se conservan los roles originales para el visualizador
+# independiente. Las sesiones Titan usan permisos delegados.
+ROLE_DEFAULT_OPERATIONS: dict[str, tuple[str, ...]] = {
+    "super_admin": ALL_OPERATIONS,
+    "admin": ALL_OPERATIONS,
+    "rrhh": (
+        "attendance.read",
+        "reports.read",
+        "reports.export",
+        "exports.read",
+        "payroll.run",
+        "collaborators.read",
+        "collaborators.write",
+        "collaborators.sync",
+        "schedules.read",
+        "schedules.write",
+        "remote_punch",
+        "sync.read",
+    ),
+    "ti": (
+        "attendance.read",
+        "devices.read",
+        "devices.write",
+        "devices.delete",
+        "inventory.read",
+        "inventory.write",
+        "zk.read",
+        "zk.clone",
+        "zk.move",
+        "zk.enroll",
+        "zk.delete",
+        "zk.push",
+        "zk.sync",
+        "collaborators.read",
+        "collaborators.sync",
+        "bulk.execute",
+        "sync.read",
+        "sync.run",
+        "settings.read",
+        "exports.read",
+    ),
+    "supervisor": (
+        "attendance.read",
+        "reports.read",
+        "reports.export",
+        "exports.read",
+        "collaborators.read",
+        "schedules.read",
+        "devices.read",
+        "zk.read",
+        "remote_punch",
+        "sync.read",
+    ),
+    "consulta": (
+        "attendance.read",
+        "collaborators.read",
+        "schedules.read",
+        "devices.read",
+        "zk.read",
+        "sync.read",
+    ),
+    "coordinador": (
+        "attendance.read",
+        "collaborators.read",
+        "schedules.read",
+        "devices.read",
+        "zk.read",
+        "sync.read",
+    ),
+    "viewer": ("attendance.read",),
+}
+
+
+def normalize_role(role: Any) -> str:
+    return str(role or "").strip().lower()
+
+
+def normalize_operations(raw: Any) -> list[str]:
+    if not raw:
+        return []
+
+    if isinstance(raw, str):
+        raw = [raw]
+
+    if not isinstance(raw, Iterable):
+        return []
+
+    allowed = set(ALL_OPERATIONS)
+    result: list[str] = []
+    seen: set[str] = set()
+
+    for item in raw:
+        key = str(item or "").strip()
+
+        if key in allowed and key not in seen:
+            seen.add(key)
+            result.append(key)
+
+    return result
+
+
+def operations_for_role(role: Any) -> list[str]:
+    key = normalize_role(role)
+
+    if key in ADMIN_ROLES:
+        return list(ALL_OPERATIONS)
+
+    return list(
+        ROLE_DEFAULT_OPERATIONS.get(
+            key,
+            ROLE_DEFAULT_OPERATIONS["consulta"],
+        )
+    )
+
+
+def resolve_operations(
+    user: dict[str, Any] | None,
+) -> list[str]:
+    if not user:
+        return []
+
+    # Una lista vacía de permisos delegados significa
+    # cero permisos: nunca recurrir a un rol predeterminado.
+    if user.get("source") == "titan":
+        return normalize_operations(
+            user.get("operations", [])
+        )
+
+    role = normalize_role(user.get("role"))
+
+    if role in ADMIN_ROLES:
+        return list(ALL_OPERATIONS)
+
+    permissions = (
+        user.get("permissions")
+        if isinstance(user.get("permissions"), dict)
+        else {}
+    )
+
+    override = normalize_operations(
+        permissions.get("operations")
+        if permissions
+        else None
+    )
+
+    if override:
+        return override
+
+    direct = normalize_operations(user.get("operations"))
+
+    if direct:
+        return direct
+
+    return operations_for_role(role)
+
+
+def has_permission(
+    user: dict[str, Any] | None,
+    *operations: str,
+) -> bool:
+    if not user or not operations:
+        return False
+
+    owned = set(resolve_operations(user))
+    needed = normalize_operations(operations)
+
+    if not needed:
+        return False
+
+    return set(needed).issubset(owned)

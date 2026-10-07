@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+  <TargetFramework>net10.0-windows</TargetFramework>
+  <Nullable>enable</Nullable>
+  <ImplicitUsings>enable</ImplicitUsings>
+
+  <AssemblyName>TitanMDM.WindowsAgent</AssemblyName>
+  <RootNamespace>TitanMDM.WindowsAgent</RootNamespace>
+  <Version>1.0.0</Version>
+  <Company>TitanMDM</Company>
+  <Product>TitanMDM Windows Agent</Product>
+  <Description>Windows device management agent for TitanMDM Enterprise.</Description>
+
+  <UserSecretsId>...</UserSecretsId>
+</PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

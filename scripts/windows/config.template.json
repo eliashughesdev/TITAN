@@ -1,0 +1,6 @@
+{
+  "serverUrl": "http://172.21.20.14:8020",
+  "enrollmentToken": "__ENROLLMENT_TOKEN__",
+  "packageUrl": "http://172.21.20.14:8020/api/enrollment/windows/package",
+  "packageSha256": "__PACKAGE_SHA256__"
+}

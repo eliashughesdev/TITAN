@@ -1,0 +1,354 @@
+.helpdesk-work {
+  width: min(100%, 1600px);
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.helpdesk-work__tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #dfe7f3;
+  border-radius: 17px;
+  background: #fff;
+}
+
+.helpdesk-work__tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 11px;
+  color: #62718c;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.helpdesk-work__tabs button:hover {
+  background: #f3f6fd;
+}
+
+.helpdesk-work__tabs button.is-active {
+  color: #3155c4;
+  background: #eaf0ff;
+}
+
+.helpdesk-work__tabs button strong {
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  min-height: 23px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: #425aac;
+  background: #e2e9fa;
+  font-size: 11px;
+}
+
+.helpdesk-work__layout {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 16px;
+}
+
+.helpdesk-work__layout > * {
+  min-width: 0;
+}
+
+.helpdesk-work__agents {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 19px;
+  border: 1px solid #dfe7f3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 25px
+    rgb(31 54 101 / 5%);
+}
+
+.helpdesk-work__agents > div:first-child {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #4964d9;
+}
+
+.helpdesk-work__agents h2,
+.helpdesk-work__agents p {
+  margin: 0;
+}
+
+.helpdesk-work__agents h2 {
+  color: #263650;
+  font-size: 16px;
+}
+
+.helpdesk-work__agents > div:first-child p {
+  margin-top: 5px;
+  color: #77859b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.helpdesk-work__agents article {
+  padding: 12px;
+  border: 1px solid #e7ecf5;
+  border-radius: 12px;
+  background: #f9fbff;
+}
+
+.helpdesk-work__agents article > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.helpdesk-work__agents article strong {
+  color: #34435e;
+  font-size: 12px;
+}
+
+.helpdesk-work__agents article span {
+  color: #a56237;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.helpdesk-work__agents article span.is-available {
+  color: #16815a;
+}
+
+.helpdesk-work__agents article p {
+  margin-top: 8px;
+  color: #728099;
+  font-size: 11px;
+}
+
+.helpdesk-work__agents > button {
+  width: 100%;
+}
+
+@media (max-width: 1150px) {
+  .helpdesk-work__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .helpdesk-work__agents {
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .helpdesk-work__agents > div:first-child,
+  .helpdesk-work__agents > button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .helpdesk-work__agents {
+    grid-template-columns: 1fr;
+  }
+
+  .helpdesk-work__tabs button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* ============================================================
+ * HELPDESK KANBAN
+ * ============================================================ */
+
+.helpdesk-work__layout--kanban {
+  grid-template-columns: 1fr;
+}
+
+.helpdesk-kanban {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(240px, 1fr));
+  gap: 13px;
+  align-items: start;
+  margin-top: 15px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.helpdesk-kanban__column {
+  min-width: 240px;
+  overflow: hidden;
+  border: 1px solid #dfe7f3;
+  border-radius: 15px;
+  background: #f7f9fd;
+}
+
+.helpdesk-kanban__column > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 13px;
+  border-bottom: 1px solid #e3e9f2;
+  background: #fff;
+}
+
+.helpdesk-kanban__column > header strong {
+  color: #32415b;
+  font-size: 12px;
+}
+
+.helpdesk-kanban__column > header span {
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  height: 23px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #edf1fa;
+  color: #52617c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.helpdesk-kanban__column--new > header {
+  border-top: 3px solid #6076d6;
+}
+
+.helpdesk-kanban__column--open > header {
+  border-top: 3px solid #4593df;
+}
+
+.helpdesk-kanban__column--inprogress > header {
+  border-top: 3px solid #8a61d2;
+}
+
+.helpdesk-kanban__column--pendinguser > header {
+  border-top: 3px solid #d99b37;
+}
+
+.helpdesk-kanban__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  max-height: calc(100vh - 360px);
+  overflow-y: auto;
+}
+
+.helpdesk-kanban__card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #e1e7f0;
+  border-radius: 11px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 3px 12px
+    rgb(31 54 101 / 4%);
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.helpdesk-kanban__card:hover {
+  transform: translateY(-1px);
+  border-color: #c9d5eb;
+  box-shadow: 0 6px 18px
+    rgb(31 54 101 / 8%);
+}
+
+.helpdesk-kanban__card > strong {
+  color: #293a55;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.helpdesk-kanban__card > small {
+  color: #74829a;
+  font-size: 10px;
+}
+
+.helpdesk-kanban__card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 7px;
+}
+
+.helpdesk-kanban__card-top > span:first-child {
+  color: #566bc7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.helpdesk-kanban__priority {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #eef2f7;
+  color: #53627a;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.helpdesk-kanban__priority--high {
+  background: #fff0e8;
+  color: #b45309;
+}
+
+.helpdesk-kanban__priority--critical,
+.helpdesk-kanban__priority--urgent {
+  background: #feeceb;
+  color: #b42318;
+}
+
+.helpdesk-kanban__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #edf1f6;
+  color: #7a879b;
+  font-size: 9px;
+}
+
+.helpdesk-kanban__sla {
+  align-self: flex-start;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #feeceb;
+  color: #b42318;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.helpdesk-kanban__empty {
+  margin: 5px;
+  color: #8794a7;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 1250px) {
+  .helpdesk-kanban {
+    grid-template-columns:
+      repeat(4, 270px);
+  }
+}

@@ -1,0 +1,224 @@
+.helpdesk-workflow__sla-paused {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.helpdesk-workflow__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.helpdesk-workflow__notice > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.helpdesk-workflow__notice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.helpdesk-workflow__notice strong {
+  font-size: 13px;
+}
+
+.helpdesk-workflow__notice span {
+  color: var(--text-secondary, #667085);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.helpdesk-workflow__reopen-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+
+.helpdesk-workflow__reopen-button:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.helpdesk-workflow-modal {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(5px);
+  animation: helpdesk-workflow-backdrop-in 160ms ease-out;
+}
+
+.helpdesk-workflow-modal__dialog {
+  width: min(560px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px;
+  background: var(--surface, #fff);
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.25),
+    0 4px 15px rgba(15, 23, 42, 0.12);
+  animation: helpdesk-workflow-dialog-in 180ms ease-out;
+}
+
+.helpdesk-workflow-modal__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 13px;
+  align-items: flex-start;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.helpdesk-workflow-modal__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+.helpdesk-workflow-modal__header h2 {
+  margin: 1px 0 4px;
+  font-size: 18px;
+}
+
+.helpdesk-workflow-modal__header p {
+  margin: 0;
+  color: var(--text-secondary, #667085);
+  font-size: 13px;
+}
+
+.helpdesk-workflow-modal__close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.helpdesk-workflow-modal__close:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.helpdesk-workflow-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.helpdesk-workflow-modal__body label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.helpdesk-workflow-modal__body textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  padding: 12px 13px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.helpdesk-workflow-modal__body textarea:focus {
+  border-color: rgba(37, 99, 235, 0.6);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.09);
+}
+
+.helpdesk-workflow-modal__body small {
+  color: var(--text-secondary, #667085);
+  line-height: 1.4;
+}
+
+.helpdesk-workflow-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+@keyframes helpdesk-workflow-backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes helpdesk-workflow-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 640px) {
+  .helpdesk-workflow-modal {
+    padding: 12px;
+  }
+
+  .helpdesk-workflow-modal__footer {
+    flex-direction: column-reverse;
+  }
+
+  .helpdesk-workflow-modal__footer button {
+    width: 100%;
+  }
+}
+
+.helpdesk-workflow__success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: 11px;
+  background: rgba(22, 163, 74, 0.07);
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}

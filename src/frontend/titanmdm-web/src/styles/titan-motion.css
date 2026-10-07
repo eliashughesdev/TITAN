@@ -1,0 +1,77 @@
+.titan-fade-in {
+  animation: titan-fade-in 320ms ease;
+}
+
+.titan-slide-up {
+  animation: titan-slide-up 320ms ease;
+}
+
+.titan-scale-in {
+  animation: titan-scale-in 220ms ease;
+}
+
+.titan-hover-lift {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.titan-hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.titan-spin {
+  animation: titan-spin 0.8s linear infinite;
+}
+
+@keyframes titan-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes titan-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes titan-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes titan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-fade-in,
+  .titan-slide-up,
+  .titan-scale-in,
+  .titan-spin,
+  .titan-hover-lift {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

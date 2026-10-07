@@ -1,0 +1,150 @@
+.helpdesk-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 17px;
+  padding: 19px;
+  border: 1px solid #e0e8f4;
+  border-radius: 17px;
+  color: #263650;
+  background: #fff;
+  box-shadow: 0 6px 20px
+    rgb(31 54 101 / 5%);
+}
+
+.helpdesk-attachments *,
+.helpdesk-attachments *::before,
+.helpdesk-attachments *::after {
+  box-sizing: border-box;
+}
+
+.helpdesk-attachments__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #4c68d3;
+}
+
+.helpdesk-attachments__heading h2,
+.helpdesk-attachments__heading p,
+.helpdesk-attachments > p {
+  margin: 0;
+}
+
+.helpdesk-attachments__heading h2 {
+  color: #263650;
+  font-size: 16px;
+}
+
+.helpdesk-attachments__heading p {
+  margin-top: 4px;
+  color: #76849b;
+  font-size: 11px;
+}
+
+.helpdesk-attachments > p {
+  color: #76849b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.helpdesk-attachments > p[role="alert"] {
+  padding: 10px 12px;
+  border: 1px solid #f3cccc;
+  border-radius: 10px;
+  color: #a63939;
+  background: #fff4f4;
+}
+
+.helpdesk-attachments ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.helpdesk-attachments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e7ecf5;
+  border-radius: 11px;
+  background: #f9fbff;
+}
+
+.helpdesk-attachments li span {
+  min-width: 0;
+  color: #34445f;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.helpdesk-attachments button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid #d8e3f3;
+  border-radius: 10px;
+  color: #3759b8;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.helpdesk-attachments button:hover:not(:disabled) {
+  background: #eef3ff;
+}
+
+.helpdesk-attachments button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.helpdesk-attachments form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 11px;
+  padding-top: 12px;
+  border-top: 1px solid #e8edf6;
+}
+
+.helpdesk-attachments form > input[type="file"] {
+  flex: 1 1 190px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.helpdesk-attachments form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #596a84;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .helpdesk-attachments {
+    padding: 14px;
+  }
+
+  .helpdesk-attachments li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .helpdesk-attachments form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

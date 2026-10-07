@@ -1,0 +1,889 @@
+/* ================================================================
+   TITANMDM ENTERPRISE UI — UX-B
+   Apps · Security · Compliance · Kiosk
+   ================================================================ */
+
+.apps-page,
+.security-page,
+.compliance-page,
+.kiosk-page {
+  width: 100%;
+  max-width: 1720px;
+  margin: 0 auto;
+  padding: 0;
+  color: var(--titan-text);
+  animation: titan-b-enter 220ms ease;
+}
+
+/* ================================================================
+   HEADERS
+   ================================================================ */
+
+.apps-header,
+.security-header,
+.compliance-header,
+.kiosk-header {
+  position: relative;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 22px;
+
+  padding: 21px 22px;
+  margin-bottom: 2px;
+
+  border: 1px solid var(--titan-border);
+  border-radius: var(--titan-radius-lg);
+
+  background:
+    radial-gradient(
+      circle at 88% 8%,
+      rgba(92, 112, 255, 0.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.97),
+      rgba(248,251,255,.92)
+    );
+
+  box-shadow: var(--titan-shadow-sm);
+  overflow: hidden;
+}
+
+.apps-header::after,
+.security-header::after,
+.compliance-header::after,
+.kiosk-header::after {
+  content: "";
+
+  position: absolute;
+  left: 22px;
+  bottom: 0;
+
+  width: 54px;
+  height: 3px;
+
+  border-radius: 999px 999px 0 0;
+
+  background:
+    linear-gradient(
+      90deg,
+      var(--workspace-primary),
+      var(--titan-accent)
+    );
+}
+
+.apps-eyebrow,
+.security-eyebrow,
+.compliance-eyebrow,
+.kiosk-eyebrow {
+  color: var(--workspace-primary);
+
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .14em;
+
+  text-transform: uppercase;
+}
+
+.apps-header h1,
+.security-header h1,
+.compliance-header h1,
+.kiosk-header h1 {
+  margin: 5px 0 4px;
+
+  color: var(--titan-text);
+
+  font-size: clamp(25px, 2vw, 31px);
+  font-weight: 780;
+
+  letter-spacing: -.025em;
+}
+
+.apps-header p,
+.security-header p,
+.compliance-header p,
+.kiosk-header p {
+  max-width: 760px;
+
+  margin: 0;
+
+  color: var(--titan-text-3);
+
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* ================================================================
+   BUTTONS
+   ================================================================ */
+
+.apps-refresh-button,
+.security-primary-button,
+.security-secondary-button,
+.security-row-action,
+.compliance-primary,
+.compliance-secondary,
+.compliance-evaluate,
+.kiosk-secondary,
+.kiosk-create,
+.kiosk-app-inputs button {
+  min-height: 40px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 0 14px;
+
+  border-radius: 11px;
+
+  font-family: var(--titan-font-sans);
+  font-size: 11px;
+  font-weight: 750;
+
+  cursor: pointer;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    opacity 160ms ease;
+}
+
+.security-primary-button,
+.compliance-primary,
+.kiosk-create,
+.kiosk-app-inputs button {
+  border: 1px solid var(--workspace-primary);
+
+  color: #fff;
+
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(
+        in srgb,
+        var(--workspace-primary) 88%,
+        white
+      ),
+      var(--workspace-primary)
+    );
+
+  box-shadow:
+    0 8px 20px
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 22%,
+      transparent
+    );
+}
+
+.apps-refresh-button,
+.security-secondary-button,
+.security-row-action,
+.compliance-secondary,
+.compliance-evaluate,
+.kiosk-secondary {
+  border: 1px solid var(--titan-border-strong);
+
+  color: var(--titan-text-2);
+
+  background: rgba(255,255,255,.92);
+}
+
+.apps-refresh-button:hover:not(:disabled),
+.security-primary-button:hover:not(:disabled),
+.security-secondary-button:hover:not(:disabled),
+.security-row-action:hover:not(:disabled),
+.compliance-primary:hover:not(:disabled),
+.compliance-secondary:hover:not(:disabled),
+.compliance-evaluate:hover:not(:disabled),
+.kiosk-secondary:hover:not(:disabled),
+.kiosk-create:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--titan-shadow-sm);
+}
+
+/* ================================================================
+   COMMON SURFACES
+   ================================================================ */
+
+.apps-panel,
+.security-panel,
+.compliance-panel,
+.kiosk-editor,
+.kiosk-profiles {
+  border: 1px solid var(--titan-border);
+
+  border-radius: 16px;
+
+  background: rgba(255,255,255,.96);
+
+  box-shadow: var(--titan-shadow-sm);
+}
+
+/* ================================================================
+   KPI CARDS
+   ================================================================ */
+
+.apps-stat-grid,
+.security-stats,
+.compliance-stats,
+.kiosk-summary {
+  gap: 12px;
+}
+
+.apps-stat-card,
+.security-stat,
+.compliance-stat,
+.kiosk-summary-card {
+  position: relative;
+
+  min-height: 90px;
+
+  border: 1px solid var(--titan-border);
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f9fbff
+    );
+
+  box-shadow: var(--titan-shadow-sm);
+
+  overflow: hidden;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.apps-stat-card:hover,
+.security-stat:hover,
+.compliance-stat:hover,
+.kiosk-summary-card:hover {
+  transform: translateY(-2px);
+
+  box-shadow: var(--titan-shadow-md);
+}
+
+.apps-stat-icon,
+.security-stat-icon,
+.compliance-stat-icon,
+.kiosk-summary-card > div {
+  border-radius: 12px;
+
+  color: var(--workspace-primary);
+
+  background: var(--workspace-soft);
+}
+
+.apps-stat-card span,
+.security-stat span,
+.compliance-stat span,
+.kiosk-summary-card span {
+  color: var(--titan-text-3);
+
+  font-size: 9px;
+  font-weight: 750;
+
+  letter-spacing: .04em;
+
+  text-transform: uppercase;
+}
+
+.apps-stat-card strong,
+.security-stat strong,
+.compliance-stat strong,
+.kiosk-summary-card strong {
+  color: var(--titan-text);
+  font-weight: 800;
+}
+
+.security-stat.danger,
+.compliance-stat.danger {
+  border-color: rgba(217,76,99,.24);
+}
+
+.compliance-stat.good {
+  border-color: rgba(30,169,113,.22);
+}
+
+/* ================================================================
+   APPS
+   ================================================================ */
+
+.apps-toolbar {
+  gap: 10px;
+
+  padding: 13px 16px;
+
+  border-bottom:
+    1px solid rgba(151,170,203,.15);
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.apps-search {
+  border:
+    1px solid rgba(143,163,201,.31);
+
+  border-radius: 11px;
+
+  background: #f8faff;
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.apps-search:focus-within {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 48%,
+      white
+    );
+
+  background: #fff;
+
+  box-shadow:
+    0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 9%,
+      transparent
+    );
+}
+
+.apps-toolbar select {
+  border-color: var(--titan-border);
+  border-radius: 10px;
+
+  color: var(--titan-text-2);
+
+  background: #fff;
+}
+
+.apps-panel-header {
+  padding: 15px 17px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.apps-panel-title {
+  color: var(--titan-text);
+}
+
+.apps-panel-title span {
+  color: var(--titan-text-4);
+  font-size: 10px;
+}
+
+.apps-table th {
+  color: var(--titan-text-3);
+
+  background: #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.apps-table td {
+  border-bottom:
+    1px solid rgba(151,170,203,.13);
+
+  color: var(--titan-text-2);
+
+  font-size: 11px;
+}
+
+.apps-table tbody tr {
+  transition:
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.apps-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 3%,
+      white
+    );
+
+  box-shadow:
+    inset 3px 0 var(--workspace-primary);
+}
+
+.app-icon {
+  border-radius: 10px;
+
+  color: var(--workspace-primary);
+
+  background: var(--workspace-soft);
+}
+
+.app-badge {
+  min-height: 25px;
+
+  align-items: center;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+/* ================================================================
+   SECURITY
+   ================================================================ */
+
+.security-risk-grid {
+  gap: 10px;
+}
+
+.security-risk-card {
+  border: 1px solid var(--titan-border);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #f8faff
+    );
+
+  box-shadow: 0 5px 15px rgba(25,42,75,.03);
+}
+
+.security-panel-heading {
+  padding: 15px 17px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.security-panel-heading strong {
+  color: var(--titan-text);
+}
+
+.security-panel-heading span {
+  color: var(--titan-text-4);
+
+  font-size: 10px;
+}
+
+.security-table th {
+  color: var(--titan-text-3);
+
+  background: #f7f9fd;
+
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.security-table td {
+  border-bottom:
+    1px solid rgba(151,170,203,.13);
+
+  color: var(--titan-text-2);
+
+  font-size: 10px;
+}
+
+.security-table tbody tr:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 3%,
+      white
+    );
+}
+
+.security-device-link strong {
+  color: var(--workspace-primary);
+}
+
+.security-risk-badge,
+.security-boolean {
+  min-height: 25px;
+
+  align-items: center;
+
+  padding: 0 8px;
+
+  font-size: 9px;
+}
+
+.security-risk-badge.low,
+.security-boolean.good {
+  color: #137b58;
+  background: #eaf9f2;
+}
+
+.security-risk-badge.medium {
+  color: #99620b;
+  background: #fff8eb;
+}
+
+.security-risk-badge.high,
+.security-risk-badge.critical,
+.security-boolean.bad {
+  color: #ab3248;
+  background: #fff0f3;
+}
+
+/* ================================================================
+   COMPLIANCE
+   ================================================================ */
+
+.compliance-panel-header {
+  padding: 15px 17px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+}
+
+.compliance-panel-header strong {
+  color: var(--titan-text);
+}
+
+.compliance-device {
+  border-bottom:
+    1px solid rgba(151,170,203,.13);
+
+  transition: background 150ms ease;
+}
+
+.compliance-device:hover {
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 2.5%,
+      white
+    );
+}
+
+.compliance-device-name strong {
+  color: var(--titan-text);
+}
+
+.compliance-status,
+.compliance-risk {
+  min-height: 25px;
+
+  align-items: center;
+
+  padding: 0 8px;
+
+  font-size: 9px;
+}
+
+.compliance-findings {
+  background:
+    linear-gradient(
+      180deg,
+      #f8faff,
+      #f5f8fc
+    );
+}
+
+.compliance-finding {
+  border: 1px solid var(--titan-border);
+
+  border-radius: 11px;
+
+  box-shadow:
+    0 4px 12px rgba(30,47,82,.03);
+}
+
+.compliance-finding.pass {
+  border-left:
+    3px solid var(--titan-success);
+}
+
+.compliance-finding.fail {
+  border-left:
+    3px solid var(--titan-danger);
+}
+
+/* ================================================================
+   KIOSK
+   ================================================================ */
+
+.kiosk-layout {
+  gap: 14px;
+}
+
+.kiosk-editor,
+.kiosk-profiles {
+  padding: 17px;
+}
+
+.kiosk-section-title > div {
+  color: var(--titan-text);
+}
+
+.kiosk-editor > label {
+  color: var(--titan-text-2);
+
+  font-size: 10px;
+
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.kiosk-editor input,
+.kiosk-editor textarea {
+  border: 1px solid rgba(143,163,201,.32);
+
+  border-radius: 10px;
+
+  outline: none;
+
+  color: var(--titan-text);
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fbfcff
+    );
+
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.kiosk-editor input:focus,
+.kiosk-editor textarea:focus {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 48%,
+      white
+    );
+
+  box-shadow:
+    0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 9%,
+      transparent
+    );
+}
+
+.kiosk-mode {
+  border: 1px solid var(--titan-border);
+
+  border-radius: 12px;
+
+  color: var(--titan-text-3);
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fafcff
+    );
+
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.kiosk-mode:hover {
+  transform: translateY(-1px);
+  border-color: var(--titan-border-strong);
+}
+
+.kiosk-mode.selected {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 36%,
+      white
+    );
+
+  color: var(--workspace-primary);
+
+  background: var(--workspace-soft);
+
+  box-shadow:
+    inset 3px 0 var(--workspace-primary);
+}
+
+.kiosk-app-row,
+.kiosk-profile {
+  border: 1px solid var(--titan-border);
+
+  border-radius: 11px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #fff,
+      #fafcff
+    );
+
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.kiosk-profile:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--titan-shadow-sm);
+}
+
+/* ================================================================
+   MESSAGES
+   ================================================================ */
+
+.apps-error,
+.security-message,
+.compliance-message,
+.kiosk-message {
+  border-radius: 12px;
+
+  box-shadow:
+    0 7px 18px rgba(30,47,82,.035);
+
+  animation:
+    titan-b-notice 180ms ease-out;
+}
+
+.security-message.success,
+.compliance-message.success,
+.kiosk-message.success {
+  border-color: rgba(30,169,113,.2);
+
+  color: #176c4b;
+
+  background: #ecfaf3;
+}
+
+.apps-error,
+.security-message.error,
+.compliance-message.error,
+.kiosk-message.error {
+  border-color: rgba(217,76,99,.2);
+
+  color: #a93448;
+
+  background: #fff1f3;
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 1150px) {
+  .apps-stat-grid,
+  .security-stats,
+  .security-risk-grid,
+  .compliance-stats,
+  .kiosk-summary {
+    grid-template-columns:
+      repeat(2, minmax(0,1fr));
+  }
+
+  .kiosk-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .apps-header,
+  .security-header,
+  .compliance-header,
+  .kiosk-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .apps-stat-grid,
+  .security-stats,
+  .security-risk-grid,
+  .compliance-stats,
+  .kiosk-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .apps-toolbar {
+    flex-direction: column;
+  }
+
+  .apps-search {
+    width: 100%;
+  }
+}
+
+@keyframes titan-b-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes titan-b-notice {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apps-page,
+  .security-page,
+  .compliance-page,
+  .kiosk-page,
+  .apps-stat-card,
+  .security-stat,
+  .compliance-stat,
+  .kiosk-summary-card {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

@@ -1,0 +1,107 @@
+.hdkb__readonly {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #eed79f;
+  border-radius: 10px;
+  background: #fff9e9;
+  color: #956514;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.hdkb__column-description {
+  display: block;
+  margin-top: 2px;
+  color: #8a95a7;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.helpdesk-kanban__column {
+  transition:
+    border-color 130ms ease,
+    background 130ms ease,
+    transform 130ms ease;
+}
+
+.hdkb__column--over {
+  border-color: #7887df;
+  background: #f2f4ff;
+  transform: translateY(-1px);
+}
+
+.hdkb__drag-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #8995a8;
+}
+
+.hdkb__ticket-number {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #566bc7;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.hdkb__ticket-number:hover {
+  text-decoration: underline;
+}
+
+.hdkb__subject {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #293a55;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hdkb__subject:hover {
+  color: #405cca;
+}
+
+.hdkb__drag-row
+.helpdesk-kanban__priority {
+  margin-left: auto;
+}
+
+.hdkb__card--dragging {
+  opacity: .42;
+  transform: rotate(1deg) scale(.985);
+}
+
+.hdkb__card--saving {
+  pointer-events: none;
+  opacity: .68;
+}
+
+.hdkb__saving-label {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #edf0ff;
+  color: #4f5fc0;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.helpdesk-kanban__card[draggable="true"] {
+  cursor: grab;
+}
+
+.helpdesk-kanban__card[draggable="true"]:active {
+  cursor: grabbing;
+}
