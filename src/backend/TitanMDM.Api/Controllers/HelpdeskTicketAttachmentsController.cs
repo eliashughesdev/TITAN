@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Application.Security;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -16,19 +17,64 @@ namespace TitanMDM.Api.Controllers;
 public sealed class HelpdeskTicketAttachmentsController
     : ControllerBase
 {
+    // ============================================================
+    // PERMISSIONS
+    // ============================================================
+
+    private const string PortalAccess =
+        "helpdesk.portal.access";
+
+    private const string RequestOwnView =
+        "helpdesk.request.own.view";
+
+    private const string TicketDetails =
+        "helpdesk.ticket.details.view";
+
+    private const string AgentAccess =
+        "helpdesk.agent.access";
+
+    private const string AdminAccess =
+        "helpdesk.admin.access";
+
+    private const string TicketInternalNote =
+        "helpdesk.ticket.internal-note";
+
+    private const string LegacyHelpdeskView =
+        "helpdesk.view";
+
+    private const string LegacyHelpdeskManage =
+        "helpdesk.manage";
+
+    private const string LegacyTicketsView =
+        "tickets.view";
+
+    private const string LegacyTicketsComment =
+        "tickets.comment";
+
+    // ============================================================
+    // DEPENDENCIES
+    // ============================================================
+
     private readonly TitanMdmDbContext
         _db;
+
+    private readonly IScopeAccessService
+        _scopeAccessService;
 
     private readonly string
         _root;
 
     public HelpdeskTicketAttachmentsController(
         TitanMdmDbContext db,
+        IScopeAccessService scopeAccessService,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
         _db =
             db;
+
+        _scopeAccessService =
+            scopeAccessService;
 
         var configured =
             configuration[
@@ -57,33 +103,42 @@ public sealed class HelpdeskTicketAttachmentsController
         var identity =
             GetIdentity();
 
-        if (identity is null)
+        if (
+            identity is null)
         {
-            return Unauthorized();
+            return Unauthorized(
+                new
+                {
+                    message =
+                        "La sesión no contiene una identidad válida."
+                });
+        }
+
+        var access =
+            await GetTicketAccessAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken);
+
+        if (
+            !access.Exists)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        "El ticket no existe."
+                });
         }
 
         if (
-            !CanViewTickets())
+            !access.CanView)
         {
             return Forbid();
         }
 
-        var ticketExists =
-            await _db.HelpdeskTickets
-                .AsNoTracking()
-                .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            identity.Value.OrganizationId
-                        &&
-                        x.Id ==
-                            ticketId,
-                    cancellationToken);
-
-        if (!ticketExists)
-        {
-            return NotFound();
-        }
+        var canViewInternal =
+            CanViewInternal();
 
         var items =
             await _db
@@ -95,8 +150,14 @@ public sealed class HelpdeskTicketAttachmentsController
                             identity.Value.OrganizationId
                         &&
                         x.TicketId ==
-                            ticketId)
-                .OrderBy(
+                            ticketId
+                        &&
+                        (
+                            !x.IsInternal
+                            ||
+                            canViewInternal
+                        ))
+                .OrderByDescending(
                     x =>
                         x.IsInline)
                 .ThenBy(
@@ -116,8 +177,9 @@ public sealed class HelpdeskTicketAttachmentsController
                             x.CreatedAtUtc,
 
                             canPreview =
-                                x.ContentType.StartsWith(
-                                    "image/")
+                                x.ContentType
+                                    .StartsWith(
+                                        "image/")
                                 ||
                                 x.ContentType ==
                                     "application/pdf"
@@ -133,17 +195,17 @@ public sealed class HelpdeskTicketAttachmentsController
     // PREVIEW
     // ============================================================
 
-    [HttpGet("{attachmentId:guid}/preview")]
+    [HttpGet(
+        "{attachmentId:guid}/preview")]
     public async Task<IActionResult> Preview(
         Guid ticketId,
         Guid attachmentId,
         CancellationToken cancellationToken)
     {
-        return await OpenFile(
+        return await OpenFileAsync(
             ticketId,
             attachmentId,
-            download:
-                false,
+            false,
             cancellationToken);
     }
 
@@ -151,17 +213,17 @@ public sealed class HelpdeskTicketAttachmentsController
     // DOWNLOAD
     // ============================================================
 
-    [HttpGet("{attachmentId:guid}/download")]
+    [HttpGet(
+        "{attachmentId:guid}/download")]
     public async Task<IActionResult> Download(
         Guid ticketId,
         Guid attachmentId,
         CancellationToken cancellationToken)
     {
-        return await OpenFile(
+        return await OpenFileAsync(
             ticketId,
             attachmentId,
-            download:
-                true,
+            true,
             cancellationToken);
     }
 
@@ -169,21 +231,36 @@ public sealed class HelpdeskTicketAttachmentsController
     // FILE
     // ============================================================
 
-    private async Task<IActionResult> OpenFile(
-        Guid ticketId,
-        Guid attachmentId,
-        bool download,
-        CancellationToken cancellationToken)
+    private async Task<IActionResult>
+        OpenFileAsync(
+            Guid ticketId,
+            Guid attachmentId,
+            bool download,
+            CancellationToken cancellationToken)
     {
         var identity =
             GetIdentity();
 
-        if (identity is null)
+        if (
+            identity is null)
         {
             return Unauthorized();
         }
 
-        if (!CanViewTickets())
+        var access =
+            await GetTicketAccessAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken);
+
+        if (
+            !access.Exists)
+        {
+            return NotFound();
+        }
+
+        if (
+            !access.CanView)
         {
             return Forbid();
         }
@@ -204,15 +281,17 @@ public sealed class HelpdeskTicketAttachmentsController
                             attachmentId,
                     cancellationToken);
 
-        if (attachment is null)
+        if (
+            attachment is null)
         {
-            return NotFound();
+            return NotFound(
+                new
+                {
+                    message =
+                        "El adjunto no existe."
+                });
         }
 
-        /*
-         * Notas internas:
-         * solo TIC/Admin.
-         */
         if (
             attachment.IsInternal
             &&
@@ -230,32 +309,32 @@ public sealed class HelpdeskTicketAttachmentsController
                 ticketId
                     .ToString("N"));
 
-        var path =
-            Path.Combine(
-                directory,
-                attachment.StorageName);
-
-        /*
-         * Protección adicional:
-         * StorageName viene de BD, pero no confiamos
-         * ciegamente en un path.
-         */
-        var fullPath =
-            Path.GetFullPath(
-                path);
-
         var fullDirectory =
             Path.GetFullPath(
-                directory)
+                directory);
+
+        var fullPath =
+            Path.GetFullPath(
+                Path.Combine(
+                    fullDirectory,
+                    attachment.StorageName));
+
+        var expectedPrefix =
+            fullDirectory
             +
             Path.DirectorySeparatorChar;
 
         if (
             !fullPath.StartsWith(
-                fullDirectory,
+                expectedPrefix,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest();
+            return BadRequest(
+                new
+                {
+                    message =
+                        "La ruta física del adjunto no es válida."
+                });
         }
 
         if (
@@ -266,7 +345,7 @@ public sealed class HelpdeskTicketAttachmentsController
                 new
                 {
                     message =
-                        "El archivo existe en la base de datos pero no se encontró en almacenamiento."
+                        "El archivo está registrado, pero no existe en almacenamiento."
                 });
         }
 
@@ -280,7 +359,20 @@ public sealed class HelpdeskTicketAttachmentsController
                 useAsync:
                     true);
 
-        if (download)
+        /*
+         * Seguridad para contenido servido
+         * directamente al navegador.
+         */
+        Response.Headers[
+            "X-Content-Type-Options"] =
+            "nosniff";
+
+        Response.Headers[
+            "Cache-Control"] =
+            "private, max-age=300";
+
+        if (
+            download)
         {
             return File(
                 stream,
@@ -298,45 +390,132 @@ public sealed class HelpdeskTicketAttachmentsController
     }
 
     // ============================================================
-    // SECURITY
+    // ACCESS
     // ============================================================
 
-    private bool CanViewTickets()
+    private async Task<TicketAccessResult>
+        GetTicketAccessAsync(
+            (
+                Guid OrganizationId,
+                Guid UserId
+            ) identity,
+            Guid ticketId,
+            CancellationToken cancellationToken)
     {
-        return HasAnyPermission(
-            "helpdesk.ticket.details.view",
-            "helpdesk.inbox.all",
-            "helpdesk.agent.access",
-            "helpdesk.admin.access",
-            "helpdesk.view",
-            "tickets.view",
-            "helpdesk.manage");
+        var ticket =
+            await _db
+                .HelpdeskTickets
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            identity.OrganizationId
+                        &&
+                        x.Id ==
+                            ticketId)
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.RequesterUserId
+                        })
+                .SingleOrDefaultAsync(
+                    cancellationToken);
+
+        if (
+            ticket is null)
+        {
+            return new TicketAccessResult(
+                false,
+                false);
+        }
+
+        /*
+         * Solicitante viendo SU ticket.
+         */
+        if (
+            ticket.RequesterUserId ==
+                identity.UserId
+            &&
+            HasAnyPermission(
+                PortalAccess,
+                RequestOwnView,
+                AdminAccess,
+                LegacyHelpdeskManage))
+        {
+            return new TicketAccessResult(
+                true,
+                true);
+        }
+
+        /*
+         * Consola TIC.
+         */
+        if (
+            !HasAnyPermission(
+                TicketDetails,
+                AgentAccess,
+                AdminAccess,
+                LegacyHelpdeskView,
+                LegacyTicketsView,
+                LegacyHelpdeskManage))
+        {
+            return new TicketAccessResult(
+                true,
+                false);
+        }
+
+        /*
+         * Mismo modelo de scopes utilizado
+         * por el resto del Helpdesk.
+         */
+        var canAccess =
+            await _scopeAccessService
+                .CanAccessTicketAsync(
+                    identity.OrganizationId,
+                    identity.UserId,
+                    ticketId,
+                    cancellationToken);
+
+        return new TicketAccessResult(
+            true,
+            canAccess);
     }
 
     private bool CanViewInternal()
     {
         return HasAnyPermission(
-            "helpdesk.ticket.internal-note",
-            "helpdesk.admin.access",
-            "tickets.comment",
-            "helpdesk.manage");
+            TicketInternalNote,
+            AgentAccess,
+            AdminAccess,
+            LegacyTicketsComment,
+            LegacyHelpdeskManage);
+    }
+
+    private bool HasPermission(
+        string permission)
+    {
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                string.Equals(
+                    claim.Value,
+                    permission,
+                    StringComparison.OrdinalIgnoreCase));
     }
 
     private bool HasAnyPermission(
         params string[] permissions)
     {
         return permissions.Any(
-            permission =>
-                User.Claims.Any(
-                    claim =>
-                        claim.Type ==
-                            "permission"
-                        &&
-                        string.Equals(
-                            claim.Value,
-                            permission,
-                            StringComparison.OrdinalIgnoreCase)));
+            HasPermission);
     }
+
+    // ============================================================
+    // IDENTITY
+    // ============================================================
 
     private (
         Guid OrganizationId,
@@ -379,4 +558,8 @@ public sealed class HelpdeskTicketAttachmentsController
             organizationId,
             userId);
     }
+
+    private sealed record TicketAccessResult(
+        bool Exists,
+        bool CanView);
 }

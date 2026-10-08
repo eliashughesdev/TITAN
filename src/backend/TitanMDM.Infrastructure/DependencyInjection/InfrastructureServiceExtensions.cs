@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -251,7 +251,7 @@ public static class InfrastructureServiceExtensions
         // IDENTITY / AUTHENTICATION
         // ============================================================
 
-        services.AddScoped<
+services.AddScoped<
             IPasswordHasher<User>,
             PasswordHasher<User>>();
 
@@ -486,7 +486,7 @@ public static class InfrastructureServiceExtensions
         // ============================================================
 
         /*
-         * Generador empresarial de números:
+         * Generador empresarial de nÃºmeros:
          *
          * HD-1
          * HD-2
@@ -569,3 +569,5 @@ public static class InfrastructureServiceExtensions
         return services;
     }
 }
+
+

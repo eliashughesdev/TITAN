@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -92,7 +92,7 @@ if (isDevelopment)
 // CACHE
 //
 // IMPORTANTE:
-// TODA la configuración DI debe existir ANTES de builder.Build().
+// TODA la configuraciÃ³n DI debe existir ANTES de builder.Build().
 // ============================================================================
 
 builder.Services.AddMemoryCache();
@@ -275,15 +275,15 @@ builder.Services
 // El navegador nunca consulta directamente BioTime o Python.
 //
 // React
-//   ↓
+//   â†“
 // TitanMDM API
-//   ↓
+//   â†“
 // Memory Cache
-//   ↓
+//   â†“
 // Ponches Gateway
-//   ↓
+//   â†“
 // Python Edge
-//   ↓
+//   â†“
 // BioTime / ZKTeco
 //
 // Operaciones de escritura NO deben reutilizar respuestas cacheadas.
@@ -319,7 +319,7 @@ builder.Services
              *
              * - consultas
              * - SQL
-             * - sincronización
+             * - sincronizaciÃ³n
              * - operaciones ZKTeco
              */
             client.Timeout =
@@ -335,7 +335,7 @@ builder.Services
 // ============================================================================
 // IMPORTANTE
 //
-// NO AGREGAR builder.Services DESPUÉS DE ESTE PUNTO.
+// NO AGREGAR builder.Services DESPUÃ‰S DE ESTE PUNTO.
 // ============================================================================
 
 var app =
@@ -356,6 +356,7 @@ using (var scope =
 
     await bootstrapper
         .BootstrapAsync();
+
 }
 
 // ============================================================================
@@ -647,3 +648,5 @@ app.Run();
 public partial class Program
 {
 }
+
+

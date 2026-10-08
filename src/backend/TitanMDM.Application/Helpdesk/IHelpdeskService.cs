@@ -52,4 +52,24 @@ public interface IHelpdeskService
             Guid requesterUserId,
             HelpdeskRoutingPreviewRequest request,
             CancellationToken cancellationToken = default);
+
+    Task<HelpdeskRoutingHealthSnapshot> GetRoutingHealthAsync(
+    Guid organizationId,
+    CancellationToken cancellationToken = default);
+
+    Task<HelpdeskRoutingDiagnosticSnapshot?> GetRoutingDiagnosticAsync(
+        Guid organizationId,
+        Guid ticketId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> RetryAutomaticAssignmentEnterpriseAsync(
+        Guid organizationId,
+        Guid ticketId,
+        CancellationToken cancellationToken = default);
+
+    Task<HelpdeskRoutingQueueResult> RetryAutomaticAssignmentForOpenTicketsAsync(
+        Guid organizationId,
+        int maxTickets,
+        bool dryRun,
+        CancellationToken cancellationToken = default);
 }

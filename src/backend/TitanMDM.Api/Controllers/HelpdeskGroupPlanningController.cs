@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
@@ -5,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Domain.Entities;
-
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Controllers;
@@ -27,7 +27,7 @@ public sealed class HelpdeskGroupPlanningController
     }
 
     // ============================================================
-    // CATALOG
+    // GET COMPLETE PLANNING CATALOG
     // ============================================================
 
     [HttpGet]
@@ -47,7 +47,8 @@ public sealed class HelpdeskGroupPlanningController
         }
 
         var teams =
-            await _db.HelpdeskTeams
+            await _db
+                .HelpdeskTeams
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -60,7 +61,8 @@ public sealed class HelpdeskGroupPlanningController
                     cancellationToken);
 
         var sites =
-            await _db.Sites
+            await _db
+                .Sites
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -86,7 +88,8 @@ public sealed class HelpdeskGroupPlanningController
                     cancellationToken);
 
         var locations =
-            await _db.SiteLocations
+            await _db
+                .SiteLocations
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -111,7 +114,8 @@ public sealed class HelpdeskGroupPlanningController
                     cancellationToken);
 
         var coverages =
-            await _db.HelpdeskSiteCoverages
+            await _db
+                .HelpdeskSiteCoverages
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -121,7 +125,8 @@ public sealed class HelpdeskGroupPlanningController
                     cancellationToken);
 
         var members =
-            await _db.HelpdeskTeamMembers
+            await _db
+                .HelpdeskTeamMembers
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -141,18 +146,19 @@ public sealed class HelpdeskGroupPlanningController
                 .ToListAsync(
                     cancellationToken);
 
-        var eligibleUserIds =
+        var eligibleIds =
             await EligibleTechnicians(
                     organizationId)
                 .ToListAsync(
                     cancellationToken);
 
         var eligibleSet =
-            eligibleUserIds
+            eligibleIds
                 .ToHashSet();
 
         var users =
-            await _db.Users
+            await _db
+                .Users
                 .AsNoTracking()
                 .Where(
                     x =>
@@ -195,168 +201,207 @@ public sealed class HelpdeskGroupPlanningController
                     x.Name);
 
         var resultUsers =
-            users.Select(
-                user =>
-                {
-                    string? siteName =
-                        null;
-
-                    string? locationName =
-                        null;
-
-                    if (
-                        user.SiteId.HasValue)
+            users
+                .Select(
+                    user =>
                     {
-                        siteNames.TryGetValue(
-                            user.SiteId.Value,
-                            out siteName);
-                    }
+                        string? siteName =
+                            null;
 
-                    if (
-                        user.SiteLocationId.HasValue)
-                    {
-                        locationNames.TryGetValue(
-                            user.SiteLocationId.Value,
-                            out locationName);
-                    }
+                        string? locationName =
+                            null;
 
-                    return new
-                    {
-                        user.Id,
+                        if (
+                            user.SiteId
+                                .HasValue)
+                        {
+                            siteNames
+                                .TryGetValue(
+                                    user.SiteId.Value,
+                                    out siteName);
+                        }
 
-                        name =
-                            $"{user.FirstName} {user.LastName}"
-                                .Trim(),
+                        if (
+                            user.SiteLocationId
+                                .HasValue)
+                        {
+                            locationNames
+                                .TryGetValue(
+                                    user.SiteLocationId.Value,
+                                    out locationName);
+                        }
 
-                        user.Email,
+                        return new
+                        {
+                            user.Id,
 
-                        eligible =
-                            eligibleSet.Contains(
-                                user.Id),
+                            name =
+                                $"{user.FirstName} {user.LastName}"
+                                    .Trim(),
 
-                        user.SiteId,
+                            user.Email,
 
-                        siteName,
+                            eligible =
+                                eligibleSet
+                                    .Contains(
+                                        user.Id),
 
-                        user.SiteLocationId,
+                            user.SiteId,
 
-                        siteLocationName =
-                            locationName
-                    };
-                })
+                            siteName,
+
+                            user.SiteLocationId,
+
+                            siteLocationName =
+                                locationName
+                        };
+                    })
                 .ToArray();
 
         var resultGroups =
-            teams.Select(
-                team =>
-                {
-                    var teamCoverages =
-                        coverages
-                            .Where(
-                                x =>
-                                    x.TeamId ==
-                                        team.Id)
-                            .OrderBy(
-                                x =>
-                                    x.Priority)
-                            .Select(
-                                x =>
-                                    new
-                                    {
-                                        x.Id,
-                                        x.SiteId,
-                                        x.SiteLocationId,
-                                        x.Category,
-                                        x.Priority,
-                                        x.IsActive
-                                    })
-                            .ToArray();
-
-                    var technicians =
-                        members
-                            .Where(
-                                x =>
-                                    x.TeamId ==
-                                        team.Id)
-                            .Select(
-                                member =>
-                                {
-                                    var schedule =
-                                        schedules
-                                            .FirstOrDefault(
-                                                x =>
-                                                    x.TeamId ==
-                                                        team.Id
-                                                    &&
-                                                    x.UserId ==
-                                                        member.UserId);
-
-                                    return new
-                                    {
-                                        member.UserId,
-                                        member.IsAvailable,
-                                        member.AcceptsAutomaticAssignments,
-                                        member.MaxOpenTickets,
-
-                                        priority =
-                                            schedule?.Priority
-                                            ??
-                                            1,
-
-                                        timeZoneId =
-                                            schedule?.TimeZoneId
-                                            ??
-                                            "America/Santo_Domingo",
-
-                                        slots =
-                                            schedule?.GetSlots()
-                                            ??
-                                            Array.Empty<HelpdeskWeeklySlot>(),
-
-                                        configured =
-                                            schedule is not null,
-
-                                        onDuty =
-                                            schedule?.IsOnDuty(
-                                                DateTime.UtcNow)
-                                            ??
-                                            false
-                                    };
-                                })
-                            .OrderBy(
-                                x =>
-                                    x.priority)
-                            .ThenBy(
-                                x =>
-                                    x.UserId)
-                            .ToArray();
-
-                    return new
+            teams
+                .Select(
+                    team =>
                     {
-                        team.Id,
-                        team.Name,
-                        team.Description,
-                        team.IsActive,
+                        var teamCoverages =
+                            coverages
+                                .Where(
+                                    x =>
+                                        x.TeamId ==
+                                            team.Id)
+                                .OrderBy(
+                                    x =>
+                                        x.Priority)
+                                .ThenBy(
+                                    x =>
+                                        x.SiteId)
+                                .Select(
+                                    x =>
+                                        new
+                                        {
+                                            x.Id,
+                                            x.SiteId,
+                                            x.SiteLocationId,
+                                            x.Category,
+                                            x.Priority,
+                                            x.IsActive
+                                        })
+                                .ToArray();
 
-                        tasks =
-                            ParseTasks(
-                                team.Categories),
+                        var technicians =
+                            members
+                                .Where(
+                                    x =>
+                                        x.TeamId ==
+                                            team.Id)
+                                .Select(
+                                    member =>
+                                    {
+                                        var schedule =
+                                            schedules
+                                                .FirstOrDefault(
+                                                    x =>
+                                                        x.TeamId ==
+                                                            team.Id
+                                                        &&
+                                                        x.UserId ==
+                                                            member.UserId);
 
-                        coverages =
-                            teamCoverages,
+                                        return new
+                                        {
+                                            member.UserId,
 
-                        technicians
-                    };
-                })
+                                            member.IsAvailable,
+
+                                            member.AcceptsAutomaticAssignments,
+
+                                            member.MaxOpenTickets,
+
+                                            priority =
+                                                schedule?.Priority
+                                                ??
+                                                1,
+
+                                            timeZoneId =
+                                                schedule?.TimeZoneId
+                                                ??
+                                                "America/Santo_Domingo",
+
+                                            slots =
+                                                schedule?.GetSlots()
+                                                ??
+                                                Array.Empty<
+                                                    HelpdeskWeeklySlot>(),
+
+                                            configured =
+                                                schedule
+                                                is not null,
+
+                                            enabled =
+                                                schedule?
+                                                    .IsEnabled
+                                                ??
+                                                false,
+
+                                            onDuty =
+                                                schedule?
+                                                    .IsOnDuty(
+                                                        DateTime.UtcNow)
+                                                ??
+                                                false
+                                        };
+                                    })
+                                .OrderBy(
+                                    x =>
+                                        x.priority)
+                                .ThenBy(
+                                    x =>
+                                        x.UserId)
+                                .ToArray();
+
+                        return new
+                        {
+                            team.Id,
+                            team.Name,
+                            team.Description,
+                            team.IsActive,
+
+                            tasks =
+                                ParseTasks(
+                                    team.Categories),
+
+                            coverages =
+                                teamCoverages,
+
+                            technicians,
+
+                            readiness =
+                                CalculateReadiness(
+                                    team,
+                                    teamCoverages.Length,
+                                    technicians.Length,
+                                    technicians.Count(
+                                        x =>
+                                            x.AcceptsAutomaticAssignments),
+                                    technicians.Count(
+                                        x =>
+                                            x.AcceptsAutomaticAssignments
+                                            &&
+                                            x.configured))
+                        };
+                    })
                 .ToArray();
 
         return Ok(
             new
             {
                 sites,
+
                 locations,
+
                 users =
                     resultUsers,
+
                 groups =
                     resultGroups
             });
@@ -398,14 +443,12 @@ public sealed class HelpdeskGroupPlanningController
                     .Trim();
 
         if (
-            name.Length is < 1 or > 120)
+            name.Length
+            is < 1 or > 120)
         {
             return BadRequest(
-                new
-                {
-                    message =
-                        "El nombre del grupo debe tener entre 1 y 120 caracteres."
-                });
+                Message(
+                    "El nombre debe tener entre 1 y 120 caracteres."));
         }
 
         if (
@@ -413,32 +456,33 @@ public sealed class HelpdeskGroupPlanningController
             500)
         {
             return BadRequest(
-                new
-                {
-                    message =
-                        "La descripción no puede exceder 500 caracteres."
-                });
+                Message(
+                    "La descripción no puede exceder 500 caracteres."));
         }
 
+        var normalizedName =
+            name
+                .ToLowerInvariant();
+
         var duplicate =
-            await _db.HelpdeskTeams
+            await _db
+                .HelpdeskTeams
+                .AsNoTracking()
                 .AnyAsync(
                     x =>
                         x.OrganizationId ==
                             organizationId
                         &&
-                        x.Name ==
-                            name,
+                        x.Name
+                            .ToLower() ==
+                            normalizedName,
                     cancellationToken);
 
         if (duplicate)
         {
             return Conflict(
-                new
-                {
-                    message =
-                        "Ya existe un grupo con ese nombre."
-                });
+                Message(
+                    "Ya existe un grupo con ese nombre."));
         }
 
         var team =
@@ -447,7 +491,8 @@ public sealed class HelpdeskGroupPlanningController
                 name,
                 description);
 
-        _db.HelpdeskTeams
+        _db
+            .HelpdeskTeams
             .Add(
                 team);
 
@@ -486,6 +531,285 @@ public sealed class HelpdeskGroupPlanningController
             return Unauthorized();
         }
 
+        var validation =
+            await ValidateRequestAsync(
+                organizationId,
+                teamId,
+                request,
+                cancellationToken);
+
+        if (!validation.Valid)
+        {
+            return BadRequest(
+                Message(
+                    validation.Error
+                    ??
+                    "La configuración no es válida."));
+        }
+
+        var strategy =
+            _db
+                .Database
+                .CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(
+            async () =>
+            {
+                await using var transaction =
+                    await _db
+                        .Database
+                        .BeginTransactionAsync(
+                            IsolationLevel.Serializable,
+                            cancellationToken);
+
+                var team =
+                    await _db
+                        .HelpdeskTeams
+                        .FirstAsync(
+                            x =>
+                                x.Id ==
+                                    teamId
+                                &&
+                                x.OrganizationId ==
+                                    organizationId,
+                            cancellationToken);
+
+                team.ConfigureCategories(
+                    NormalizeTasks(
+                        request.Tasks));
+
+                // =================================================
+                // COVERAGES
+                // =================================================
+
+                var existingCoverage =
+                    await _db
+                        .HelpdeskSiteCoverages
+                        .Where(
+                            x =>
+                                x.OrganizationId ==
+                                    organizationId
+                                &&
+                                x.TeamId ==
+                                    teamId)
+                        .ToListAsync(
+                            cancellationToken);
+
+                _db
+                    .HelpdeskSiteCoverages
+                    .RemoveRange(
+                        existingCoverage);
+
+                foreach (
+                    var coverage
+                    in request.Coverages)
+                {
+                    _db
+                        .HelpdeskSiteCoverages
+                        .Add(
+                            new HelpdeskSiteCoverage(
+                                organizationId,
+                                teamId,
+                                coverage.SiteId,
+                                coverage.SiteLocationId,
+                                NormalizeCategory(
+                                    coverage.Category),
+                                coverage.Priority));
+                }
+
+                // =================================================
+                // MEMBERS
+                // =================================================
+
+                var technicianIds =
+                    request
+                        .Technicians
+                        .Select(
+                            x =>
+                                x.UserId)
+                        .ToHashSet();
+
+                var existingMembers =
+                    await _db
+                        .HelpdeskTeamMembers
+                        .Where(
+                            x =>
+                                x.OrganizationId ==
+                                    organizationId
+                                &&
+                                x.TeamId ==
+                                    teamId)
+                        .ToListAsync(
+                            cancellationToken);
+
+                var membersToDelete =
+                    existingMembers
+                        .Where(
+                            x =>
+                                !technicianIds
+                                    .Contains(
+                                        x.UserId))
+                        .ToArray();
+
+                _db
+                    .HelpdeskTeamMembers
+                    .RemoveRange(
+                        membersToDelete);
+
+                // =================================================
+                // SCHEDULES
+                // =================================================
+
+                var existingSchedules =
+                    await _db
+                        .Set<
+                            HelpdeskTechnicianSchedule>()
+                        .Where(
+                            x =>
+                                x.OrganizationId ==
+                                    organizationId
+                                &&
+                                x.TeamId ==
+                                    teamId)
+                        .ToListAsync(
+                            cancellationToken);
+
+                var schedulesToDelete =
+                    existingSchedules
+                        .Where(
+                            x =>
+                                !technicianIds
+                                    .Contains(
+                                        x.UserId))
+                        .ToArray();
+
+                _db
+                    .Set<
+                        HelpdeskTechnicianSchedule>()
+                    .RemoveRange(
+                        schedulesToDelete);
+
+                foreach (
+                    var technician
+                    in request.Technicians)
+                {
+                    var member =
+                        existingMembers
+                            .FirstOrDefault(
+                                x =>
+                                    x.UserId ==
+                                        technician.UserId);
+
+                    if (
+                        member is null)
+                    {
+                        member =
+                            new HelpdeskTeamMember(
+                                organizationId,
+                                teamId,
+                                technician.UserId,
+                                technician
+                                    .AcceptsAutomaticAssignments,
+                                technician
+                                    .MaxOpenTickets);
+
+                        _db
+                            .HelpdeskTeamMembers
+                            .Add(
+                                member);
+                    }
+                    else
+                    {
+                        member
+                            .ConfigureAutomaticAssignments(
+                                technician
+                                    .AcceptsAutomaticAssignments,
+                                technician
+                                    .MaxOpenTickets);
+                    }
+
+                    member.SetAvailability(
+                        technician.IsAvailable);
+
+                    var schedule =
+                        existingSchedules
+                            .FirstOrDefault(
+                                x =>
+                                    x.UserId ==
+                                        technician.UserId);
+
+                    if (
+                        schedule is null)
+                    {
+                        schedule =
+                            new HelpdeskTechnicianSchedule(
+                                organizationId,
+                                teamId,
+                                technician.UserId);
+
+                        _db
+                            .Set<
+                                HelpdeskTechnicianSchedule>()
+                            .Add(
+                                schedule);
+                    }
+
+                    schedule.Configure(
+                        technician.Priority,
+                        technician
+                            .AcceptsAutomaticAssignments,
+                        technician.TimeZoneId,
+                        technician.Slots
+                        ??
+                        Array.Empty<
+                            HelpdeskWeeklySlot>());
+                }
+
+                await _db
+                    .SaveChangesAsync(
+                        cancellationToken);
+
+                await transaction
+                    .CommitAsync(
+                        cancellationToken);
+            });
+
+        return Ok(
+            new
+            {
+                message =
+                    "Categorías, cobertura, técnicos, capacidad y horarios guardados correctamente.",
+
+                readyForAutomaticRouting =
+                    request.Coverages.Length >
+                    0
+                    &&
+                    request.Technicians.Any(
+                        x =>
+                            x.IsAvailable
+                            &&
+                            x.AcceptsAutomaticAssignments
+                            &&
+                            x.Slots
+                            is
+                            {
+                                Length: > 0
+                            })
+            });
+    }
+
+    // ============================================================
+    // VALIDATION
+    // ============================================================
+
+    private async Task<
+        ValidationResult>
+        ValidateRequestAsync(
+            Guid organizationId,
+            Guid teamId,
+            SaveGroupRequest request,
+            CancellationToken cancellationToken)
+    {
         if (
             request.Tasks is null
             ||
@@ -493,117 +817,191 @@ public sealed class HelpdeskGroupPlanningController
             ||
             request.Technicians is null)
         {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Envía tareas, coberturas y técnicos."
-                });
+            return ValidationResult
+                .Fail(
+                    "Debes enviar categorías, coberturas y técnicos.");
         }
 
-        if (
-            request.Tasks.Length >
-                50
-            ||
-            request.Tasks.Any(
-                x =>
-                    string.IsNullOrWhiteSpace(
-                        x)
-                    ||
-                    x.Length >
-                        100))
-        {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Las tareas son inválidas."
-                });
-        }
-
-        if (
-            request.Technicians.Length >
-                100
-            ||
-            request.Technicians
-                .Select(
+        var teamExists =
+            await _db
+                .HelpdeskTeams
+                .AsNoTracking()
+                .AnyAsync(
                     x =>
-                        x.UserId)
-                .Distinct()
-                .Count()
-                !=
-                request.Technicians
-                    .Length)
-        {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Admite hasta 100 técnicos sin duplicados."
-                });
-        }
-
-        var team =
-            await _db.HelpdeskTeams
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.Id ==
-                            teamId
-                        &&
                         x.OrganizationId ==
-                            organizationId,
+                            organizationId
+                        &&
+                        x.Id ==
+                            teamId,
                     cancellationToken);
 
-        if (
-            team is null)
+        if (!teamExists)
         {
-            return NotFound();
+            return ValidationResult
+                .Fail(
+                    "El grupo no existe.");
+        }
+
+        var tasks =
+            NormalizeTasks(
+                request.Tasks);
+
+        /*
+         * HelpdeskTeam.ConfigureCategories()
+         * admite máximo 15.
+         *
+         * El controlador viejo validaba 50 y luego el dominio
+         * podía lanzar excepción. Queda corregido aquí.
+         */
+        if (
+            tasks.Length
+            is < 1 or > 15)
+        {
+            return ValidationResult
+                .Fail(
+                    "Cada grupo debe tener entre 1 y 15 categorías.");
+        }
+
+        if (
+            tasks.Any(
+                x =>
+                    x.Length >
+                        50
+                    ||
+                    x.Contains(
+                        '|')
+                    ||
+                    x.Contains(
+                        ',')))
+        {
+            return ValidationResult
+                .Fail(
+                    "Las categorías no pueden superar 50 caracteres ni contener ',' o '|'.");
         }
 
         // ========================================================
-        // VALIDATE COVERAGE
+        // COVERAGE
         // ========================================================
 
+        if (
+            request.Coverages.Length >
+            250)
+        {
+            return ValidationResult
+                .Fail(
+                    "Un grupo no puede tener más de 250 coberturas.");
+        }
+
+        foreach (
+            var coverage
+            in request.Coverages)
+        {
+            if (
+                coverage.SiteId ==
+                    Guid.Empty)
+            {
+                return ValidationResult
+                    .Fail(
+                        "Toda cobertura necesita una localidad.");
+            }
+
+            if (
+                coverage.Priority
+                is < 1 or > 1000)
+            {
+                return ValidationResult
+                    .Fail(
+                        "La prioridad de cobertura debe estar entre 1 y 1000.");
+            }
+
+            var category =
+                NormalizeCategory(
+                    coverage.Category);
+
+            if (
+                category is not null
+                &&
+                !tasks.Contains(
+                    category,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                return ValidationResult
+                    .Fail(
+                        $"La cobertura '{category}' no pertenece a las categorías del grupo.");
+            }
+        }
+
+        var duplicateCoverage =
+            request
+                .Coverages
+                .GroupBy(
+                    x =>
+                        new
+                        {
+                            x.SiteId,
+                            x.SiteLocationId,
+
+                            Category =
+                                NormalizeCategory(
+                                    x.Category)
+                        })
+                .Any(
+                    x =>
+                        x.Count() >
+                        1);
+
+        if (duplicateCoverage)
+        {
+            return ValidationResult
+                .Fail(
+                    "Existe una cobertura repetida.");
+        }
+
         var siteIds =
-            request.Coverages
+            request
+                .Coverages
                 .Select(
                     x =>
                         x.SiteId)
                 .Distinct()
                 .ToArray();
 
-        var validSites =
-            await _db.Sites
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.IsActive
-                        &&
-                        siteIds.Contains(
-                            x.Id))
-                .Select(
-                    x =>
-                        x.Id)
-                .ToListAsync(
-                    cancellationToken);
-
         if (
-            validSites.Count !=
-            siteIds.Length)
+            siteIds.Length >
+            0)
         {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Hay localidades inexistentes o inactivas."
-                });
+            var validSites =
+                await _db
+                    .Sites
+                    .AsNoTracking()
+                    .Where(
+                        x =>
+                            x.OrganizationId ==
+                                organizationId
+                            &&
+                            x.IsActive
+                            &&
+                            siteIds.Contains(
+                                x.Id))
+                    .Select(
+                        x =>
+                            x.Id)
+                    .CountAsync(
+                        cancellationToken);
+
+            if (
+                validSites !=
+                siteIds.Length)
+            {
+                return ValidationResult
+                    .Fail(
+                        "Existe una localidad inexistente o inactiva.");
+            }
         }
 
         var locationIds =
-            request.Coverages
+            request
+                .Coverages
                 .Where(
                     x =>
                         x.SiteLocationId
@@ -619,8 +1017,9 @@ public sealed class HelpdeskGroupPlanningController
             locationIds.Length >
             0)
         {
-            var locations =
-                await _db.SiteLocations
+            var validLocations =
+                await _db
+                    .SiteLocations
                     .AsNoTracking()
                     .Where(
                         x =>
@@ -642,15 +1041,12 @@ public sealed class HelpdeskGroupPlanningController
                         cancellationToken);
 
             if (
-                locations.Count !=
+                validLocations.Count !=
                 locationIds.Length)
             {
-                return BadRequest(
-                    new
-                    {
-                        message =
-                            "Hay sublocalidades inexistentes o inactivas."
-                    });
+                return ValidationResult
+                    .Fail(
+                        "Existe una sublocalidad inexistente o inactiva.");
             }
 
             foreach (
@@ -658,314 +1054,165 @@ public sealed class HelpdeskGroupPlanningController
                 in request.Coverages)
             {
                 if (
-                    !coverage.SiteLocationId
+                    !coverage
+                        .SiteLocationId
                         .HasValue)
                 {
                     continue;
                 }
 
-                var valid =
-                    locations.Any(
-                        location =>
-                            location.Id ==
-                                coverage.SiteLocationId.Value
-                            &&
-                            location.SiteId ==
-                                coverage.SiteId);
+                var belongs =
+                    validLocations
+                        .Any(
+                            x =>
+                                x.Id ==
+                                    coverage
+                                        .SiteLocationId
+                                        .Value
+                                &&
+                                x.SiteId ==
+                                    coverage.SiteId);
 
-                if (!valid)
+                if (!belongs)
                 {
-                    return BadRequest(
-                        new
-                        {
-                            message =
-                                "Una sublocalidad no pertenece a la localidad indicada."
-                        });
+                    return ValidationResult
+                        .Fail(
+                            "Una sublocalidad no pertenece a la localidad seleccionada.");
                 }
             }
         }
 
-        var duplicateCoverage =
-            request.Coverages
-                .GroupBy(
-                    x =>
-                        new
-                        {
-                            x.SiteId,
-                            x.SiteLocationId,
-
-                            Category =
-                                NormalizeCategory(
-                                    x.Category)
-                        })
-                .Any(
-                    group =>
-                        group.Count() >
-                        1);
+        // ========================================================
+        // TECHNICIANS
+        // ========================================================
 
         if (
-            duplicateCoverage)
+            request.Technicians.Length >
+            100)
         {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "No puedes repetir la misma cobertura."
-                });
+            return ValidationResult
+                .Fail(
+                    "Un grupo admite hasta 100 técnicos.");
         }
 
-        // ========================================================
-        // VALIDATE TECHNICIANS
-        // ========================================================
+        if (
+            request
+                .Technicians
+                .Select(
+                    x =>
+                        x.UserId)
+                .Distinct()
+                .Count()
+            !=
+            request
+                .Technicians
+                .Length)
+        {
+            return ValidationResult
+                .Fail(
+                    "No puedes agregar el mismo técnico dos veces.");
+        }
 
         var technicianIds =
-            request.Technicians
+            request
+                .Technicians
                 .Select(
                     x =>
                         x.UserId)
                 .ToArray();
 
-        var eligible =
-            await EligibleTechnicians(
-                    organizationId)
-                .Where(
-                    id =>
-                        technicianIds
-                            .Contains(
-                                id))
-                .ToListAsync(
-                    cancellationToken);
-
         if (
-            eligible.Count !=
-            technicianIds.Length)
+            technicianIds.Length >
+            0)
         {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Cada técnico debe estar activo y disponer de permisos operativos de Mesa de Ayuda."
-                });
-        }
+            var eligible =
+                await EligibleTechnicians(
+                        organizationId)
+                    .Where(
+                        id =>
+                            technicianIds
+                                .Contains(
+                                    id))
+                    .CountAsync(
+                        cancellationToken);
 
-        var schedulesToCreate =
-            new Dictionary<
-                Guid,
-                HelpdeskTechnicianSchedule>();
-
-        try
-        {
-            team.ConfigureCategories(
-                request.Tasks);
-
-            foreach (
-                var technician
-                in request.Technicians)
+            if (
+                eligible !=
+                technicianIds.Length)
             {
-                if (
-                    technician.MaxOpenTickets
-                    is < 1 or > 500)
-                {
-                    throw new ArgumentException(
-                        "El límite de tickets debe estar entre 1 y 500.");
-                }
-
-                if (
-                    technician.Slots
-                    is null)
-                {
-                    throw new ArgumentException(
-                        "Debe enviarse el horario de cada técnico.");
-                }
-
-                var profile =
-                    new HelpdeskTechnicianSchedule(
-                        organizationId,
-                        teamId,
-                        technician.UserId);
-
-                profile.Configure(
-                    technician.Priority,
-                    technician.AcceptsAutomaticAssignments,
-                    technician.TimeZoneId,
-                    technician.Slots);
-
-                schedulesToCreate[
-                    technician.UserId
-                ] =
-                    profile;
+                return ValidationResult
+                    .Fail(
+                        "Todos los técnicos deben estar activos y tener permisos operativos de Mesa de Ayuda.");
             }
         }
-        catch (
-            ArgumentException exception)
-        {
-            return BadRequest(
-                new
-                {
-                    message =
-                        exception.Message
-                });
-        }
-
-        // ========================================================
-        // REPLACE SITE COVERAGE
-        // ========================================================
-
-        var existingCoverage =
-            await _db.HelpdeskSiteCoverages
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.TeamId ==
-                            teamId)
-                .ToListAsync(
-                    cancellationToken);
-
-        _db.HelpdeskSiteCoverages
-            .RemoveRange(
-                existingCoverage);
-
-        foreach (
-            var coverage
-            in request.Coverages)
-        {
-            _db.HelpdeskSiteCoverages
-                .Add(
-                    new HelpdeskSiteCoverage(
-                        organizationId,
-                        teamId,
-                        coverage.SiteId,
-                        coverage.SiteLocationId,
-                        NormalizeCategory(
-                            coverage.Category),
-                        coverage.Priority));
-        }
-
-        // ========================================================
-        // TEAM MEMBERS
-        // ========================================================
-
-        var existingMembers =
-            await _db.HelpdeskTeamMembers
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.TeamId ==
-                            teamId)
-                .ToListAsync(
-                    cancellationToken);
-
-        var existingSchedules =
-            await _db
-                .Set<HelpdeskTechnicianSchedule>()
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.TeamId ==
-                            teamId)
-                .ToListAsync(
-                    cancellationToken);
-
-        _db.HelpdeskTeamMembers
-            .RemoveRange(
-                existingMembers
-                    .Where(
-                        x =>
-                            !technicianIds
-                                .Contains(
-                                    x.UserId)));
-
-        _db
-            .Set<HelpdeskTechnicianSchedule>()
-            .RemoveRange(
-                existingSchedules
-                    .Where(
-                        x =>
-                            !technicianIds
-                                .Contains(
-                                    x.UserId)));
 
         foreach (
             var technician
             in request.Technicians)
         {
-            var member =
-                existingMembers
-                    .FirstOrDefault(
-                        x =>
-                            x.UserId ==
-                                technician.UserId);
+            if (
+                technician.MaxOpenTickets
+                is < 1 or > 500)
+            {
+                return ValidationResult
+                    .Fail(
+                        "La capacidad debe estar entre 1 y 500 tickets.");
+            }
 
             if (
-                member is null)
+                technician.Priority
+                is < 1 or > 100)
             {
-                member =
-                    new HelpdeskTeamMember(
+                return ValidationResult
+                    .Fail(
+                        "La prioridad del técnico debe estar entre 1 y 100.");
+            }
+
+            if (
+                technician.Slots
+                is null)
+            {
+                return ValidationResult
+                    .Fail(
+                        "Debes enviar el horario del técnico.");
+            }
+
+            try
+            {
+                /*
+                 * Utilizamos la entidad del dominio como validador
+                 * canónico de:
+                 *
+                 * - timezone;
+                 * - horarios;
+                 * - solapamientos;
+                 * - slots nocturnos;
+                 * - máximo 28 franjas.
+                 */
+                var validator =
+                    new HelpdeskTechnicianSchedule(
                         organizationId,
                         teamId,
-                        technician.UserId,
-                        technician.AcceptsAutomaticAssignments,
-                        technician.MaxOpenTickets);
+                        technician.UserId);
 
-                _db.HelpdeskTeamMembers
-                    .Add(
-                        member);
-            }
-            else
-            {
-                member
-                    .ConfigureAutomaticAssignments(
-                        technician.AcceptsAutomaticAssignments,
-                        technician.MaxOpenTickets);
-            }
-
-            member.SetAvailability(
-                technician.IsAvailable);
-
-            var schedule =
-                existingSchedules
-                    .FirstOrDefault(
-                        x =>
-                            x.UserId ==
-                                technician.UserId);
-
-            if (
-                schedule is null)
-            {
-                _db
-                    .Set<HelpdeskTechnicianSchedule>()
-                    .Add(
-                        schedulesToCreate[
-                            technician.UserId
-                        ]);
-            }
-            else
-            {
-                schedule.Configure(
+                validator.Configure(
                     technician.Priority,
-                    technician.AcceptsAutomaticAssignments,
+                    technician
+                        .AcceptsAutomaticAssignments,
                     technician.TimeZoneId,
-                    technician.Slots
-                    ?? Array.Empty<HelpdeskWeeklySlot>());
+                    technician.Slots);
+            }
+            catch (
+                ArgumentException exception)
+            {
+                return ValidationResult
+                    .Fail(
+                        exception.Message);
             }
         }
 
-        await _db
-            .SaveChangesAsync(
-                cancellationToken);
-
-        return Ok(
-            new
-            {
-                message =
-                    "Grupo, tareas, localidades, técnicos y horarios guardados correctamente."
-            });
+        return ValidationResult
+            .Success();
     }
 
     // ============================================================
@@ -976,7 +1223,7 @@ public sealed class HelpdeskGroupPlanningController
         EligibleTechnicians(
             Guid organizationId)
     {
-        var operationalPermissions =
+        var permissions =
             new[]
             {
                 "helpdesk.agent.access",
@@ -987,7 +1234,7 @@ public sealed class HelpdeskGroupPlanningController
                 "helpdesk.ticket.resolve",
                 "helpdesk.ticket.close",
 
-                // Legacy
+                // Compatibility
                 "tickets.comment",
                 "tickets.assign",
                 "tickets.close",
@@ -996,29 +1243,34 @@ public sealed class HelpdeskGroupPlanningController
 
         return (
             from userRole
-                in _db.UserRoles
+                in _db
+                    .UserRoles
                     .AsNoTracking()
 
             join role
-                in _db.Roles
+                in _db
+                    .Roles
                     .AsNoTracking()
                 on userRole.RoleId
                 equals role.Id
 
             join rolePermission
-                in _db.RolePermissions
+                in _db
+                    .RolePermissions
                     .AsNoTracking()
                 on role.Id
                 equals rolePermission.RoleId
 
             join permission
-                in _db.Permissions
+                in _db
+                    .Permissions
                     .AsNoTracking()
                 on rolePermission.PermissionId
                 equals permission.Id
 
             join user
-                in _db.Users
+                in _db
+                    .Users
                     .AsNoTracking()
                 on userRole.UserId
                 equals user.Id
@@ -1026,19 +1278,23 @@ public sealed class HelpdeskGroupPlanningController
             where
                 user.OrganizationId ==
                     organizationId
+
                 &&
                 role.OrganizationId ==
                     organizationId
+
                 &&
                 user.IsActive
+
                 &&
                 role.IsActive
+
                 &&
                 permission.IsActive
+
                 &&
-                operationalPermissions
-                    .Contains(
-                        permission.Code)
+                permissions.Contains(
+                    permission.Code)
 
             select user.Id
         )
@@ -1046,8 +1302,106 @@ public sealed class HelpdeskGroupPlanningController
     }
 
     // ============================================================
+    // READINESS
+    // ============================================================
+
+    private static object
+        CalculateReadiness(
+            HelpdeskTeam team,
+            int coverageCount,
+            int technicianCount,
+            int automaticTechnicians,
+            int scheduledAutomaticTechnicians)
+    {
+        var issues =
+            new List<string>();
+
+        var categories =
+            ParseTasks(
+                team.Categories);
+
+        if (
+            !team.IsActive)
+        {
+            issues.Add(
+                "Grupo inactivo");
+        }
+
+        if (
+            categories.Length ==
+            0)
+        {
+            issues.Add(
+                "Sin categorías");
+        }
+
+        if (
+            coverageCount ==
+            0)
+        {
+            issues.Add(
+                "Sin cobertura");
+        }
+
+        if (
+            technicianCount ==
+            0)
+        {
+            issues.Add(
+                "Sin técnicos");
+        }
+
+        if (
+            automaticTechnicians ==
+            0)
+        {
+            issues.Add(
+                "Sin técnicos para autoasignación");
+        }
+
+        if (
+            automaticTechnicians >
+                scheduledAutomaticTechnicians)
+        {
+            issues.Add(
+                "Existen técnicos automáticos sin turno configurado");
+        }
+
+        return new
+        {
+            ready =
+                issues.Count ==
+                0,
+
+            issues =
+                issues.ToArray()
+        };
+    }
+
+    // ============================================================
     // HELPERS
     // ============================================================
+
+    private static string[]
+        NormalizeTasks(
+            IEnumerable<string> values)
+    {
+        return values
+            .Select(
+                x =>
+                    x?
+                        .Trim()
+                        .ToLowerInvariant()
+                    ??
+                    string.Empty)
+            .Where(
+                x =>
+                    x.Length >
+                    0)
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 
     private static string[]
         ParseTasks(
@@ -1095,8 +1449,7 @@ public sealed class HelpdeskGroupPlanningController
             out organizationId);
     }
 
-    private bool
-        CanView()
+    private bool CanView()
     {
         return HasAnyPermission(
             "helpdesk.groups.view",
@@ -1110,8 +1463,7 @@ public sealed class HelpdeskGroupPlanningController
             "settings.manage");
     }
 
-    private bool
-        CanManage()
+    private bool CanManage()
     {
         return HasAnyPermission(
             "helpdesk.groups.manage",
@@ -1137,6 +1489,16 @@ public sealed class HelpdeskGroupPlanningController
                             claim.Value,
                             permission,
                             StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static object
+        Message(
+            string message)
+    {
+        return new
+        {
+            message
+        };
     }
 
     // ============================================================
@@ -1170,4 +1532,27 @@ public sealed class HelpdeskGroupPlanningController
             int Priority,
             string TimeZoneId,
             HelpdeskWeeklySlot[]? Slots);
+
+    private sealed record
+        ValidationResult(
+            bool Valid,
+            string? Error)
+    {
+        public static ValidationResult
+            Success()
+        {
+            return new ValidationResult(
+                true,
+                null);
+        }
+
+        public static ValidationResult
+            Fail(
+                string error)
+        {
+            return new ValidationResult(
+                false,
+                error);
+        }
+    }
 }

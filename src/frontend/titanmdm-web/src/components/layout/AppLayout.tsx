@@ -1,77 +1,162 @@
-import { useEffect, useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
-import apiClient from '../../api/apiClient'
+import {
+  useEffect,
+  useState,
+} from 'react'
+
+import {
+  Outlet,
+  useLocation,
+} from 'react-router-dom'
+
+import apiClient
+  from '../../api/apiClient'
+
 import {
   TitanAssistantProvider,
 } from '../../assistant/context/TitanAssistantContext'
+
 import {
   TitanAssistant,
 } from '../../assistant/components/TitanAssistant'
-import {
-  HelpdeskAttachmentMount,
-} from '../../pages/helpdesk/HelpdeskAttachmentMount'
+
 import {
   WorkspaceProvider,
 } from '../../workspace/WorkspaceContext'
-import { Header } from './Header'
-import { ModuleNavigation } from './ModuleNavigation'
-import { Sidebar } from './Sidebar'
+
+import {
+  Header,
+} from './Header'
+
+import {
+  ModuleNavigation,
+} from './ModuleNavigation'
+
+import {
+  Sidebar,
+} from './Sidebar'
 
 export function AppLayout() {
-  const location = useLocation()
+  const location =
+    useLocation()
+
   const isPonches =
-    location.pathname === '/ponches' ||
-    location.pathname.startsWith('/ponches/')
+    location.pathname ===
+      '/ponches'
+    ||
+    location.pathname
+      .startsWith(
+        '/ponches/',
+      )
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [assistantAllowed, setAssistantAllowed] = useState(false)
+  const [
+    sidebarCollapsed,
+    setSidebarCollapsed,
+  ] =
+    useState(
+      false,
+    )
 
-  useEffect(() => {
-    let active = true
+  const [
+    assistantAllowed,
+    setAssistantAllowed,
+  ] =
+    useState(
+      false,
+    )
 
-    async function checkAssistantAccess() {
-      try {
-        const response = await apiClient.get<{ enabled: boolean }>(
-          '/helpdesk/operations/assistant/me',
-        )
+  useEffect(
+    () => {
+      let active =
+        true
 
-        if (active) {
-          setAssistantAllowed(response.data.enabled === true)
+      async function checkAssistantAccess() {
+        try {
+          const response =
+            await apiClient.get<{
+              enabled: boolean
+            }>(
+              '/helpdesk/operations/assistant/me',
+            )
+
+          if (
+            active
+          ) {
+            setAssistantAllowed(
+              response.data
+                .enabled ===
+                true,
+            )
+          }
         }
-      } catch {
-        if (active) setAssistantAllowed(false)
+        catch {
+          if (
+            active
+          ) {
+            setAssistantAllowed(
+              false,
+            )
+          }
+        }
       }
-    }
 
-    void checkAssistantAccess()
-    return () => {
-      active = false
-    }
-  }, [])
+      void checkAssistantAccess()
+
+      return () => {
+        active =
+          false
+      }
+    },
+    [],
+  )
 
   return (
     <WorkspaceProvider>
       <TitanAssistantProvider>
-        <div className="app-layout">
+        <div
+          className="app-layout"
+        >
           <Sidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((value) => !value)}
+            collapsed={
+              sidebarCollapsed
+            }
+            onToggle={
+              () =>
+                setSidebarCollapsed(
+                  value =>
+                    !value,
+                )
+            }
           />
 
-          <div className="app-layout__main">
+          <div
+            className="app-layout__main"
+          >
             <Header />
 
-            {/* Ponches utiliza navegación dentro de su propio módulo. */}
-            {!isPonches && <ModuleNavigation />}
+            {
+              !isPonches
+              &&
+              (
+                <ModuleNavigation />
+              )
+            }
 
-            <main className="app-layout__content">
+            <main
+              className="app-layout__content"
+            >
               <Outlet />
-              <HelpdeskAttachmentMount />
             </main>
           </div>
 
-          {/* Fiorella ocupará esta pantalla al integrar su chat original. */}
-          {assistantAllowed && !isPonches && <TitanAssistant />}
+          {
+            assistantAllowed
+            &&
+            !isPonches
+            &&
+            (
+              <TitanAssistant />
+            )
+          }
         </div>
       </TitanAssistantProvider>
     </WorkspaceProvider>

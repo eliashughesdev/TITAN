@@ -181,3 +181,5 @@ desktop.ini
 *.swo
 
 ~$*
+# TitanMDM Helpdesk runtime attachments
+src/backend/TitanMDM.Api/App_Data/helpdesk-attachments/

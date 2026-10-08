@@ -18,6 +18,10 @@ import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
+import {
+  HelpdeskRoutingOperationsPanel,
+} from './HelpdeskRoutingOperationsPanel'
+
 import './HelpdeskPages.css'
 
 interface AnalyticsCard {
@@ -63,7 +67,7 @@ export function HelpdeskAnalyticsHome() {
           'KPI operativos',
 
         description:
-          'Resumen rápido del backlog, tickets activos, autoasignación, carga y cumplimiento operativo.',
+          'Backlog, tickets activos, autoasignación, carga y cumplimiento operativo.',
 
         path:
           '/helpdesk/centro/kpis?workspace=helpdesk',
@@ -82,7 +86,7 @@ export function HelpdeskAnalyticsHome() {
           'Reportes y análisis',
 
         description:
-          'Panel detallado con tendencias, SLA, prioridades, categorías, Sites, técnicos, automatización y exportación.',
+          'Tendencias, SLA, prioridades, categorías, Sites, técnicos, automatización y exportación.',
 
         path:
           '/helpdesk/reportes?workspace=helpdesk',
@@ -140,14 +144,17 @@ export function HelpdeskAnalyticsHome() {
           </h1>
 
           <p>
-            Accede únicamente a vistas
-            que aportan una función
-            diferente: seguimiento SLA,
-            indicadores rápidos y
-            reportes detallados.
+            Rendimiento del servicio,
+            SLA, carga de trabajo y
+            comportamiento de la
+            automatización.
           </p>
         </div>
       </header>
+
+      <HelpdeskRoutingOperationsPanel
+        readOnly
+      />
 
       <section
         className="helpdesk-hub__grid"

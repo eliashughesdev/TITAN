@@ -22,6 +22,10 @@ import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
+import {
+  HelpdeskRoutingOperationsPanel,
+} from './HelpdeskRoutingOperationsPanel'
+
 import './HelpdeskPages.css'
 
 interface AdminAction {
@@ -327,13 +331,13 @@ export function HelpdeskAdminHome() {
 
           <p>
             Configura la operación,
-            experiencia del solicitante,
-            integraciones y parámetros
-            del servicio desde un único
-            punto.
+            integraciones, automatización
+            y distribución del servicio.
           </p>
         </div>
       </header>
+
+      <HelpdeskRoutingOperationsPanel />
 
       <div
         className="helpdesk-admin-home__sections"
@@ -353,9 +357,7 @@ export function HelpdeskAdminHome() {
                   ),
               )
 
-            if (
-              !actions.length
-            ) {
+            if (!actions.length) {
               return null
             }
 

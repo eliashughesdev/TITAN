@@ -2,16 +2,18 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
 import {
+  AlertTriangle,
   Download,
-  Eye,
   File,
   FileText,
-  Image,
+  Image as ImageIcon,
   Mail,
+  Maximize2,
   Paperclip,
   RefreshCw,
   ShieldCheck,
@@ -19,6 +21,7 @@ import {
 } from 'lucide-react'
 
 import {
+  getAttachmentErrorMessage,
   helpdeskAttachmentsApi,
   type HelpdeskAttachment,
 } from '../../api/helpdeskAttachmentsApi'
@@ -27,6 +30,11 @@ import './HelpdeskTicketAttachmentsPanel.css'
 
 interface Props {
   ticketId: string
+}
+
+interface PreviewResource {
+  item: HelpdeskAttachment
+  url: string
 }
 
 function formatBytes(
@@ -59,24 +67,47 @@ function formatBytes(
   )} MB`
 }
 
-function iconFor(
-  contentType: string,
+function isImage(
+  item: HelpdeskAttachment,
+) {
+  return item.contentType
+    .toLowerCase()
+    .startsWith(
+      'image/',
+    )
+}
+
+function isPdf(
+  item: HelpdeskAttachment,
+) {
+  return item.contentType
+    .toLowerCase() ===
+    'application/pdf'
+}
+
+function FileIcon(
+  {
+    item,
+  }: {
+    item: HelpdeskAttachment
+  },
 ) {
   if (
-    contentType.startsWith(
-      'image/',
+    isImage(
+      item,
     )
   ) {
     return (
-      <Image
+      <ImageIcon
         size={18}
       />
     )
   }
 
   if (
-    contentType ===
-    'application/pdf'
+    isPdf(
+      item,
+    )
   ) {
     return (
       <FileText
@@ -108,6 +139,29 @@ export function HelpdeskTicketAttachmentsPanel(
     )
 
   const [
+    urls,
+    setUrls,
+  ] =
+    useState<
+      Record<
+        string,
+        string
+      >
+    >(
+      {},
+    )
+
+  const urlsRef =
+    useRef<
+      Record<
+        string,
+        string
+      >
+    >(
+      {},
+    )
+
+  const [
     loading,
     setLoading,
   ] =
@@ -116,8 +170,8 @@ export function HelpdeskTicketAttachmentsPanel(
     )
 
   const [
-    previewUrl,
-    setPreviewUrl,
+    error,
+    setError,
   ] =
     useState<
       string |
@@ -127,14 +181,38 @@ export function HelpdeskTicketAttachmentsPanel(
     )
 
   const [
-    previewItem,
-    setPreviewItem,
+    enlarged,
+    setEnlarged,
   ] =
     useState<
-      HelpdeskAttachment |
+      PreviewResource |
       null
     >(
       null,
+    )
+
+  const revokeUrls =
+    useCallback(
+      () => {
+        Object
+          .values(
+            urlsRef.current,
+          )
+          .forEach(
+            url =>
+              URL.revokeObjectURL(
+                url,
+              ),
+          )
+
+        urlsRef.current =
+          {}
+
+        setUrls(
+          {},
+        )
+      },
+      [],
     )
 
   const load =
@@ -143,6 +221,12 @@ export function HelpdeskTicketAttachmentsPanel(
         setLoading(
           true,
         )
+
+        setError(
+          null,
+        )
+
+        revokeUrls()
 
         try {
           const result =
@@ -154,6 +238,86 @@ export function HelpdeskTicketAttachmentsPanel(
           setItems(
             result,
           )
+
+          /*
+           * Cargamos automáticamente todas las imágenes.
+           *
+           * Ya no hace falta pulsar "Ver".
+           */
+          const imageItems =
+            result.filter(
+              isImage,
+            )
+
+          const loaded =
+            await Promise.all(
+              imageItems.map(
+                async item => {
+                  try {
+                    const blob =
+                      await helpdeskAttachmentsApi
+                        .preview(
+                          ticketId,
+                          item.id,
+                        )
+
+                    return {
+                      id:
+                        item.id,
+
+                      url:
+                        URL.createObjectURL(
+                          blob,
+                        ),
+                    }
+                  }
+                  catch {
+                    return null
+                  }
+                },
+              ),
+            )
+
+          const nextUrls:
+            Record<
+              string,
+              string
+            > =
+            {}
+
+          for (
+            const resource
+            of loaded
+          ) {
+            if (
+              resource
+            ) {
+              nextUrls[
+                resource.id
+              ] =
+                resource.url
+            }
+          }
+
+          urlsRef.current =
+            nextUrls
+
+          setUrls(
+            nextUrls,
+          )
+        }
+        catch (
+          loadError
+        ) {
+          setItems(
+            [],
+          )
+
+          setError(
+            getAttachmentErrorMessage(
+              loadError,
+            ),
+          )
         }
         finally {
           setLoading(
@@ -162,6 +326,7 @@ export function HelpdeskTicketAttachmentsPanel(
         }
       },
       [
+        revokeUrls,
         ticketId,
       ],
     )
@@ -169,26 +334,14 @@ export function HelpdeskTicketAttachmentsPanel(
   useEffect(
     () => {
       void load()
-    },
-    [
-      load,
-    ],
-  )
 
-  useEffect(
-    () => {
       return () => {
-        if (
-          previewUrl
-        ) {
-          URL.revokeObjectURL(
-            previewUrl,
-          )
-        }
+        revokeUrls()
       }
     },
     [
-      previewUrl,
+      load,
+      revokeUrls,
     ],
   )
 
@@ -196,8 +349,8 @@ export function HelpdeskTicketAttachmentsPanel(
     useMemo(
       () =>
         items.filter(
-          x =>
-            x.isInline,
+          item =>
+            item.isInline,
         ),
       [
         items,
@@ -208,110 +361,230 @@ export function HelpdeskTicketAttachmentsPanel(
     useMemo(
       () =>
         items.filter(
-          x =>
-            !x.isInline,
+          item =>
+            !item.isInline,
         ),
       [
         items,
       ],
     )
 
-  async function openPreview(
-    item:
-      HelpdeskAttachment,
-  ) {
-    const blob =
-      await helpdeskAttachmentsApi
-        .preview(
-          ticketId,
-          item.id,
-        )
-
-    if (
-      previewUrl
-    ) {
-      URL.revokeObjectURL(
-        previewUrl,
-      )
-    }
-
-    const url =
-      URL.createObjectURL(
-        blob,
-      )
-
-    setPreviewUrl(
-      url,
-    )
-
-    setPreviewItem(
-      item,
-    )
-  }
-
   async function download(
     item:
       HelpdeskAttachment,
   ) {
-    const blob =
-      await helpdeskAttachmentsApi
-        .download(
-          ticketId,
-          item.id,
+    try {
+      const blob =
+        await helpdeskAttachmentsApi
+          .download(
+            ticketId,
+            item.id,
+          )
+
+      const url =
+        URL.createObjectURL(
+          blob,
         )
 
-    const url =
-      URL.createObjectURL(
-        blob,
-      )
+      const anchor =
+        document.createElement(
+          'a',
+        )
 
-    const anchor =
-      document.createElement(
-        'a',
-      )
+      anchor.href =
+        url
 
-    anchor.href =
-      url
+      anchor.download =
+        item.fileName
 
-    anchor.download =
-      item.fileName
+      document.body
+        .appendChild(
+          anchor,
+        )
 
-    document.body
-      .appendChild(
-        anchor,
-      )
+      anchor.click()
 
-    anchor.click()
+      anchor.remove()
 
-    anchor.remove()
-
-    URL.revokeObjectURL(
-      url,
-    )
-  }
-
-  function closePreview() {
-    if (
-      previewUrl
-    ) {
       URL.revokeObjectURL(
-        previewUrl,
+        url,
       )
     }
+    catch (
+      downloadError
+    ) {
+      setError(
+        getAttachmentErrorMessage(
+          downloadError,
+        ),
+      )
+    }
+  }
 
-    setPreviewUrl(
-      null,
-    )
+  async function openPdf(
+    item:
+      HelpdeskAttachment,
+  ) {
+    try {
+      const blob =
+        await helpdeskAttachmentsApi
+          .preview(
+            ticketId,
+            item.id,
+          )
 
-    setPreviewItem(
-      null,
+      const url =
+        URL.createObjectURL(
+          blob,
+        )
+
+      window.open(
+        url,
+        '_blank',
+        'noopener,noreferrer',
+      )
+
+      window.setTimeout(
+        () =>
+          URL.revokeObjectURL(
+            url,
+          ),
+        60_000,
+      )
+    }
+    catch (
+      previewError
+    ) {
+      setError(
+        getAttachmentErrorMessage(
+          previewError,
+        ),
+      )
+    }
+  }
+
+  function renderImage(
+    item:
+      HelpdeskAttachment,
+    signature:
+      boolean,
+  ) {
+    const url =
+      urls[
+        item.id
+      ]
+
+    return (
+      <article
+        key={
+          item.id
+        }
+        className={
+          signature
+            ? 'helpdesk-mail-image helpdesk-mail-image--signature'
+            : 'helpdesk-mail-image'
+        }
+      >
+        <div
+          className="helpdesk-mail-image__top"
+        >
+          <div>
+            <FileIcon
+              item={
+                item
+              }
+            />
+
+            <span>
+              <strong>
+                {
+                  item.fileName
+                }
+              </strong>
+
+              <small>
+                {
+                  formatBytes(
+                    item.sizeBytes,
+                  )
+                }
+              </small>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            title="Descargar"
+            onClick={
+              () =>
+                void download(
+                  item,
+                )
+            }
+          >
+            <Download
+              size={15}
+            />
+          </button>
+        </div>
+
+        {
+          url
+            ? (
+              <button
+                type="button"
+                className="helpdesk-mail-image__preview"
+                title="Ampliar imagen"
+                onClick={
+                  () =>
+                    setEnlarged(
+                      {
+                        item,
+                        url,
+                      },
+                    )
+                }
+              >
+                <img
+                  src={
+                    url
+                  }
+                  alt={
+                    signature
+                      ? 'Firma visual del remitente'
+                      : item.fileName
+                  }
+                />
+
+                <span>
+                  <Maximize2
+                    size={16}
+                  />
+
+                  Ampliar
+                </span>
+              </button>
+            )
+            : (
+              <div
+                className="helpdesk-mail-image__missing"
+              >
+                <AlertTriangle
+                  size={18}
+                />
+
+                No fue posible mostrar esta imagen.
+              </div>
+            )
+        }
+      </article>
     )
   }
 
   return (
     <>
       {/* ====================================================== */}
-      {/* INLINE / SIGNATURE                                     */}
+      {/* FIRMA / INLINE                                         */}
       {/* ====================================================== */}
 
       {
@@ -320,10 +593,10 @@ export function HelpdeskTicketAttachmentsPanel(
         &&
         (
           <section
-            className="helpdesk-detail__card helpdesk-attachments"
+            className="helpdesk-detail__card helpdesk-mail-assets"
           >
             <header
-              className="helpdesk-attachments__header"
+              className="helpdesk-mail-assets__header"
             >
               <div>
                 <Mail
@@ -332,11 +605,11 @@ export function HelpdeskTicketAttachmentsPanel(
 
                 <div>
                   <h2>
-                    Firma y contenido del correo
+                    Firma y contenido visual del correo
                   </h2>
 
                   <p>
-                    Elementos visuales incrustados por el remitente.
+                    Imágenes incrustadas por el remitente.
                   </p>
                 </div>
               </div>
@@ -349,178 +622,32 @@ export function HelpdeskTicketAttachmentsPanel(
             </header>
 
             <div
-              className="helpdesk-signature-grid"
+              className="helpdesk-signature-images"
             >
               {
                 inline.map(
-                  item => (
-                    <button
-                      key={
-                        item.id
-                      }
-                      type="button"
-                      className="helpdesk-signature-card"
-                      onClick={
-                        () =>
-                          void openPreview(
-                            item,
-                          )
-                      }
-                    >
-                      <span
-                        className="helpdesk-signature-card__icon"
-                      >
-                        {
-                          iconFor(
-                            item.contentType,
-                          )
-                        }
-                      </span>
-
-                      <div>
-                        <strong>
-                          {
-                            item.fileName
-                          }
-                        </strong>
-
-                        <small>
-                          {
-                            formatBytes(
-                              item.sizeBytes,
-                            )
-                          }
-                        </small>
-
-                        {
-                          item.contentId
-                          &&
-                          (
-                            <small
-                              title={
-                                item.contentId
-                              }
-                            >
-                              CID identificado
-                            </small>
-                          )
-                        }
-                      </div>
-
-                      <Eye
-                        size={16}
-                      />
-                    </button>
-                  ),
-                )
-              }
-            </div>
-
-            <div
-              className="helpdesk-signature-note"
-            >
-              <ShieldCheck
-                size={15}
-              />
-
-              La firma es evidencia visual complementaria.
-              La identidad principal continúa siendo el
-              correo y el usuario sincronizado.
-            </div>
-          </section>
-        )
-      }
-
-      {/* ====================================================== */}
-      {/* NORMAL ATTACHMENTS                                     */}
-      {/* ====================================================== */}
-
-      <section
-        className="helpdesk-detail__card helpdesk-attachments"
-      >
-        <header
-          className="helpdesk-attachments__header"
-        >
-          <div>
-            <Paperclip
-              size={18}
-            />
-
-            <div>
-              <h2>
-                Adjuntos
-              </h2>
-
-              <p>
-                Archivos relacionados con el caso.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="helpdesk-attachments__refresh"
-            disabled={
-              loading
-            }
-            onClick={
-              () =>
-                void load()
-            }
-          >
-            <RefreshCw
-              size={14}
-            />
-          </button>
-        </header>
-
-        {
-          loading
-          &&
-          normal.length ===
-          0
-            ? (
-              <div
-                className="helpdesk-attachments__empty"
-              >
-                Cargando adjuntos…
-              </div>
-            )
-            : normal.length ===
-              0
-              ? (
-                <div
-                  className="helpdesk-attachments__empty"
-                >
-                  No hay archivos adjuntos convencionales.
-                </div>
-              )
-              : (
-                <div
-                  className="helpdesk-attachments__list"
-                >
-                  {
-                    normal.map(
-                      item => (
+                  item =>
+                    isImage(
+                      item,
+                    )
+                      ? renderImage(
+                          item,
+                          true,
+                        )
+                      : (
                         <article
                           key={
                             item.id
                           }
-                          className="helpdesk-attachment-row"
+                          className="helpdesk-file-card"
                         >
-                          <span
-                            className="helpdesk-attachment-row__icon"
-                          >
-                            {
-                              iconFor(
-                                item.contentType,
-                              )
+                          <FileIcon
+                            item={
+                              item
                             }
-                          </span>
+                          />
 
-                          <div
-                            className="helpdesk-attachment-row__info"
-                          >
+                          <div>
                             <strong>
                               {
                                 item.fileName
@@ -533,56 +660,225 @@ export function HelpdeskTicketAttachmentsPanel(
                                   item.sizeBytes,
                                 )
                               }
-                              {' · '}
-                              {
-                                item.contentType
-                              }
                             </small>
                           </div>
 
-                          <div
-                            className="helpdesk-attachment-row__actions"
-                          >
-                            {
-                              item.canPreview
-                              &&
-                              (
-                                <button
-                                  type="button"
-                                  onClick={
-                                    () =>
-                                      void openPreview(
-                                        item,
-                                      )
-                                  }
-                                >
-                                  <Eye
-                                    size={15}
-                                  />
-
-                                  Ver
-                                </button>
-                              )
+                          <button
+                            type="button"
+                            onClick={
+                              () =>
+                                void download(
+                                  item,
+                                )
                             }
+                          >
+                            <Download
+                              size={15}
+                            />
 
-                            <button
-                              type="button"
-                              onClick={
-                                () =>
-                                  void download(
-                                    item,
-                                  )
-                              }
-                            >
-                              <Download
-                                size={15}
-                              />
-
-                              Descargar
-                            </button>
-                          </div>
+                            Descargar
+                          </button>
                         </article>
                       ),
+                )
+              }
+            </div>
+
+            <div
+              className="helpdesk-signature-security"
+            >
+              <ShieldCheck
+                size={15}
+              />
+
+              <span>
+                La firma se conserva como evidencia visual
+                complementaria. La identidad principal sigue
+                validándose mediante el remitente y el usuario
+                sincronizado en TitanMDM.
+              </span>
+            </div>
+          </section>
+        )
+      }
+
+      {/* ====================================================== */}
+      {/* ADJUNTOS                                               */}
+      {/* ====================================================== */}
+
+      <section
+        className="helpdesk-detail__card helpdesk-mail-assets"
+      >
+        <header
+          className="helpdesk-mail-assets__header"
+        >
+          <div>
+            <Paperclip
+              size={18}
+            />
+
+            <div>
+              <h2>
+                Adjuntos
+              </h2>
+
+              <p>
+                Evidencias y archivos recibidos con el ticket.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="helpdesk-mail-assets__refresh"
+            disabled={
+              loading
+            }
+            title="Actualizar adjuntos"
+            onClick={
+              () =>
+                void load()
+            }
+          >
+            <RefreshCw
+              size={15}
+            />
+          </button>
+        </header>
+
+        {
+          error
+          &&
+          (
+            <div
+              className="helpdesk-mail-assets__error"
+            >
+              <AlertTriangle
+                size={17}
+              />
+
+              {
+                error
+              }
+            </div>
+          )
+        }
+
+        {
+          loading
+            ? (
+              <div
+                className="helpdesk-mail-assets__empty"
+              >
+                Cargando archivos…
+              </div>
+            )
+            : normal.length ===
+              0
+              ? (
+                <div
+                  className="helpdesk-mail-assets__empty"
+                >
+                  Este ticket no contiene adjuntos convencionales.
+                </div>
+              )
+              : (
+                <div
+                  className="helpdesk-ticket-files"
+                >
+                  {
+                    normal.map(
+                      item => {
+                        if (
+                          isImage(
+                            item,
+                          )
+                        ) {
+                          return renderImage(
+                            item,
+                            false,
+                          )
+                        }
+
+                        return (
+                          <article
+                            key={
+                              item.id
+                            }
+                            className="helpdesk-file-card"
+                          >
+                            <span
+                              className="helpdesk-file-card__icon"
+                            >
+                              <FileIcon
+                                item={
+                                  item
+                                }
+                              />
+                            </span>
+
+                            <div>
+                              <strong>
+                                {
+                                  item.fileName
+                                }
+                              </strong>
+
+                              <small>
+                                {
+                                  formatBytes(
+                                    item.sizeBytes,
+                                  )
+                                }
+                                {' · '}
+                                {
+                                  item.contentType
+                                }
+                              </small>
+                            </div>
+
+                            <div
+                              className="helpdesk-file-card__actions"
+                            >
+                              {
+                                isPdf(
+                                  item,
+                                )
+                                &&
+                                (
+                                  <button
+                                    type="button"
+                                    onClick={
+                                      () =>
+                                        void openPdf(
+                                          item,
+                                        )
+                                    }
+                                  >
+                                    Ver PDF
+                                  </button>
+                                )
+                              }
+
+                              <button
+                                type="button"
+                                onClick={
+                                  () =>
+                                    void download(
+                                      item,
+                                    )
+                                }
+                              >
+                                <Download
+                                  size={15}
+                                />
+
+                                Descargar
+                              </button>
+                            </div>
+                          </article>
+                        )
+                      },
                     )
                   }
                 </div>
@@ -591,33 +887,44 @@ export function HelpdeskTicketAttachmentsPanel(
       </section>
 
       {/* ====================================================== */}
-      {/* PREVIEW MODAL                                          */}
+      {/* IMAGE VIEWER                                           */}
       {/* ====================================================== */}
 
       {
-        previewUrl
-        &&
-        previewItem
+        enlarged
         &&
         (
           <div
-            className="helpdesk-preview"
+            className="helpdesk-image-viewer"
+            role="presentation"
+            onClick={
+              () =>
+                setEnlarged(
+                  null,
+                )
+            }
           >
             <div
-              className="helpdesk-preview__dialog"
+              className="helpdesk-image-viewer__dialog"
+              role="dialog"
+              aria-modal="true"
+              onClick={
+                event =>
+                  event.stopPropagation()
+              }
             >
               <header>
                 <div>
                   <strong>
                     {
-                      previewItem.fileName
+                      enlarged.item.fileName
                     }
                   </strong>
 
                   <span>
                     {
                       formatBytes(
-                        previewItem.sizeBytes,
+                        enlarged.item.sizeBytes,
                       )
                     }
                   </span>
@@ -627,7 +934,10 @@ export function HelpdeskTicketAttachmentsPanel(
                   type="button"
                   aria-label="Cerrar"
                   onClick={
-                    closePreview
+                    () =>
+                      setEnlarged(
+                        null,
+                      )
                   }
                 >
                   <X
@@ -637,34 +947,16 @@ export function HelpdeskTicketAttachmentsPanel(
               </header>
 
               <div
-                className="helpdesk-preview__body"
+                className="helpdesk-image-viewer__content"
               >
-                {
-                  previewItem.contentType
-                    .startsWith(
-                      'image/',
-                    )
-                    ? (
-                      <img
-                        src={
-                          previewUrl
-                        }
-                        alt={
-                          previewItem.fileName
-                        }
-                      />
-                    )
-                    : (
-                      <iframe
-                        src={
-                          previewUrl
-                        }
-                        title={
-                          previewItem.fileName
-                        }
-                      />
-                    )
-                }
+                <img
+                  src={
+                    enlarged.url
+                  }
+                  alt={
+                    enlarged.item.fileName
+                  }
+                />
               </div>
             </div>
           </div>

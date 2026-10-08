@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Domain.Entities;
@@ -6,7 +6,7 @@ using TitanMDM.Domain.Enums;
 
 namespace TitanMDM.Infrastructure.Persistence.Seed;
 
-public sealed class TitanMdmSeeder
+public sealed partial class TitanMdmSeeder
 {
     private const string DefaultOrganizationCode =
         "TITANMDM";
@@ -70,7 +70,7 @@ public sealed class TitanMdmSeeder
                 "dashboard.global.view",
                 "Ver dashboard general",
                 "Dashboard",
-                "Permite visualizar métricas combinadas de todas las plataformas."),
+                "Permite visualizar mÃ©tricas combinadas de todas las plataformas."),
 
             new(
                 "workspace.windows.view",
@@ -86,9 +86,9 @@ public sealed class TitanMdmSeeder
 
             new(
                 "workspace.administration.view",
-                "Acceder a Administración",
+                "Acceder a AdministraciÃ³n",
                 "Workspaces",
-                "Permite acceder al espacio de administración de TitanMDM."),
+                "Permite acceder al espacio de administraciÃ³n de TitanMDM."),
 
             new(
                 "workspace.helpdesk.view",
@@ -116,7 +116,7 @@ public sealed class TitanMdmSeeder
                 "devices.update",
                 "Modificar dispositivos",
                 "Devices",
-                "Permite modificar información administrativa de dispositivos."),
+                "Permite modificar informaciÃ³n administrativa de dispositivos."),
 
             new(
                 "devices.delete",
@@ -138,7 +138,7 @@ public sealed class TitanMdmSeeder
                 "enrollment.view",
                 "Ver enrolamiento",
                 "Enrollment",
-                "Permite consultar métodos y procesos de enrolamiento."),
+                "Permite consultar mÃ©todos y procesos de enrolamiento."),
 
             new(
                 "enrollment.manage",
@@ -152,15 +152,15 @@ public sealed class TitanMdmSeeder
 
             new(
                 "policies.view",
-                "Ver políticas",
+                "Ver polÃ­ticas",
                 "Policies",
-                "Permite consultar políticas de administración."),
+                "Permite consultar polÃ­ticas de administraciÃ³n."),
 
             new(
                 "policies.manage",
-                "Administrar políticas",
+                "Administrar polÃ­ticas",
                 "Policies",
-                "Permite crear, modificar, asignar y retirar políticas."),
+                "Permite crear, modificar, asignar y retirar polÃ­ticas."),
 
             // =====================================================
             // APPLICATIONS
@@ -170,7 +170,7 @@ public sealed class TitanMdmSeeder
                 "apps.view",
                 "Ver aplicaciones",
                 "Applications",
-                "Permite consultar el catálogo de aplicaciones."),
+                "Permite consultar el catÃ¡logo de aplicaciones."),
 
             new(
                 "apps.manage",
@@ -272,7 +272,7 @@ public sealed class TitanMdmSeeder
                 "reports.export",
                 "Exportar reportes",
                 "Reports",
-                "Permite exportar información y reportes."),
+                "Permite exportar informaciÃ³n y reportes."),
 
             // =====================================================
             // USERS
@@ -312,9 +312,9 @@ public sealed class TitanMdmSeeder
 
             new(
                 "audit.view",
-                "Ver auditoría",
+                "Ver auditorÃ­a",
                 "Audit",
-                "Permite consultar el registro de auditoría."),
+                "Permite consultar el registro de auditorÃ­a."),
 
             // =====================================================
             // SETTINGS
@@ -322,15 +322,15 @@ public sealed class TitanMdmSeeder
 
             new(
                 "settings.view",
-                "Ver configuración",
+                "Ver configuraciÃ³n",
                 "Settings",
-                "Permite consultar la configuración de TitanMDM."),
+                "Permite consultar la configuraciÃ³n de TitanMDM."),
 
             new(
                 "settings.manage",
-                "Administrar configuración",
+                "Administrar configuraciÃ³n",
                 "Settings",
-                "Permite modificar la configuración global de TitanMDM."),
+                "Permite modificar la configuraciÃ³n global de TitanMDM."),
 
               // =====================================================
             // HELPDESK - WORKSPACE / ACCESS
@@ -346,13 +346,13 @@ public sealed class TitanMdmSeeder
                 "helpdesk.agent.access",
                 "Acceder a consola TIC",
                 "Helpdesk",
-                "Permite acceder a la consola operativa de técnicos de Mesa de Ayuda."),
+                "Permite acceder a la consola operativa de tÃ©cnicos de Mesa de Ayuda."),
 
             new(
                 "helpdesk.admin.access",
-                "Acceder a administración Helpdesk",
+                "Acceder a administraciÃ³n Helpdesk",
                 "Helpdesk",
-                "Permite acceder a configuración avanzada de Mesa de Ayuda."),
+                "Permite acceder a configuraciÃ³n avanzada de Mesa de Ayuda."),
 
             // =====================================================
             // HELPDESK - REQUESTER / COLLABORATOR
@@ -368,7 +368,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.request.own.view",
                 "Ver solicitudes propias",
                 "Helpdesk",
-                "Permite consultar únicamente los tickets creados por el usuario."),
+                "Permite consultar Ãºnicamente los tickets creados por el usuario."),
 
             new(
                 "helpdesk.request.own.comment",
@@ -380,13 +380,13 @@ public sealed class TitanMdmSeeder
                 "helpdesk.request.own.reopen",
                 "Reabrir solicitudes propias",
                 "Helpdesk",
-                "Permite reabrir tickets propios dentro del período autorizado."),
+                "Permite reabrir tickets propios dentro del perÃ­odo autorizado."),
 
             new(
                 "helpdesk.request.own.confirm",
-                "Confirmar resolución propia",
+                "Confirmar resoluciÃ³n propia",
                 "Helpdesk",
-                "Permite confirmar una resolución y cerrar un ticket propio."),
+                "Permite confirmar una resoluciÃ³n y cerrar un ticket propio."),
 
             // =====================================================
             // HELPDESK - AGENT CONSOLE
@@ -396,13 +396,13 @@ public sealed class TitanMdmSeeder
                 "helpdesk.inbox.my-work",
                 "Ver Mi trabajo",
                 "Helpdesk",
-                "Permite visualizar los tickets asignados al técnico actual."),
+                "Permite visualizar los tickets asignados al tÃ©cnico actual."),
 
             new(
                 "helpdesk.inbox.unassigned",
                 "Ver tickets sin asignar",
                 "Helpdesk",
-                "Permite visualizar tickets pendientes de asignación."),
+                "Permite visualizar tickets pendientes de asignaciÃ³n."),
 
             new(
                 "helpdesk.inbox.all",
@@ -420,7 +420,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.kanban.view",
                 "Ver Kanban de Helpdesk",
                 "Helpdesk",
-                "Permite utilizar la vista Kanban de operación."),
+                "Permite utilizar la vista Kanban de operaciÃ³n."),
 
             new(
                 "helpdesk.ticket.details.view",
@@ -438,7 +438,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.ticket.internal-note",
                 "Crear notas internas",
                 "Helpdesk",
-                "Permite registrar notas visibles únicamente para personal TIC."),
+                "Permite registrar notas visibles Ãºnicamente para personal TIC."),
 
             new(
                 "helpdesk.ticket.take",
@@ -450,13 +450,13 @@ public sealed class TitanMdmSeeder
                 "helpdesk.ticket.assign",
                 "Asignar tickets",
                 "Helpdesk",
-                "Permite asignar tickets a otros técnicos autorizados."),
+                "Permite asignar tickets a otros tÃ©cnicos autorizados."),
 
             new(
                 "helpdesk.ticket.transfer",
                 "Transferir tickets",
                 "Helpdesk",
-                "Permite transferir un ticket entre grupos o técnicos."),
+                "Permite transferir un ticket entre grupos o tÃ©cnicos."),
 
             new(
                 "helpdesk.ticket.transition",
@@ -510,9 +510,9 @@ public sealed class TitanMdmSeeder
 
             new(
                 "helpdesk.analytics.view",
-                "Ver gráficos Helpdesk",
+                "Ver grÃ¡ficos Helpdesk",
                 "Helpdesk",
-                "Permite visualizar gráficos y tendencias operativas."),
+                "Permite visualizar grÃ¡ficos y tendencias operativas."),
 
             new(
                 "helpdesk.reports.view",
@@ -540,7 +540,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.sites.manage",
                 "Administrar localidades en Helpdesk",
                 "Helpdesk",
-                "Permite administrar la integración de Sites con Mesa de Ayuda."),
+                "Permite administrar la integraciÃ³n de Sites con Mesa de Ayuda."),
 
             new(
                 "helpdesk.groups.view",
@@ -556,15 +556,15 @@ public sealed class TitanMdmSeeder
 
             new(
                 "helpdesk.technicians.view",
-                "Ver técnicos",
+                "Ver tÃ©cnicos",
                 "Helpdesk",
-                "Permite consultar técnicos, disponibilidad y capacidad."),
+                "Permite consultar tÃ©cnicos, disponibilidad y capacidad."),
 
             new(
                 "helpdesk.technicians.manage",
-                "Administrar técnicos",
+                "Administrar tÃ©cnicos",
                 "Helpdesk",
-                "Permite configurar técnicos, cobertura y disponibilidad."),
+                "Permite configurar tÃ©cnicos, cobertura y disponibilidad."),
 
             new(
                 "helpdesk.schedules.view",
@@ -576,7 +576,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.schedules.manage",
                 "Administrar turnos Helpdesk",
                 "Helpdesk",
-                "Permite configurar turnos y horarios de técnicos."),
+                "Permite configurar turnos y horarios de tÃ©cnicos."),
 
             // =====================================================
             // HELPDESK - SERVICE CATALOG
@@ -584,15 +584,15 @@ public sealed class TitanMdmSeeder
 
             new(
                 "helpdesk.categories.view",
-                "Ver categorías",
+                "Ver categorÃ­as",
                 "Helpdesk",
-                "Permite consultar categorías y especialidades."),
+                "Permite consultar categorÃ­as y especialidades."),
 
             new(
                 "helpdesk.categories.manage",
-                "Administrar categorías",
+                "Administrar categorÃ­as",
                 "Helpdesk",
-                "Permite crear y modificar categorías y especialidades."),
+                "Permite crear y modificar categorÃ­as y especialidades."),
 
             new(
                 "helpdesk.templates.view",
@@ -626,13 +626,13 @@ public sealed class TitanMdmSeeder
                 "helpdesk.automation.view",
                 "Ver automatizaciones",
                 "Helpdesk",
-                "Permite consultar reglas y eventos de automatización."),
+                "Permite consultar reglas y eventos de automatizaciÃ³n."),
 
             new(
                 "helpdesk.automation.manage",
                 "Administrar automatizaciones",
                 "Helpdesk",
-                "Permite crear y modificar reglas automáticas."),
+                "Permite crear y modificar reglas automÃ¡ticas."),
 
             // =====================================================
             // HELPDESK - MAIL
@@ -640,9 +640,9 @@ public sealed class TitanMdmSeeder
 
             new(
                 "helpdesk.mail.view",
-                "Ver configuración de correo",
+                "Ver configuraciÃ³n de correo",
                 "Helpdesk",
-                "Permite consultar el estado de integración de correo."),
+                "Permite consultar el estado de integraciÃ³n de correo."),
 
             new(
                 "helpdesk.mail.manage",
@@ -662,7 +662,7 @@ public sealed class TitanMdmSeeder
 
             new(
                 "helpdesk.ai.view",
-                "Ver configuración de IA",
+                "Ver configuraciÃ³n de IA",
                 "Helpdesk",
                 "Permite consultar modelos y estado del proveedor de IA."),
 
@@ -670,7 +670,7 @@ public sealed class TitanMdmSeeder
                 "helpdesk.ai.manage",
                 "Administrar IA Helpdesk",
                 "Helpdesk",
-                "Permite modificar configuración y automatizaciones asistidas por IA."),
+                "Permite modificar configuraciÃ³n y automatizaciones asistidas por IA."),
 
             // =====================================================
             // HELPDESK - LEGACY COMPATIBILITY
@@ -790,9 +790,9 @@ public sealed class TitanMdmSeeder
 
             new(
                 "ponches.collaborators.sync",
-                "Sincronizar colaboradores y biometría",
+                "Sincronizar colaboradores y biometrÃ­a",
                 "Ponches",
-                "Sincronizar colaboradores y biometría."),
+                "Sincronizar colaboradores y biometrÃ­a."),
 
             new(
                 "ponches.schedules.view",
@@ -808,15 +808,15 @@ public sealed class TitanMdmSeeder
 
             new(
                 "ponches.inventory.view",
-                "Ver inventario biométrico",
+                "Ver inventario biomÃ©trico",
                 "Ponches",
-                "Ver inventario biométrico."),
+                "Ver inventario biomÃ©trico."),
 
             new(
                 "ponches.inventory.manage",
-                "Administrar inventario biométrico",
+                "Administrar inventario biomÃ©trico",
                 "Ponches",
-                "Administrar inventario biométrico."),
+                "Administrar inventario biomÃ©trico."),
 
             new(
                 "ponches.bulk.execute",
@@ -838,27 +838,27 @@ public sealed class TitanMdmSeeder
 
             new(
                 "ponches.sync.view",
-                "Ver historial de sincronización",
+                "Ver historial de sincronizaciÃ³n",
                 "Ponches",
-                "Ver historial de sincronización."),
+                "Ver historial de sincronizaciÃ³n."),
 
             new(
                 "ponches.sync.run",
-                "Ejecutar sincronización",
+                "Ejecutar sincronizaciÃ³n",
                 "Ponches",
-                "Ejecutar sincronización."),
+                "Ejecutar sincronizaciÃ³n."),
 
             new(
                 "ponches.settings.view",
-                "Ver configuración de Ponches",
+                "Ver configuraciÃ³n de Ponches",
                 "Ponches",
-                "Ver configuración de Ponches."),
+                "Ver configuraciÃ³n de Ponches."),
 
             new(
                 "ponches.settings.manage",
-                "Editar configuración de Ponches",
+                "Editar configuraciÃ³n de Ponches",
                 "Ponches",
-                "Editar configuración de Ponches."),
+                "Editar configuraciÃ³n de Ponches."),
 
             new(
                 "ponches.users.view",
@@ -905,13 +905,26 @@ public sealed class TitanMdmSeeder
         /*
          * DatabaseBootstrapper maneja migrations.
          *
-         * El Seeder únicamente garantiza datos mínimos,
-         * permisos, break-glass y reconciliación de scopes.
+         * El Seeder Ãºnicamente garantiza datos mÃ­nimos,
+         * permisos, break-glass y reconciliaciÃ³n de scopes.
          */
 
         var organization =
             await EnsureOrganizationAsync(
                 cancellationToken);
+
+        /*
+         * ========================================================
+         * HELPDESK ENTERPRISE DEFAULT CATALOG
+         * ========================================================
+         *
+         * Catálogo empresarial inicial de Mesa de Ayuda.
+         *
+         * Es idempotente:
+         * - no duplica grupos;
+         * - no pisa categorías configuradas manualmente;
+         * - solo inicializa grupos inexistentes o vacíos.
+         */
 
         var permissions =
             await EnsurePermissionsAsync(
@@ -977,7 +990,7 @@ public sealed class TitanMdmSeeder
 
         organization.UpdateInformation(
             DefaultOrganizationName,
-            "Plataforma empresarial de administración y seguridad de dispositivos.",
+            "Plataforma empresarial de administraciÃ³n y seguridad de dispositivos.",
             null,
             "Dominican Republic",
             "America/Santo_Domingo");
@@ -1241,7 +1254,7 @@ public sealed class TitanMdmSeeder
                 12)
         {
             throw new InvalidOperationException(
-                "Primera instalación: configura TITAN_BOOTSTRAP_PASSWORD " +
+                "Primera instalaciÃ³n: configura TITAN_BOOTSTRAP_PASSWORD " +
                 "con al menos 12 caracteres. Las instalaciones con el " +
                 "administrador existente no necesitan esta variable.");
         }
@@ -1329,9 +1342,9 @@ public sealed class TitanMdmSeeder
          *   - activo;
          *   - con rol SuperAdmin activo;
          *   - con rol de sistema;
-         *   - perteneciente a la misma organización del rol;
+         *   - perteneciente a la misma organizaciÃ³n del rol;
          *
-         * obtiene explícitamente:
+         * obtiene explÃ­citamente:
          *
          * AuthorizationScopeType.Organization
          *
@@ -1347,7 +1360,7 @@ public sealed class TitanMdmSeeder
          * esosa@cesariglesias.com.do
          *
          * que tienen SuperAdmin + permisos, pero anteriormente
-         * no recibían Organization Scope.
+         * no recibÃ­an Organization Scope.
          * ========================================================
          */
 
@@ -1416,7 +1429,7 @@ public sealed class TitanMdmSeeder
                 .ToArray();
 
         /*
-         * Consultamos únicamente los Organization Scope existentes
+         * Consultamos Ãºnicamente los Organization Scope existentes
          * para los SuperAdmin detectados.
          */
 
@@ -1464,8 +1477,8 @@ public sealed class TitanMdmSeeder
             /*
              * Para Organization Scope:
              *
-             * OrganizationId = organización del usuario.
-             * ScopeId        = misma organización.
+             * OrganizationId = organizaciÃ³n del usuario.
+             * ScopeId        = misma organizaciÃ³n.
              */
 
             var key =
@@ -1511,3 +1524,5 @@ public sealed class TitanMdmSeeder
                 cancellationToken);
     }
 }
+
+
