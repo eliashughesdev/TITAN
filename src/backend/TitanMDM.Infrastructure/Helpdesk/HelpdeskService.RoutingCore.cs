@@ -7,30 +7,242 @@ namespace TitanMDM.Infrastructure.Helpdesk;
 public sealed partial class HelpdeskService
 {
     // ============================================================
+    // PUBLIC ROUTING PREVIEW
+    // ============================================================
+
+    public async Task<RoutingPreview> PreviewRoutingAsync(
+        Guid organizationId,
+        Guid requesterId,
+        string category,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await EvaluateRoutingAsync(
+            organizationId,
+            requesterId,
+            category,
+            cancellationToken);
+
+        return ToPreview(result);
+    }
+
+    public async Task<RoutingPreview> PreviewRoutingAsync(
+        Guid organizationId,
+        Guid requesterId,
+        string category,
+        Guid? siteId,
+        Guid? siteLocationId,
+        Guid? requestedTeamId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await EvaluateRoutingAsync(
+            organizationId,
+            requesterId,
+            category,
+            cancellationToken,
+            requestedTeamId,
+            siteId,
+            siteLocationId);
+
+        return ToPreview(result);
+    }
+
+    // ============================================================
+    // ROUTING ENGINE
+    // ============================================================
+
+    private async Task<RoutingEvaluation> EvaluateRoutingAsync(
+        Guid organizationId,
+        Guid requesterId,
+        string category,
+        CancellationToken cancellationToken,
+        Guid? requestedTeamId = null,
+        Guid? explicitSiteId = null,
+        Guid? explicitSiteLocationId = null)
+    {
+        var context = await ResolveRoutingContextAsync(
+            organizationId,
+            requesterId,
+            category,
+            explicitSiteId,
+            explicitSiteLocationId,
+            cancellationToken);
+
+        if (!context.Success)
+        {
+            return RoutingEvaluation.Fail(
+                context.FailureReason
+                ?? "No fue posible resolver el contexto del solicitante.");
+        }
+
+        var teams = await LoadRoutingTeamsAsync(
+            organizationId,
+            context.NormalizedCategory!,
+            requestedTeamId,
+            cancellationToken);
+
+        if (teams.Count == 0)
+        {
+            return new RoutingEvaluation(
+                Candidate: null,
+                RequesterLocation: context.RequesterLocation,
+                SiteId: context.SiteId,
+                SiteLocationId: context.SiteLocationId,
+                Reason:
+                    requestedTeamId.HasValue
+                        ? "El grupo seleccionado no puede atender el ticket."
+                        : "No existe un grupo activo compatible con el ticket.");
+        }
+
+        var coverages = await LoadRankedCoveragesAsync(
+            organizationId,
+            context.SiteId!.Value,
+            context.SiteLocationId,
+            context.NormalizedCategory!,
+            teams.Keys.ToArray(),
+            cancellationToken);
+
+        if (coverages.Count == 0)
+        {
+            return new RoutingEvaluation(
+                null,
+                context.RequesterLocation,
+                context.SiteId,
+                context.SiteLocationId,
+                "No existe cobertura compatible con la localidad, sublocalidad y categoría del ticket.");
+        }
+
+        var usableCoverages =
+            SelectBestCoverageTier(coverages);
+
+        var eligibleTechnicianIds =
+            await EligibleTechnicians(organizationId)
+                .ToListAsync(cancellationToken);
+
+        if (eligibleTechnicianIds.Count == 0)
+        {
+            return new RoutingEvaluation(
+                null,
+                context.RequesterLocation,
+                context.SiteId,
+                context.SiteLocationId,
+                "No existen técnicos con permisos operativos de Mesa de Ayuda.");
+        }
+
+        var coveredTeamIds =
+            usableCoverages
+                .Select(x => x.Coverage.TeamId)
+                .Distinct()
+                .ToArray();
+
+        var members = await LoadAvailableMembersAsync(
+            organizationId,
+            coveredTeamIds,
+            eligibleTechnicianIds,
+            cancellationToken);
+
+        if (members.Count == 0)
+        {
+            return new RoutingEvaluation(
+                null,
+                context.RequesterLocation,
+                context.SiteId,
+                context.SiteLocationId,
+                "Existe cobertura, pero no hay técnicos habilitados que acepten autoasignación.");
+        }
+
+        var scheduleResult =
+            await FilterMembersByScheduleAsync(
+                organizationId,
+                members,
+                cancellationToken);
+
+        if (scheduleResult.Members.Count == 0)
+        {
+            return new RoutingEvaluation(
+                null,
+                context.RequesterLocation,
+                context.SiteId,
+                context.SiteLocationId,
+                "Existe cobertura y técnicos habilitados, pero ninguno está disponible según su turno.");
+        }
+
+        var candidates =
+            await BuildRankedCandidatesAsync(
+                organizationId,
+                context.SiteName!,
+                teams,
+                usableCoverages,
+                scheduleResult.Members,
+                scheduleResult.SchedulePriorities,
+                cancellationToken);
+
+        var chosen =
+            candidates
+                .OrderBy(x => x.CoverageRank)
+                .ThenBy(x => x.CoveragePriority)
+                .ThenBy(x => x.SchedulePriority)
+                .ThenBy(x => x.Occupancy)
+                .ThenBy(x => x.Candidate.OpenTickets)
+
+                // Técnico nunca utilizado primero.
+                .ThenBy(
+                    x =>
+                        x.LastAutomaticAssignmentAtUtc.HasValue
+                            ? 1
+                            : 0)
+
+                // Después quien lleve más tiempo sin recibir ticket.
+                .ThenBy(x => x.LastAutomaticAssignmentAtUtc)
+
+                // Desempate estable.
+                .ThenBy(x => x.Candidate.UserId)
+
+                .FirstOrDefault();
+
+        if (chosen is null)
+        {
+            return new RoutingEvaluation(
+                null,
+                context.RequesterLocation,
+                context.SiteId,
+                context.SiteLocationId,
+                "Todos los técnicos elegibles alcanzaron su capacidad máxima.");
+        }
+
+        var selected = chosen.Candidate;
+
+        return new RoutingEvaluation(
+            Candidate: selected,
+            RequesterLocation: context.RequesterLocation,
+            SiteId: context.SiteId,
+            SiteLocationId: context.SiteLocationId,
+            Reason:
+                BuildRoutingReason(
+                    context.RequesterLocation!,
+                    context.NormalizedCategory!,
+                    selected));
+    }
+
+    // ============================================================
     // REQUESTER / LOCATION CONTEXT
     // ============================================================
 
-    private async Task<RoutingContext>
-        ResolveRoutingContextAsync(
-            Guid organizationId,
-            Guid requesterId,
-            string? category,
-            Guid? explicitSiteId,
-            Guid? explicitSiteLocationId,
-            CancellationToken cancellationToken)
+    private async Task<RoutingContext> ResolveRoutingContextAsync(
+        Guid organizationId,
+        Guid requesterId,
+        string? category,
+        Guid? explicitSiteId,
+        Guid? explicitSiteLocationId,
+        CancellationToken cancellationToken)
     {
         var requester =
             await _db.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     x =>
-                        x.Id ==
-                            requesterId
-                        &&
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.IsActive,
+                        x.Id == requesterId
+                        && x.OrganizationId == organizationId
+                        && x.IsActive,
                     cancellationToken);
 
         if (requester is null)
@@ -39,17 +251,15 @@ public sealed partial class HelpdeskService
                 "El solicitante no está activo en esta organización.");
         }
 
-        // --------------------------------------------------------
-        // Priority:
-        //
-        // 1. Site proveniente del ticket/dispositivo/intelligence.
-        // 2. Site del usuario.
-        // --------------------------------------------------------
-
+        /*
+         * Prioridad:
+         *
+         * 1. Site inferido/asignado directamente al ticket.
+         * 2. Site del solicitante.
+         */
         var effectiveSiteId =
             explicitSiteId
-            ??
-            requester.SiteId;
+            ?? requester.SiteId;
 
         var effectiveLocationId =
             explicitSiteId.HasValue
@@ -67,13 +277,9 @@ public sealed partial class HelpdeskService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.Id ==
-                            effectiveSiteId.Value
-                        &&
-                        x.IsActive,
+                        x.OrganizationId == organizationId
+                        && x.Id == effectiveSiteId.Value
+                        && x.IsActive,
                     cancellationToken);
 
         if (site is null)
@@ -82,8 +288,7 @@ public sealed partial class HelpdeskService
                 "La localidad del ticket no existe o está desactivada.");
         }
 
-        SiteLocation? siteLocation =
-            null;
+        SiteLocation? siteLocation = null;
 
         if (effectiveLocationId.HasValue)
         {
@@ -92,26 +297,15 @@ public sealed partial class HelpdeskService
                     .AsNoTracking()
                     .FirstOrDefaultAsync(
                         x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            x.SiteId ==
-                                site.Id
-                            &&
-                            x.Id ==
-                                effectiveLocationId.Value
-                            &&
-                            x.IsActive,
+                            x.OrganizationId == organizationId
+                            && x.SiteId == site.Id
+                            && x.Id == effectiveLocationId.Value
+                            && x.IsActive,
                         cancellationToken);
 
-            /*
-             * Nunca utilizar una sublocalidad perteneciente
-             * a otra localidad.
-             */
             if (siteLocation is null)
             {
-                effectiveLocationId =
-                    null;
+                effectiveLocationId = null;
             }
         }
 
@@ -125,16 +319,14 @@ public sealed partial class HelpdeskService
             effectiveLocationId,
             site.Name,
             requesterLocation,
-            NormalizeRoutingCategory(
-                category));
+            NormalizeRoutingCategory(category));
     }
 
     // ============================================================
-    // TEAM RESOLUTION
+    // TEAMS
     // ============================================================
 
-    private async Task<
-        Dictionary<Guid, HelpdeskTeam>>
+    private async Task<Dictionary<Guid, HelpdeskTeam>>
         LoadRoutingTeamsAsync(
             Guid organizationId,
             string normalizedCategory,
@@ -146,60 +338,34 @@ public sealed partial class HelpdeskService
                 .AsNoTracking()
                 .Where(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.IsActive);
+                        x.OrganizationId == organizationId
+                        && x.IsActive);
 
         if (requestedTeamId.HasValue)
         {
             query =
                 query.Where(
                     x =>
-                        x.Id ==
-                            requestedTeamId.Value);
+                        x.Id == requestedTeamId.Value);
         }
 
         var teams =
-            await query
-                .ToListAsync(
-                    cancellationToken);
+            await query.ToListAsync(cancellationToken);
 
         /*
-         * IMPORTANTE
-         * ----------
+         * GENERAL significa:
          *
-         * "general" no significa que solamente pueden utilizarse
-         * grupos cuyo campo Categories esté vacío.
+         * "todavía no clasificado con suficiente precisión".
          *
-         * Significa que el ticket todavía no fue clasificado con
-         * suficiente precisión.
-         *
-         * Por lo tanto mantenemos los grupos candidatos para que:
-         *
-         * - localidad;
-         * - cobertura;
-         * - OpenRouter;
-         * - requester intelligence;
-         * - carga;
-         * - capacidad
-         *
-         * puedan decidir.
+         * No debe excluir grupos especializados.
          */
         return teams
             .Where(
                 x =>
-                    normalizedCategory ==
-                        "general"
-                    ||
-                    string.IsNullOrWhiteSpace(
-                        x.Categories)
-                    ||
-                    x.HandlesCategory(
-                        normalizedCategory))
-            .ToDictionary(
-                x =>
-                    x.Id);
+                    normalizedCategory == "general"
+                    || string.IsNullOrWhiteSpace(x.Categories)
+                    || x.HandlesCategory(normalizedCategory))
+            .ToDictionary(x => x.Id);
     }
 
     // ============================================================
@@ -220,106 +386,62 @@ public sealed partial class HelpdeskService
                 .AsNoTracking()
                 .Where(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.IsActive
-                        &&
-                        x.SiteId ==
-                            siteId
-                        &&
-                        teamIds.Contains(
-                            x.TeamId))
-                .ToListAsync(
-                    cancellationToken);
+                        x.OrganizationId == organizationId
+                        && x.IsActive
+                        && x.SiteId == siteId
+                        && teamIds.Contains(x.TeamId))
+                .ToListAsync(cancellationToken);
 
-        var generalCategory =
-            normalizedCategory ==
-                "general";
+        var isGeneral =
+            normalizedCategory == "general";
 
         return coverages
             .Select(
                 coverage =>
                 {
-                    /*
-                     * Para una categoría conocida:
-                     *
-                     *   exactCategory = coincidencia exacta.
-                     *
-                     * Para GENERAL:
-                     *
-                     *   no rechazamos una cobertura solamente
-                     *   porque tenga categoría configurada.
-                     */
                     var exactCategory =
-                        !generalCategory
-                        &&
-                        string.Equals(
+                        !isGeneral
+                        && string.Equals(
                             coverage.Category,
                             normalizedCategory,
                             StringComparison.OrdinalIgnoreCase);
 
+                    /*
+                     * GENERAL todavía no conoce suficientemente
+                     * la categoría. No eliminamos coberturas
+                     * especializadas en esta etapa.
+                     */
                     var anyCategory =
-                        generalCategory
-                        ||
-                        string.IsNullOrWhiteSpace(
+                        isGeneral
+                        || string.IsNullOrWhiteSpace(
                             coverage.Category);
 
                     var exactLocation =
                         siteLocationId.HasValue
-                        &&
-                        coverage.SiteLocationId ==
-                            siteLocationId;
+                        && coverage.SiteLocationId
+                            == siteLocationId.Value;
 
                     var entireSite =
-                        !coverage.SiteLocationId
-                            .HasValue;
+                        !coverage.SiteLocationId.HasValue;
 
-                    /*
-                     * Ranking:
-                     *
-                     * 0 exact location + exact category
-                     * 1 exact location + wildcard/general
-                     * 2 entire site    + exact category
-                     * 3 entire site    + wildcard/general
-                     */
                     var rank =
-                        exactLocation
-                        &&
-                        exactCategory
+                        exactLocation && exactCategory
                             ? 0
-                            :
-                        exactLocation
-                        &&
-                        anyCategory
-                            ? 1
-                            :
-                        entireSite
-                        &&
-                        exactCategory
-                            ? 2
-                            :
-                        entireSite
-                        &&
-                        anyCategory
-                            ? 3
-                            :
-                        int.MaxValue;
+                            : exactLocation && anyCategory
+                                ? 1
+                                : entireSite && exactCategory
+                                    ? 2
+                                    : entireSite && anyCategory
+                                        ? 3
+                                        : int.MaxValue;
 
                     return new RankedCoverage(
                         coverage,
                         rank);
                 })
-            .Where(
-                x =>
-                    x.Rank !=
-                        int.MaxValue)
-            .OrderBy(
-                x =>
-                    x.Rank)
-            .ThenBy(
-                x =>
-                    x.Coverage.Priority)
+            .Where(x => x.Rank != int.MaxValue)
+            .OrderBy(x => x.Rank)
+            .ThenBy(x => x.Coverage.Priority)
             .ToList();
     }
 
@@ -333,32 +455,23 @@ public sealed partial class HelpdeskService
         }
 
         var bestRank =
-            coverages[0]
-                .Rank;
+            coverages[0].Rank;
 
         var bestPriority =
             coverages
-                .Where(
-                    x =>
-                        x.Rank ==
-                            bestRank)
-                .Min(
-                    x =>
-                        x.Coverage.Priority);
+                .Where(x => x.Rank == bestRank)
+                .Min(x => x.Coverage.Priority);
 
         return coverages
             .Where(
                 x =>
-                    x.Rank ==
-                        bestRank
-                    &&
-                    x.Coverage.Priority ==
-                        bestPriority)
+                    x.Rank == bestRank
+                    && x.Coverage.Priority == bestPriority)
             .ToList();
     }
 
     // ============================================================
-    // MEMBERSHIP
+    // MEMBERS
     // ============================================================
 
     private async Task<List<HelpdeskTeamMember>>
@@ -372,27 +485,17 @@ public sealed partial class HelpdeskService
             .AsNoTracking()
             .Where(
                 x =>
-                    x.OrganizationId ==
-                        organizationId
-                    &&
-                    coveredTeamIds.Contains(
-                        x.TeamId)
-                    &&
-                    eligibleTechnicianIds.Contains(
-                        x.UserId)
-                    &&
-                    x.IsAvailable
-                    &&
-                    x.AcceptsAutomaticAssignments
-                    &&
-                    x.MaxOpenTickets >
-                        0)
-            .ToListAsync(
-                cancellationToken);
+                    x.OrganizationId == organizationId
+                    && coveredTeamIds.Contains(x.TeamId)
+                    && eligibleTechnicianIds.Contains(x.UserId)
+                    && x.IsAvailable
+                    && x.AcceptsAutomaticAssignments
+                    && x.MaxOpenTickets > 0)
+            .ToListAsync(cancellationToken);
     }
 
     // ============================================================
-    // SCHEDULE FILTERING
+    // SCHEDULES
     // ============================================================
 
     private async Task<ScheduleFilterResult>
@@ -403,17 +506,13 @@ public sealed partial class HelpdeskService
     {
         var teamIds =
             members
-                .Select(
-                    x =>
-                        x.TeamId)
+                .Select(x => x.TeamId)
                 .Distinct()
                 .ToArray();
 
         var userIds =
             members
-                .Select(
-                    x =>
-                        x.UserId)
+                .Select(x => x.UserId)
                 .Distinct()
                 .ToArray();
 
@@ -423,27 +522,18 @@ public sealed partial class HelpdeskService
                 .AsNoTracking()
                 .Where(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        teamIds.Contains(
-                            x.TeamId)
-                        &&
-                        userIds.Contains(
-                            x.UserId))
-                .ToListAsync(
-                    cancellationToken);
+                        x.OrganizationId == organizationId
+                        && teamIds.Contains(x.TeamId)
+                        && userIds.Contains(x.UserId))
+                .ToListAsync(cancellationToken);
 
-        var now =
-            DateTime.UtcNow;
+        var now = DateTime.UtcNow;
 
         var availableMembers =
             new List<HelpdeskTeamMember>();
 
         var priorities =
-            new Dictionary<
-                (Guid TeamId, Guid UserId),
-                int>();
+            new Dictionary<(Guid TeamId, Guid UserId), int>();
 
         foreach (var member in members)
         {
@@ -451,46 +541,34 @@ public sealed partial class HelpdeskService
                 schedules
                     .Where(
                         x =>
-                            x.TeamId ==
-                                member.TeamId
-                            &&
-                            x.UserId ==
-                                member.UserId)
+                            x.TeamId == member.TeamId
+                            && x.UserId == member.UserId)
                     .ToList();
 
             /*
-             * Regla única para todo Routing:
+             * Si no existe horario:
+             * IsAvailable gobierna.
              *
-             * SIN schedule:
-             *   IsAvailable controla disponibilidad.
-             *
-             * CON schedule:
-             *   debe existir al menos un slot activo.
+             * Si existe horario:
+             * debe estar dentro de un slot activo.
              */
             if (technicianSchedules.Count == 0)
             {
-                availableMembers.Add(
-                    member);
+                availableMembers.Add(member);
 
                 priorities[
                     (
                         member.TeamId,
                         member.UserId
-                    )] =
-                    1000;
+                    )] = 1000;
 
                 continue;
             }
 
             var activeSchedule =
                 technicianSchedules
-                    .Where(
-                        x =>
-                            x.IsOnDuty(
-                                now))
-                    .OrderBy(
-                        x =>
-                            x.Priority)
+                    .Where(x => x.IsOnDuty(now))
+                    .OrderBy(x => x.Priority)
                     .FirstOrDefault();
 
             if (activeSchedule is null)
@@ -498,8 +576,7 @@ public sealed partial class HelpdeskService
                 continue;
             }
 
-            availableMembers.Add(
-                member);
+            availableMembers.Add(member);
 
             priorities[
                 (
@@ -515,7 +592,7 @@ public sealed partial class HelpdeskService
     }
 
     // ============================================================
-    // CANDIDATE BUILDING
+    // CANDIDATES + FAIRNESS
     // ============================================================
 
     private async Task<List<RankedCandidate>>
@@ -532,9 +609,7 @@ public sealed partial class HelpdeskService
     {
         var technicianIds =
             members
-                .Select(
-                    x =>
-                        x.UserId)
+                .Select(x => x.UserId)
                 .Distinct()
                 .ToArray();
 
@@ -543,16 +618,11 @@ public sealed partial class HelpdeskService
                 .AsNoTracking()
                 .Where(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.IsActive
-                        &&
-                        technicianIds.Contains(
-                            x.Id))
+                        x.OrganizationId == organizationId
+                        && x.IsActive
+                        && technicianIds.Contains(x.Id))
                 .ToDictionaryAsync(
-                    x =>
-                        x.Id,
+                    x => x.Id,
                     cancellationToken);
 
         if (technicians.Count == 0)
@@ -560,28 +630,17 @@ public sealed partial class HelpdeskService
             return [];
         }
 
-        // --------------------------------------------------------
-        // CURRENT LOAD
-        // --------------------------------------------------------
-
         var loads =
             await _db.HelpdeskTickets
                 .AsNoTracking()
                 .Where(
                     x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.AssigneeUserId.HasValue
-                        &&
-                        technicianIds.Contains(
+                        x.OrganizationId == organizationId
+                        && x.AssigneeUserId.HasValue
+                        && technicianIds.Contains(
                             x.AssigneeUserId.Value)
-                        &&
-                        x.Status !=
-                            "resolved"
-                        &&
-                        x.Status !=
-                            "closed")
+                        && x.Status != "resolved"
+                        && x.Status != "closed")
                 .GroupBy(
                     x =>
                         x.AssigneeUserId!.Value)
@@ -589,49 +648,34 @@ public sealed partial class HelpdeskService
                     group =>
                         new
                         {
-                            UserId =
-                                group.Key,
-
-                            Count =
-                                group.Count()
+                            UserId = group.Key,
+                            Count = group.Count()
                         })
                 .ToDictionaryAsync(
-                    x =>
-                        x.UserId,
-                    x =>
-                        x.Count,
+                    x => x.UserId,
+                    x => x.Count,
                     cancellationToken);
 
-        // --------------------------------------------------------
-        // FAIRNESS
-        // --------------------------------------------------------
-
+        /*
+         * La última autoasignación permite round-robin/fairness
+         * cuando varios técnicos tienen igual carga.
+         */
         var lastAssignments =
             await (
                 from ticketEvent
-                    in _db.HelpdeskTicketEvents
-                        .AsNoTracking()
+                    in _db.HelpdeskTicketEvents.AsNoTracking()
 
                 join ticket
-                    in _db.HelpdeskTickets
-                        .AsNoTracking()
-
+                    in _db.HelpdeskTickets.AsNoTracking()
                     on ticketEvent.TicketId
                     equals ticket.Id
 
                 where
-                    ticketEvent.OrganizationId ==
-                        organizationId
-                    &&
-                    ticket.OrganizationId ==
-                        organizationId
-                    &&
-                    ticketEvent.EventType ==
-                        "auto_assigned"
-                    &&
-                    ticket.AssigneeUserId.HasValue
-                    &&
-                    technicianIds.Contains(
+                    ticketEvent.OrganizationId == organizationId
+                    && ticket.OrganizationId == organizationId
+                    && ticketEvent.EventType == "auto_assigned"
+                    && ticket.AssigneeUserId.HasValue
+                    && technicianIds.Contains(
                         ticket.AssigneeUserId.Value)
 
                 group ticketEvent
@@ -640,8 +684,7 @@ public sealed partial class HelpdeskService
 
                 select new
                 {
-                    UserId =
-                        technicianGroup.Key,
+                    UserId = technicianGroup.Key,
 
                     LastAssignedAtUtc =
                         technicianGroup.Max(
@@ -650,35 +693,21 @@ public sealed partial class HelpdeskService
                 }
             )
             .ToDictionaryAsync(
-                x =>
-                    x.UserId,
-                x =>
-                    x.LastAssignedAtUtc,
+                x => x.UserId,
+                x => x.LastAssignedAtUtc,
                 cancellationToken);
-
-        // --------------------------------------------------------
-        // LOCATION DICTIONARIES
-        // --------------------------------------------------------
 
         var technicianSiteIds =
             technicians.Values
-                .Where(
-                    x =>
-                        x.SiteId.HasValue)
-                .Select(
-                    x =>
-                        x.SiteId!.Value)
+                .Where(x => x.SiteId.HasValue)
+                .Select(x => x.SiteId!.Value)
                 .Distinct()
                 .ToArray();
 
         var technicianLocationIds =
             technicians.Values
-                .Where(
-                    x =>
-                        x.SiteLocationId.HasValue)
-                .Select(
-                    x =>
-                        x.SiteLocationId!.Value)
+                .Where(x => x.SiteLocationId.HasValue)
+                .Select(x => x.SiteLocationId!.Value)
                 .Distinct()
                 .ToArray();
 
@@ -686,8 +715,7 @@ public sealed partial class HelpdeskService
             usableCoverages
                 .Where(
                     x =>
-                        x.Coverage
-                            .SiteLocationId
+                        x.Coverage.SiteLocationId
                             .HasValue)
                 .Select(
                     x =>
@@ -698,79 +726,53 @@ public sealed partial class HelpdeskService
                 .ToArray();
 
         var technicianSiteNames =
-            technicianSiteIds.Length ==
-                0
+            technicianSiteIds.Length == 0
                 ? new Dictionary<Guid, string>()
-                :
-                await _db.Sites
+                : await _db.Sites
                     .AsNoTracking()
                     .Where(
                         x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            technicianSiteIds.Contains(
-                                x.Id))
+                            x.OrganizationId == organizationId
+                            && technicianSiteIds.Contains(x.Id))
                     .ToDictionaryAsync(
-                        x =>
-                            x.Id,
-                        x =>
-                            x.Name,
+                        x => x.Id,
+                        x => x.Name,
                         cancellationToken);
 
         var technicianLocationNames =
-            technicianLocationIds.Length ==
-                0
+            technicianLocationIds.Length == 0
                 ? new Dictionary<Guid, string>()
-                :
-                await _db.SiteLocations
+                : await _db.SiteLocations
                     .AsNoTracking()
                     .Where(
                         x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            technicianLocationIds.Contains(
-                                x.Id))
+                            x.OrganizationId == organizationId
+                            && technicianLocationIds.Contains(x.Id))
                     .ToDictionaryAsync(
-                        x =>
-                            x.Id,
-                        x =>
-                            x.Name,
+                        x => x.Id,
+                        x => x.Name,
                         cancellationToken);
 
         var coverageLocationNames =
-            coverageLocationIds.Length ==
-                0
+            coverageLocationIds.Length == 0
                 ? new Dictionary<Guid, string>()
-                :
-                await _db.SiteLocations
+                : await _db.SiteLocations
                     .AsNoTracking()
                     .Where(
                         x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            coverageLocationIds.Contains(
-                                x.Id))
+                            x.OrganizationId == organizationId
+                            && coverageLocationIds.Contains(x.Id))
                     .ToDictionaryAsync(
-                        x =>
-                            x.Id,
-                        x =>
-                            x.Name,
+                        x => x.Id,
+                        x => x.Name,
                         cancellationToken);
-
-        // --------------------------------------------------------
-        // BUILD CANDIDATES
-        // --------------------------------------------------------
 
         var candidates =
             new List<RankedCandidate>();
 
         foreach (var member in members)
         {
-            if (
-                !technicians.TryGetValue(
+            if (!technicians.TryGetValue(
                     member.UserId,
                     out var user))
             {
@@ -781,9 +783,7 @@ public sealed partial class HelpdeskService
                 loads.GetValueOrDefault(
                     member.UserId);
 
-            if (
-                openTickets >=
-                    member.MaxOpenTickets)
+            if (openTickets >= member.MaxOpenTickets)
             {
                 continue;
             }
@@ -792,8 +792,8 @@ public sealed partial class HelpdeskService
                 usableCoverages
                     .Where(
                         x =>
-                            x.Coverage.TeamId ==
-                                member.TeamId)
+                            x.Coverage.TeamId
+                            == member.TeamId)
                     .OrderBy(
                         x =>
                             x.Coverage.Priority)
@@ -804,8 +804,7 @@ public sealed partial class HelpdeskService
                 continue;
             }
 
-            if (
-                !teams.TryGetValue(
+            if (!teams.TryGetValue(
                     member.TeamId,
                     out var team))
             {
@@ -860,13 +859,10 @@ public sealed partial class HelpdeskService
                         coverage.Coverage.Priority);
 
             var occupancy =
-                member.MaxOpenTickets <=
-                    0
+                member.MaxOpenTickets <= 0
                     ? 1d
-                    :
-                    (double)openTickets
-                    /
-                    member.MaxOpenTickets;
+                    : (double)openTickets
+                      / member.MaxOpenTickets;
 
             candidates.Add(
                 new RankedCandidate(
@@ -886,9 +882,8 @@ public sealed partial class HelpdeskService
                         occupancy,
 
                     LastAutomaticAssignmentAtUtc:
-                        lastAssignments
-                            .GetValueOrDefault(
-                                member.UserId)));
+                        lastAssignments.GetValueOrDefault(
+                            member.UserId)));
         }
 
         return candidates;
@@ -901,8 +896,7 @@ public sealed partial class HelpdeskService
     private static string NormalizeRoutingCategory(
         string? category)
     {
-        if (string.IsNullOrWhiteSpace(
-                category))
+        if (string.IsNullOrWhiteSpace(category))
         {
             return "general";
         }
@@ -917,8 +911,7 @@ public sealed partial class HelpdeskService
         HelpdeskSiteCoverage coverage,
         IReadOnlyDictionary<Guid, string> locations)
     {
-        if (
-            !coverage.SiteLocationId.HasValue)
+        if (!coverage.SiteLocationId.HasValue)
         {
             return siteName;
         }
@@ -940,8 +933,7 @@ public sealed partial class HelpdeskService
             return "Sin localidad";
         }
 
-        if (
-            !sites.TryGetValue(
+        if (!sites.TryGetValue(
                 user.SiteId.Value,
                 out var siteName))
         {
@@ -954,15 +946,11 @@ public sealed partial class HelpdeskService
             return siteName;
         }
 
-        if (
-            !locations.TryGetValue(
-                user.SiteLocationId.Value,
-                out var locationName))
-        {
-            return siteName;
-        }
-
-        return $"{siteName} / {locationName}";
+        return locations.TryGetValue(
+            user.SiteLocationId.Value,
+            out var locationName)
+                ? $"{siteName} / {locationName}"
+                : siteName;
     }
 
     private static string BuildRoutingReason(

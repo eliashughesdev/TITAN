@@ -84,45 +84,45 @@ public sealed class DeviceGroupRuleEvaluator
             .Trim()
             .ToLowerInvariant()
             switch
-            {
-                "platform" =>
-                    string.Equals(
-                        device.Platform.ToString(),
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+        {
+            "platform" =>
+                string.Equals(
+                    device.Platform.ToString(),
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                "status" =>
-                    string.Equals(
-                        device.Status.ToString(),
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+            "status" =>
+                string.Equals(
+                    device.Status.ToString(),
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                "compliancestatus" =>
-                    string.Equals(
-                        device.ComplianceStatus.ToString(),
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+            "compliancestatus" =>
+                string.Equals(
+                    device.ComplianceStatus.ToString(),
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                "department" =>
-                    string.Equals(
-                        device.Department,
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+            "department" =>
+                string.Equals(
+                    device.Department,
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                "manufacturer" =>
-                    string.Equals(
-                        device.Manufacturer,
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+            "manufacturer" =>
+                string.Equals(
+                    device.Manufacturer,
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                "model" =>
-                    string.Equals(
-                        device.Model,
-                        expected,
-                        StringComparison.OrdinalIgnoreCase),
+            "model" =>
+                string.Equals(
+                    device.Model,
+                    expected,
+                    StringComparison.OrdinalIgnoreCase),
 
-                _ => false
-            };
+            _ => false
+        };
     }
 
     private sealed class DynamicGroupRule
@@ -131,7 +131,8 @@ public sealed class DeviceGroupRuleEvaluator
             "AND";
 
         public List<DynamicGroupCondition>
-            Conditions { get; set; } = [];
+            Conditions
+        { get; set; } = [];
     }
 
     private sealed class DynamicGroupCondition

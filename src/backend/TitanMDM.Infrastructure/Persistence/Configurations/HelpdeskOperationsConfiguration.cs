@@ -173,6 +173,6 @@ public sealed class HelpdeskAssistantAccessConfiguration
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
 
-       
+
     }
 }

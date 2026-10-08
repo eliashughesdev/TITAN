@@ -173,5 +173,6 @@ public sealed class ConnectionState
     public DateTime ConnectedAtUtc { get; }
 
     public ConcurrentDictionary<Guid, byte>
-        JoinedSessions { get; } = new();
+        JoinedSessions
+    { get; } = new();
 }

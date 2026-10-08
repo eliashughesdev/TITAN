@@ -53,40 +53,40 @@ public sealed class CommandExecutor
     WindowsSoftwareManager softwareManager,
     WindowsSoftwarePackageDownloader packageDownloader,
     WindowsPolicyExecutor policyExecutor)
-{
-    _logger =
-        logger;
+    {
+        _logger =
+            logger;
 
-    _inventoryProvider =
-        inventoryProvider;
+        _inventoryProvider =
+            inventoryProvider;
 
-    _securityProvider =
-        securityProvider;
+        _securityProvider =
+            securityProvider;
 
-    _complianceProvider =
-        complianceProvider;
+        _complianceProvider =
+            complianceProvider;
 
-    _updateProvider =
-        updateProvider;
+        _updateProvider =
+            updateProvider;
 
-    _actionExecutor =
-        actionExecutor;
+        _actionExecutor =
+            actionExecutor;
 
-    _serviceManager =
-        serviceManager;
+        _serviceManager =
+            serviceManager;
 
-    _scriptExecutor =
-        scriptExecutor;
+        _scriptExecutor =
+            scriptExecutor;
 
-    _softwareManager =
-        softwareManager;
+        _softwareManager =
+            softwareManager;
 
-    _packageDownloader =
-        packageDownloader;
+        _packageDownloader =
+            packageDownloader;
 
-    _policyExecutor =
-    policyExecutor;
-}
+        _policyExecutor =
+        policyExecutor;
+    }
     public async Task<CommandExecutionResult>
         ExecuteAsync(
             AgentCommand command,
@@ -283,7 +283,7 @@ public sealed class CommandExecutor
                         await ExecuteScriptAsync(
                             command.PayloadJson,
                             cancellationToken),
-                    
+
                     /*
                     * ============================================
                     * POLICY
@@ -506,78 +506,78 @@ public sealed class CommandExecutor
     ExecuteSoftwareInstallAsync(
         string payloadJson,
         CancellationToken cancellationToken)
-{
-    var payload =
-        Deserialize<
-            SoftwareInstallPayload>(
-                payloadJson);
-
-    var packagePath =
-        payload.PackagePath;
-
-    var downloaded =
-        false;
-
-    if (
-        string.IsNullOrWhiteSpace(
-            packagePath)
-        &&
-        !string.IsNullOrWhiteSpace(
-            payload.DownloadUrl)
-        &&
-        !string.IsNullOrWhiteSpace(
-            payload.FileName))
     {
-        packagePath =
-            await _packageDownloader
-                .DownloadAsync(
-                    payload.DownloadUrl,
-                    payload.FileName,
-                    cancellationToken);
+        var payload =
+            Deserialize<
+                SoftwareInstallPayload>(
+                    payloadJson);
 
-        downloaded =
-            true;
-    }
+        var packagePath =
+            payload.PackagePath;
 
-    if (
-        string.IsNullOrWhiteSpace(
-            packagePath))
-    {
-        throw new InvalidOperationException(
-            "No se especificó PackagePath ni DownloadUrl.");
-    }
+        var downloaded =
+            false;
 
-    try
-    {
-        return await _softwareManager
-            .InstallAsync(
-                new WindowsSoftwareInstallRequest(
-                    packagePath,
-                    payload.ExpectedSha256,
-                    payload.Arguments,
-                    payload.TimeoutSeconds),
-                cancellationToken);
-    }
-    finally
-    {
         if (
-            downloaded
+            string.IsNullOrWhiteSpace(
+                packagePath)
             &&
-            File.Exists(
+            !string.IsNullOrWhiteSpace(
+                payload.DownloadUrl)
+            &&
+            !string.IsNullOrWhiteSpace(
+                payload.FileName))
+        {
+            packagePath =
+                await _packageDownloader
+                    .DownloadAsync(
+                        payload.DownloadUrl,
+                        payload.FileName,
+                        cancellationToken);
+
+            downloaded =
+                true;
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
                 packagePath))
         {
-            try
+            throw new InvalidOperationException(
+                "No se especificó PackagePath ni DownloadUrl.");
+        }
+
+        try
+        {
+            return await _softwareManager
+                .InstallAsync(
+                    new WindowsSoftwareInstallRequest(
+                        packagePath,
+                        payload.ExpectedSha256,
+                        payload.Arguments,
+                        payload.TimeoutSeconds),
+                    cancellationToken);
+        }
+        finally
+        {
+            if (
+                downloaded
+                &&
+                File.Exists(
+                    packagePath))
             {
-                File.Delete(
-                    packagePath);
-            }
-            catch
-            {
-                // El staging se limpiará posteriormente.
+                try
+                {
+                    File.Delete(
+                        packagePath);
+                }
+                catch
+                {
+                    // El staging se limpiará posteriormente.
+                }
             }
         }
     }
-}
 
     /*
      * ============================================================

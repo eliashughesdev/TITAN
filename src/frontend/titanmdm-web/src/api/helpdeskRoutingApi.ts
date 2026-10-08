@@ -106,15 +106,21 @@ export async function getRoutingHealth():
 }
 
 export async function getRoutingDiagnostic(
-  ticketId: string,
+  ticketReference: string,
 ):
   Promise<RoutingDiagnostic> {
+  const reference =
+    encodeURIComponent(
+      ticketReference
+        .trim(),
+    )
+
   const {
     data,
   } =
     await apiClient
       .get<RoutingDiagnostic>(
-        `/helpdesk/routing/tickets/${ticketId}/diagnostic`,
+        `/helpdesk/routing/tickets/reference/${reference}/diagnostic`,
       )
 
   return data

@@ -66,441 +66,441 @@ public sealed class HelpdeskEmailImportService
             tickets;
     }
 
-   public async Task<Guid> ImportAsync(
-    Guid organizationId,
-    Guid mailboxActorUserId,
-    IncomingHelpdeskEmail message,
-    CancellationToken cancellationToken = default)
-{
-    ValidateInput(
-        organizationId,
-        mailboxActorUserId,
-        message);
-
-    var mailbox =
-        NormalizeEmail(
-            message.Mailbox);
-
-    var fromEmail =
-        NormalizeEmail(
-            message.FromEmail);
-
-    var internetMessageId =
-        message.InternetMessageId
-            .Trim();
-
-    var conversationId =
-        string.IsNullOrWhiteSpace(
-            message.ConversationId)
-                ? null
-                : message.ConversationId
-                    .Trim();
-
-    var messageKey =
-        ComputeMessageKey(
-            internetMessageId);
-
-    var subject =
-        NormalizeSubject(
-            message.Subject);
-
-    var body =
-        NormalizeBody(
-            message.Body);
-
-    // ============================================================
-    // FAST IDEMPOTENCY
-    // ============================================================
-
-    var alreadyImported =
-        await FindImportedMessageAsync(
+    public async Task<Guid> ImportAsync(
+     Guid organizationId,
+     Guid mailboxActorUserId,
+     IncomingHelpdeskEmail message,
+     CancellationToken cancellationToken = default)
+    {
+        ValidateInput(
             organizationId,
-            mailbox,
-            messageKey,
-            cancellationToken);
+            mailboxActorUserId,
+            message);
 
-    if (alreadyImported is not null)
-    {
-        return alreadyImported
-            .TicketId;
-    }
+        var mailbox =
+            NormalizeEmail(
+                message.Mailbox);
 
-    // ============================================================
-    // MAILBOX ACTOR
-    // ============================================================
+        var fromEmail =
+            NormalizeEmail(
+                message.FromEmail);
 
-    var mailboxActorExists =
-        await _db.Users
-            .AsNoTracking()
-            .AnyAsync(
-                x =>
-                    x.OrganizationId ==
-                        organizationId
-                    &&
-                    x.Id ==
-                        mailboxActorUserId
-                    &&
-                    x.IsActive,
+        var internetMessageId =
+            message.InternetMessageId
+                .Trim();
+
+        var conversationId =
+            string.IsNullOrWhiteSpace(
+                message.ConversationId)
+                    ? null
+                    : message.ConversationId
+                        .Trim();
+
+        var messageKey =
+            ComputeMessageKey(
+                internetMessageId);
+
+        var subject =
+            NormalizeSubject(
+                message.Subject);
+
+        var body =
+            NormalizeBody(
+                message.Body);
+
+        // ============================================================
+        // FAST IDEMPOTENCY
+        // ============================================================
+
+        var alreadyImported =
+            await FindImportedMessageAsync(
+                organizationId,
+                mailbox,
+                messageKey,
                 cancellationToken);
 
-    if (!mailboxActorExists)
-    {
-        throw new InvalidOperationException(
-            "El usuario técnico del buzón no existe o está inactivo.");
-    }
+        if (alreadyImported is not null)
+        {
+            return alreadyImported
+                .TicketId;
+        }
 
-    // ============================================================
-    // REQUESTER LOOKUP
-    //
-    // Puede no existir todavía como usuario TitanMDM.
-    // En ese caso conservamos el actor técnico como UserId
-    // interno y guardamos la identidad real del remitente
-    // mediante SetEmailRequester / SetEmailAuthor.
-    // ============================================================
+        // ============================================================
+        // MAILBOX ACTOR
+        // ============================================================
 
-    var requester =
-        await _db.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                x =>
-                    x.OrganizationId ==
-                        organizationId
-                    &&
-                    x.Email ==
-                        fromEmail
-                    &&
-                    x.IsActive,
-                cancellationToken);
+        var mailboxActorExists =
+            await _db.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            mailboxActorUserId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
-    // ============================================================
-    // SQL SERVER EXECUTION STRATEGY
-    //
-    // IMPORTANTE:
-    //
-    // TitanMDM tiene EnableRetryOnFailure habilitado.
-    // Por tanto cualquier transacción explícita debe ejecutarse
-    // dentro de Database.CreateExecutionStrategy().
-    //
-    // De lo contrario EF Core lanza:
-    //
-    // "The configured execution strategy
-    //  'SqlServerRetryingExecutionStrategy'
-    //  does not support user-initiated transactions."
-    // ============================================================
+        if (!mailboxActorExists)
+        {
+            throw new InvalidOperationException(
+                "El usuario técnico del buzón no existe o está inactivo.");
+        }
 
-    var executionStrategy =
-        _db.Database
-            .CreateExecutionStrategy();
+        // ============================================================
+        // REQUESTER LOOKUP
+        //
+        // Puede no existir todavía como usuario TitanMDM.
+        // En ese caso conservamos el actor técnico como UserId
+        // interno y guardamos la identidad real del remitente
+        // mediante SetEmailRequester / SetEmailAuthor.
+        // ============================================================
 
-    return await executionStrategy
-        .ExecuteAsync(
-            async () =>
-            {
-                cancellationToken
-                    .ThrowIfCancellationRequested();
+        var requester =
+            await _db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Email ==
+                            fromEmail
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
-                await using var transaction =
-                    await _db.Database
-                        .BeginTransactionAsync(
-                            cancellationToken);
+        // ============================================================
+        // SQL SERVER EXECUTION STRATEGY
+        //
+        // IMPORTANTE:
+        //
+        // TitanMDM tiene EnableRetryOnFailure habilitado.
+        // Por tanto cualquier transacción explícita debe ejecutarse
+        // dentro de Database.CreateExecutionStrategy().
+        //
+        // De lo contrario EF Core lanza:
+        //
+        // "The configured execution strategy
+        //  'SqlServerRetryingExecutionStrategy'
+        //  does not support user-initiated transactions."
+        // ============================================================
 
-                try
+        var executionStrategy =
+            _db.Database
+                .CreateExecutionStrategy();
+
+        return await executionStrategy
+            .ExecuteAsync(
+                async () =>
                 {
-                    // ====================================================
-                    // SECOND IDEMPOTENCY CHECK
-                    //
-                    // Necesario porque dos workers/nodos pueden detectar
-                    // el mismo mensaje antes de que alguno lo confirme.
-                    // ====================================================
+                    cancellationToken
+                        .ThrowIfCancellationRequested();
 
-                    var existingInsideTransaction =
-                        await FindImportedMessageAsync(
-                            organizationId,
-                            mailbox,
-                            messageKey,
+                    await using var transaction =
+                        await _db.Database
+                            .BeginTransactionAsync(
+                                cancellationToken);
+
+                    try
+                    {
+                        // ====================================================
+                        // SECOND IDEMPOTENCY CHECK
+                        //
+                        // Necesario porque dos workers/nodos pueden detectar
+                        // el mismo mensaje antes de que alguno lo confirme.
+                        // ====================================================
+
+                        var existingInsideTransaction =
+                            await FindImportedMessageAsync(
+                                organizationId,
+                                mailbox,
+                                messageKey,
+                                cancellationToken);
+
+                        if (existingInsideTransaction is not null)
+                        {
+                            await transaction
+                                .CommitAsync(
+                                    cancellationToken);
+
+                            return existingInsideTransaction
+                                .TicketId;
+                        }
+
+                        // ====================================================
+                        // THREAD RESOLUTION
+                        //
+                        // 1. Graph ConversationId
+                        // 2. Marcador controlado [TitanMDM][HD-...]
+                        // ====================================================
+
+                        var ticket =
+                            await ResolveExistingTicketAsync(
+                                organizationId,
+                                mailbox,
+                                conversationId,
+                                subject,
+                                cancellationToken);
+
+                        // ====================================================
+                        // NEW TICKET
+                        // ====================================================
+
+                        if (ticket is null)
+                        {
+                            var created =
+                                await _tickets
+                                    .CreateTicketAsync(
+                                        organizationId,
+                                        mailboxActorUserId,
+                                        new CreateHelpdeskTicketRequest(
+                                            subject,
+                                            body,
+                                            "incident",
+                                            "medium",
+                                            "general",
+                                            "email",
+                                            null,
+                                            requester?.Id
+                                                ??
+                                                mailboxActorUserId,
+                                            null),
+                                        cancellationToken);
+
+                            ticket =
+                                await _db.HelpdeskTickets
+                                    .FirstAsync(
+                                        x =>
+                                            x.OrganizationId ==
+                                                organizationId
+                                            &&
+                                            x.Id ==
+                                                created.Id,
+                                        cancellationToken);
+
+                            ticket.SetEmailRequester(
+                                message.FromName
+                                    ??
+                                    fromEmail,
+                                fromEmail);
+
+                            _db.HelpdeskTicketEvents
+                                .Add(
+                                    new HelpdeskTicketEvent(
+                                        organizationId,
+                                        ticket.Id,
+                                        mailboxActorUserId,
+                                        "email_received",
+                                        $"Ticket creado desde correo de {fromEmail}."));
+                        }
+                        else
+                        {
+                            // ================================================
+                            // EXISTING THREAD -> PUBLIC COMMENT
+                            // ================================================
+
+                            var comment =
+                                new HelpdeskTicketComment(
+                                    organizationId,
+                                    ticket.Id,
+                                    requester?.Id
+                                        ??
+                                        mailboxActorUserId,
+                                    body,
+                                    isInternal:
+                                        false);
+
+                            comment.SetEmailAuthor(
+                                message.FromName
+                                    ??
+                                    fromEmail,
+                                fromEmail);
+
+                            _db.HelpdeskTicketComments
+                                .Add(
+                                    comment);
+
+                            _db.HelpdeskTicketEvents
+                                .Add(
+                                    new HelpdeskTicketEvent(
+                                        organizationId,
+                                        ticket.Id,
+                                        mailboxActorUserId,
+                                        "email_reply",
+                                        $"Respuesta por correo recibida de {fromEmail}."));
+
+                            // ================================================
+                            // CONTINUITY WORKFLOW
+                            // ================================================
+
+                            var previousStatus =
+                                HelpdeskTicketStatus
+                                    .Normalize(
+                                        ticket.Status);
+
+                            switch (previousStatus)
+                            {
+                                case HelpdeskTicketStatus.New:
+                                    {
+                                        ticket.Transition(
+                                        HelpdeskTicketStatus.Open);
+
+                                        AddStatusEvent(
+                                        organizationId,
+                                        ticket.Id,
+                                        mailboxActorUserId,
+                                        previousStatus,
+                                        HelpdeskTicketStatus.Open);
+
+                                        break;
+                                    }
+
+                                case HelpdeskTicketStatus.PendingUser:
+                                    {
+                                        var targetStatus =
+                                        ticket.AssigneeUserId.HasValue
+                                            ? HelpdeskTicketStatus.InProgress
+                                            : HelpdeskTicketStatus.Open;
+
+                                        ticket.Transition(
+                                        targetStatus);
+
+                                        AddStatusEvent(
+                                        organizationId,
+                                        ticket.Id,
+                                        mailboxActorUserId,
+                                        previousStatus,
+                                        targetStatus);
+
+                                        break;
+                                    }
+
+                                case HelpdeskTicketStatus.Resolved:
+                                case HelpdeskTicketStatus.Closed:
+                                    {
+                                        ticket.Reopen();
+
+                                        _db.HelpdeskTicketEvents
+                                        .Add(
+                                            new HelpdeskTicketEvent(
+                                                organizationId,
+                                                ticket.Id,
+                                                mailboxActorUserId,
+                                                "reopened_by_email",
+                                                "Ticket reabierto automáticamente por una respuesta recibida por correo."));
+
+                                        AddStatusEvent(
+                                        organizationId,
+                                        ticket.Id,
+                                        mailboxActorUserId,
+                                        previousStatus,
+                                        HelpdeskTicketStatus.Open);
+
+                                        break;
+                                    }
+
+                                case HelpdeskTicketStatus.Open:
+                                case HelpdeskTicketStatus.InProgress:
+                                    {
+                                        break;
+                                    }
+
+                                default:
+                                    {
+                                        throw new InvalidOperationException(
+                                        $"Estado de Helpdesk inesperado: '{ticket.Status}'.");
+                                    }
+                            }
+                        }
+
+                        // ====================================================
+                        // EMAIL IDENTITY / IDEMPOTENCY
+                        // ====================================================
+
+                        _db.HelpdeskEmailMessages
+                            .Add(
+                                new HelpdeskEmailMessage(
+                                    organizationId,
+                                    ticket.Id,
+                                    mailbox,
+                                    internetMessageId,
+                                    conversationId));
+
+                        await _db.SaveChangesAsync(
                             cancellationToken);
 
-                    if (existingInsideTransaction is not null)
-                    {
                         await transaction
                             .CommitAsync(
                                 cancellationToken);
 
-                        return existingInsideTransaction
-                            .TicketId;
+                        return ticket.Id;
                     }
-
-                    // ====================================================
-                    // THREAD RESOLUTION
-                    //
-                    // 1. Graph ConversationId
-                    // 2. Marcador controlado [TitanMDM][HD-...]
-                    // ====================================================
-
-                    var ticket =
-                        await ResolveExistingTicketAsync(
-                            organizationId,
-                            mailbox,
-                            conversationId,
-                            subject,
-                            cancellationToken);
-
-                    // ====================================================
-                    // NEW TICKET
-                    // ====================================================
-
-                    if (ticket is null)
-                    {
-                        var created =
-                            await _tickets
-                                .CreateTicketAsync(
-                                    organizationId,
-                                    mailboxActorUserId,
-                                    new CreateHelpdeskTicketRequest(
-                                        subject,
-                                        body,
-                                        "incident",
-                                        "medium",
-                                        "general",
-                                        "email",
-                                        null,
-                                        requester?.Id
-                                            ??
-                                            mailboxActorUserId,
-                                        null),
-                                    cancellationToken);
-
-                        ticket =
-                            await _db.HelpdeskTickets
-                                .FirstAsync(
-                                    x =>
-                                        x.OrganizationId ==
-                                            organizationId
-                                        &&
-                                        x.Id ==
-                                            created.Id,
-                                    cancellationToken);
-
-                        ticket.SetEmailRequester(
-                            message.FromName
-                                ??
-                                fromEmail,
-                            fromEmail);
-
-                        _db.HelpdeskTicketEvents
-                            .Add(
-                                new HelpdeskTicketEvent(
-                                    organizationId,
-                                    ticket.Id,
-                                    mailboxActorUserId,
-                                    "email_received",
-                                    $"Ticket creado desde correo de {fromEmail}."));
-                    }
-                    else
+                    catch (DbUpdateException)
                     {
                         // ================================================
-                        // EXISTING THREAD -> PUBLIC COMMENT
+                        // IDEMPOTENCY / CONCURRENT IMPORT
+                        //
+                        // OrganizationId + Mailbox + MessageKey
+                        // tiene índice UNIQUE.
                         // ================================================
 
-                        var comment =
-                            new HelpdeskTicketComment(
-                                organizationId,
-                                ticket.Id,
-                                requester?.Id
-                                    ??
-                                    mailboxActorUserId,
-                                body,
-                                isInternal:
-                                    false);
-
-                        comment.SetEmailAuthor(
-                            message.FromName
-                                ??
-                                fromEmail,
-                            fromEmail);
-
-                        _db.HelpdeskTicketComments
-                            .Add(
-                                comment);
-
-                        _db.HelpdeskTicketEvents
-                            .Add(
-                                new HelpdeskTicketEvent(
-                                    organizationId,
-                                    ticket.Id,
-                                    mailboxActorUserId,
-                                    "email_reply",
-                                    $"Respuesta por correo recibida de {fromEmail}."));
-
-                        // ================================================
-                        // CONTINUITY WORKFLOW
-                        // ================================================
-
-                        var previousStatus =
-                            HelpdeskTicketStatus
-                                .Normalize(
-                                    ticket.Status);
-
-                        switch (previousStatus)
+                        try
                         {
-                            case HelpdeskTicketStatus.New:
-                            {
-                                ticket.Transition(
-                                    HelpdeskTicketStatus.Open);
-
-                                AddStatusEvent(
-                                    organizationId,
-                                    ticket.Id,
-                                    mailboxActorUserId,
-                                    previousStatus,
-                                    HelpdeskTicketStatus.Open);
-
-                                break;
-                            }
-
-                            case HelpdeskTicketStatus.PendingUser:
-                            {
-                                var targetStatus =
-                                    ticket.AssigneeUserId.HasValue
-                                        ? HelpdeskTicketStatus.InProgress
-                                        : HelpdeskTicketStatus.Open;
-
-                                ticket.Transition(
-                                    targetStatus);
-
-                                AddStatusEvent(
-                                    organizationId,
-                                    ticket.Id,
-                                    mailboxActorUserId,
-                                    previousStatus,
-                                    targetStatus);
-
-                                break;
-                            }
-
-                            case HelpdeskTicketStatus.Resolved:
-                            case HelpdeskTicketStatus.Closed:
-                            {
-                                ticket.Reopen();
-
-                                _db.HelpdeskTicketEvents
-                                    .Add(
-                                        new HelpdeskTicketEvent(
-                                            organizationId,
-                                            ticket.Id,
-                                            mailboxActorUserId,
-                                            "reopened_by_email",
-                                            "Ticket reabierto automáticamente por una respuesta recibida por correo."));
-
-                                AddStatusEvent(
-                                    organizationId,
-                                    ticket.Id,
-                                    mailboxActorUserId,
-                                    previousStatus,
-                                    HelpdeskTicketStatus.Open);
-
-                                break;
-                            }
-
-                            case HelpdeskTicketStatus.Open:
-                            case HelpdeskTicketStatus.InProgress:
-                            {
-                                break;
-                            }
-
-                            default:
-                            {
-                                throw new InvalidOperationException(
-                                    $"Estado de Helpdesk inesperado: '{ticket.Status}'.");
-                            }
+                            await transaction
+                                .RollbackAsync(
+                                    CancellationToken.None);
                         }
-                    }
+                        catch
+                        {
+                            // No ocultar el error original.
+                        }
 
-                    // ====================================================
-                    // EMAIL IDENTITY / IDEMPOTENCY
-                    // ====================================================
+                        _db.ChangeTracker
+                            .Clear();
 
-                    _db.HelpdeskEmailMessages
-                        .Add(
-                            new HelpdeskEmailMessage(
+                        var winner =
+                            await FindImportedMessageAsync(
                                 organizationId,
-                                ticket.Id,
                                 mailbox,
-                                internetMessageId,
-                                conversationId));
+                                messageKey,
+                                cancellationToken);
 
-                    await _db.SaveChangesAsync(
-                        cancellationToken);
+                        if (winner is not null)
+                        {
+                            return winner
+                                .TicketId;
+                        }
 
-                    await transaction
-                        .CommitAsync(
-                            cancellationToken);
-
-                    return ticket.Id;
-                }
-                catch (DbUpdateException)
-                {
-                    // ================================================
-                    // IDEMPOTENCY / CONCURRENT IMPORT
-                    //
-                    // OrganizationId + Mailbox + MessageKey
-                    // tiene índice UNIQUE.
-                    // ================================================
-
-                    try
-                    {
-                        await transaction
-                            .RollbackAsync(
-                                CancellationToken.None);
+                        throw;
                     }
                     catch
                     {
-                        // No ocultar el error original.
+                        try
+                        {
+                            await transaction
+                                .RollbackAsync(
+                                    CancellationToken.None);
+                        }
+                        catch
+                        {
+                            // No ocultar el error original.
+                        }
+
+                        /*
+                         * Si la estrategia decide reintentar una excepción
+                         * transitoria, no debemos dejar entidades Added /
+                         * Modified de un intento anterior en el ChangeTracker.
+                         */
+                        _db.ChangeTracker
+                            .Clear();
+
+                        throw;
                     }
-
-                    _db.ChangeTracker
-                        .Clear();
-
-                    var winner =
-                        await FindImportedMessageAsync(
-                            organizationId,
-                            mailbox,
-                            messageKey,
-                            cancellationToken);
-
-                    if (winner is not null)
-                    {
-                        return winner
-                            .TicketId;
-                    }
-
-                    throw;
-                }
-                catch
-                {
-                    try
-                    {
-                        await transaction
-                            .RollbackAsync(
-                                CancellationToken.None);
-                    }
-                    catch
-                    {
-                        // No ocultar el error original.
-                    }
-
-                    /*
-                     * Si la estrategia decide reintentar una excepción
-                     * transitoria, no debemos dejar entidades Added /
-                     * Modified de un intento anterior en el ChangeTracker.
-                     */
-                    _db.ChangeTracker
-                        .Clear();
-
-                    throw;
-                }
-            });
-}
+                });
+    }
 
     // ============================================================
     // THREAD RESOLUTION

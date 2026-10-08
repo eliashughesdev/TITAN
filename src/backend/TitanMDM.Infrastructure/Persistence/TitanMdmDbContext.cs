@@ -239,25 +239,25 @@ public sealed class TitanMdmDbContext
     // HELPDESK EMAIL
     // ============================================================
 
-public DbSet<HelpdeskEmailMessage>
-    HelpdeskEmailMessages =>
-        Set<HelpdeskEmailMessage>();
+    public DbSet<HelpdeskEmailMessage>
+        HelpdeskEmailMessages =>
+            Set<HelpdeskEmailMessage>();
 
-public DbSet<HelpdeskMailSettings>
-    HelpdeskMailSettings =>
-        Set<HelpdeskMailSettings>();
+    public DbSet<HelpdeskMailSettings>
+        HelpdeskMailSettings =>
+            Set<HelpdeskMailSettings>();
 
-public DbSet<HelpdeskMailProcessingLog>
-    HelpdeskMailProcessingLogs =>
-        Set<HelpdeskMailProcessingLog>();
+    public DbSet<HelpdeskMailProcessingLog>
+        HelpdeskMailProcessingLogs =>
+            Set<HelpdeskMailProcessingLog>();
 
-public DbSet<HelpdeskOutboundEmail>
-    HelpdeskOutboundEmails =>
-        Set<HelpdeskOutboundEmail>();
+    public DbSet<HelpdeskOutboundEmail>
+        HelpdeskOutboundEmails =>
+            Set<HelpdeskOutboundEmail>();
 
-public DbSet<HelpdeskTicketAttachment>
-    HelpdeskTicketAttachments =>
-        Set<HelpdeskTicketAttachment>();
+    public DbSet<HelpdeskTicketAttachment>
+        HelpdeskTicketAttachments =>
+            Set<HelpdeskTicketAttachment>();
 
     // ============================================================
     // ENTRA ID

@@ -182,11 +182,23 @@ builder.Services.AddScoped<
     RemoteControlLeaseService>();
 
 // ============================================================================
-// HELPDESK BACKGROUND SERVICES
+// HELPDESK INTELLIGENCE + BACKGROUND SERVICES
 // ============================================================================
+
+builder.Services.AddScoped<
+    HelpdeskRequesterIntelligenceService>();
+
+builder.Services.AddScoped<
+    HelpdeskAiRoutingEnrichmentService>();
 
 builder.Services.AddHostedService<
     HelpdeskMonitoringService>();
+
+builder.Services.AddHostedService<
+    HelpdeskRequesterIntelligenceWorker>();
+
+builder.Services.AddHostedService<
+    HelpdeskAiRoutingEnrichmentWorker>();
 
 builder.Services.AddHostedService<
     HelpdeskRoutingWorker>();
@@ -648,5 +660,7 @@ app.Run();
 public partial class Program
 {
 }
+
+
 
 

@@ -7,38 +7,18 @@ namespace TitanMDM.Infrastructure.Helpdesk;
 public sealed partial class HelpdeskService
 {
     // ============================================================
-    // HD-C3 / HD-C4
-    //
     // ENTERPRISE AUTOMATIC ASSIGNMENT
     //
-    // Esta capa NO duplica EvaluateRoutingAsync().
+    // SINGLE WRITE PATH
     //
-    // Reutiliza el motor existente que ya evalúa:
+    // Este archivo es responsable exclusivamente de:
     //
-    // - categoría
-    // - grupo
-    // - Site
-    // - SiteLocation
-    // - cobertura
-    // - prioridad de cobertura
-    // - RBAC
-    // - disponibilidad
-    // - horario
-    // - prioridad de turno
-    // - capacidad
-    // - carga
-    // - ocupación
-    // - última asignación automática
-    //
-    // Aquí reforzamos:
-    //
-    // - identidad del remitente de email;
-    // - revalidación antes de asignar;
     // - concurrencia;
-    // - capacidad;
-    // - turno;
-    // - auditoría;
-    // - motivos de espera.
+    // - revalidación;
+    // - actualización;
+    // - auditoría.
+    //
+    // No vuelve a implementar el algoritmo de selección.
     // ============================================================
 
     public async Task<bool>
@@ -47,199 +27,27 @@ public sealed partial class HelpdeskService
             Guid ticketId,
             CancellationToken cancellationToken = default)
     {
-        // ========================================================
-        // TICKET SNAPSHOT
-        // ========================================================
-
-        var ticket =
-            await _db
-                .HelpdeskTickets
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.Id ==
-                            ticketId,
-                    cancellationToken);
-
-        if (
-            ticket is null
-            ||
-            ticket.AssigneeUserId.HasValue
-            ||
-            ticket.Status
-                is "resolved"
-                or "closed"
-                or "pendinguser")
-        {
-            return false;
-        }
-
-        // ========================================================
-        // EMAIL REQUESTER SAFETY
-        //
-        // HelpdeskEmailImportService ya intenta resolver:
-        //
-        // FromEmail -> TitanMDM User
-        //
-        // Si no lo encuentra utiliza el usuario técnico del buzón.
-        //
-        // Nunca debemos utilizar la localidad del actor del buzón
-        // como si fuera la localidad real del remitente.
-        // ========================================================
-
-        if (
-            string.Equals(
-                ticket.Source,
-                "email",
-                StringComparison.OrdinalIgnoreCase)
-            &&
-            !string.IsNullOrWhiteSpace(
-                ticket.ExternalRequesterEmail)
-            &&
-            !ticket.SiteId.HasValue)
-        {
-            var requester =
-                await _db
-                    .Users
-                    .AsNoTracking()
-                    .Where(
-                        x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            x.Id ==
-                                ticket.RequesterUserId
-                            &&
-                            x.IsActive)
-                    .Select(
-                        x =>
-                            new
-                            {
-                                x.Id,
-                                x.Email,
-                                x.SiteId
-                            })
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
-
-            if (requester is null)
-            {
-                await RecordRoutingWaitingEnterpriseAsync(
-                    organizationId,
-                    ticketId,
-                    "El remitente del correo no está vinculado a un usuario activo de TitanMDM.",
-                    cancellationToken);
-
-                return false;
-            }
-
-            if (
-                !string.Equals(
-                    requester.Email?.Trim(),
-                    ticket.ExternalRequesterEmail.Trim(),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                await RecordRoutingWaitingEnterpriseAsync(
-                    organizationId,
-                    ticketId,
-                    "El remitente del correo todavía no está vinculado con su identidad corporativa en TitanMDM.",
-                    cancellationToken);
-
-                return false;
-            }
-
-            if (!requester.SiteId.HasValue)
-            {
-                await RecordRoutingWaitingEnterpriseAsync(
-                    organizationId,
-                    ticketId,
-                    "El usuario remitente existe, pero no tiene una localidad asignada.",
-                    cancellationToken);
-
-                return false;
-            }
-        }
-
-        // ========================================================
-        // ROUTING EVALUATION
-        //
-        // HD-C4:
-        //
-        // EvaluateRoutingAsync ya selecciona usando:
-        //
-        // 1 cobertura más específica
-        // 2 prioridad de cobertura
-        // 3 prioridad de turno
-        // 4 menor porcentaje de ocupación
-        // 5 menor carga absoluta
-        // 6 quien nunca recibió autoasignación
-        // 7 quien lleva más tiempo sin recibir una
-        // 8 UserId como desempate determinístico final
-        // ========================================================
-
-        var routing =
-            await EvaluateRoutingAsync(
-                organizationId,
-                ticket.RequesterUserId,
-                ticket.Category,
-                cancellationToken,
-                ticket.RequestedTeamId,
-                ticket.SiteId,
-                ticket.SiteLocationId);
-
-        if (
-            routing.Candidate
-            is not { } candidate)
-        {
-            await RecordRoutingWaitingEnterpriseAsync(
-                organizationId,
-                ticketId,
-                routing.Reason,
-                cancellationToken);
-
-            return false;
-        }
-
-        // ========================================================
-        // SERIALIZABLE ASSIGNMENT
-        //
-        // El candidato fue calculado fuera de la transacción.
-        //
-        // Antes del UPDATE volvemos a comprobar:
-        //
-        // - ticket sigue sin asignar;
-        // - membership existe;
-        // - disponible;
-        // - acepta autoasignación;
-        // - capacidad;
-        // - turno activo.
-        //
-        // Esto evita depender de una decisión stale.
-        // ========================================================
-
         var strategy =
-            _db
-                .Database
+            _db.Database
                 .CreateExecutionStrategy();
 
         return await strategy.ExecuteAsync(
             async () =>
             {
                 await using var transaction =
-                    await _db
-                        .Database
+                    await _db.Database
                         .BeginTransactionAsync(
                             System.Data
                                 .IsolationLevel
                                 .Serializable,
                             cancellationToken);
 
-                var currentTicket =
-                    await _db
-                        .HelpdeskTickets
+                // =================================================
+                // 1. FRESH TICKET
+                // =================================================
+
+                var ticket =
+                    await _db.HelpdeskTickets
                         .AsNoTracking()
                         .FirstOrDefaultAsync(
                             x =>
@@ -262,7 +70,7 @@ public sealed partial class HelpdeskService
                                     "pendinguser",
                             cancellationToken);
 
-                if (currentTicket is null)
+                if (ticket is null)
                 {
                     await transaction
                         .RollbackAsync(
@@ -272,110 +80,93 @@ public sealed partial class HelpdeskService
                 }
 
                 // =================================================
-                // MEMBERSHIP RECHECK
+                // 2. REQUESTER IDENTITY
                 // =================================================
 
-                var membership =
-                    await _db
-                        .HelpdeskTeamMembers
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(
-                            x =>
-                                x.OrganizationId ==
-                                    organizationId
-                                &&
-                                x.TeamId ==
-                                    candidate.TeamId
-                                &&
-                                x.UserId ==
-                                    candidate.UserId
-                                &&
-                                x.IsAvailable
-                                &&
-                                x.AcceptsAutomaticAssignments
-                                &&
-                                x.MaxOpenTickets >
-                                    0,
-                            cancellationToken);
+                var requesterValid =
+                    await ValidateEmailRequesterIdentityAsync(
+                        organizationId,
+                        ticket,
+                        cancellationToken);
 
-                if (membership is null)
+                if (!requesterValid)
                 {
+                    await RecordRoutingWaitingEnterpriseAsync(
+                        organizationId,
+                        ticketId,
+                        "La identidad corporativa del remitente todavía no es confiable para autoasignación.",
+                        cancellationToken);
+
+                    /*
+                     * Conservamos el evento de diagnóstico.
+                     */
                     await transaction
-                        .RollbackAsync(
+                        .CommitAsync(
                             cancellationToken);
 
                     return false;
                 }
 
                 // =================================================
-                // CAPACITY RECHECK
+                // 3. ROUTING
+                //
+                // CRÍTICO:
+                //
+                // EvaluateRoutingAsync se ejecuta DENTRO de la
+                // transacción SERIALIZABLE.
+                //
+                // Cada ticket ve la carga resultante del ticket
+                // anterior.
                 // =================================================
 
-                var currentLoad =
-                    await _db
-                        .HelpdeskTickets
-                        .AsNoTracking()
-                        .CountAsync(
-                            x =>
-                                x.OrganizationId ==
-                                    organizationId
-                                &&
-                                x.AssigneeUserId ==
-                                    candidate.UserId
-                                &&
-                                x.Id !=
-                                    ticketId
-                                &&
-                                x.Status !=
-                                    "resolved"
-                                &&
-                                x.Status !=
-                                    "closed",
-                            cancellationToken);
+                var routing =
+                    await EvaluateRoutingAsync(
+                        organizationId,
+                        ticket.RequesterUserId,
+                        ticket.Category,
+                        cancellationToken,
+                        ticket.RequestedTeamId,
+                        ticket.SiteId,
+                        ticket.SiteLocationId);
 
                 if (
-                    currentLoad >=
-                    membership.MaxOpenTickets)
+                    routing.Candidate
+                    is not { } candidate)
                 {
+                    await RecordRoutingWaitingEnterpriseAsync(
+                        organizationId,
+                        ticketId,
+                        routing.Reason,
+                        cancellationToken);
+
                     await transaction
-                        .RollbackAsync(
+                        .CommitAsync(
                             cancellationToken);
 
                     return false;
                 }
 
                 // =================================================
-                // SCHEDULE RECHECK
-                //
-                // Enterprise policy:
-                //
-                // sin horario = no autoasignación.
+                // 4. FINAL REVALIDATION
                 // =================================================
 
-                var schedules =
-                    await _db
-                        .Set<
-                            HelpdeskTechnicianSchedule>()
-                        .AsNoTracking()
-                        .Where(
-                            x =>
-                                x.OrganizationId ==
-                                    organizationId
-                                &&
-                                x.TeamId ==
-                                    candidate.TeamId
-                                &&
-                                x.UserId ==
-                                    candidate.UserId)
-                        .ToListAsync(
-                            cancellationToken);
+                var validation =
+                    await RevalidateCandidateAsync(
+                        organizationId,
+                        ticketId,
+                        candidate,
+                        cancellationToken);
 
-                if (
-                    schedules.Count ==
-                    0)
+                if (!validation.CanAssign)
                 {
+                    await RecordRoutingWaitingEnterpriseAsync(
+                        organizationId,
+                        ticketId,
+                        validation.Reason,
+                        cancellationToken);
+
                     await transaction
-                        .RollbackAsync(
+                        .CommitAsync(
                             cancellationToken);
 
                     return false;
@@ -384,28 +175,12 @@ public sealed partial class HelpdeskService
                 var now =
                     DateTime.UtcNow;
 
-                var onDuty =
-                    schedules.Any(
-                        x =>
-                            x.IsOnDuty(
-                                now));
-
-                if (!onDuty)
-                {
-                    await transaction
-                        .RollbackAsync(
-                            cancellationToken);
-
-                    return false;
-                }
-
                 // =================================================
-                // ATOMIC UPDATE
+                // 5. ATOMIC UPDATE
                 // =================================================
 
                 var changed =
-                    await _db
-                        .HelpdeskTickets
+                    await _db.HelpdeskTickets
                         .Where(
                             x =>
                                 x.OrganizationId ==
@@ -456,9 +231,7 @@ public sealed partial class HelpdeskService
                                         now),
                             cancellationToken);
 
-                if (
-                    changed !=
-                    1)
+                if (changed != 1)
                 {
                     await transaction
                         .RollbackAsync(
@@ -468,69 +241,313 @@ public sealed partial class HelpdeskService
                 }
 
                 // =================================================
-                // AUDIT
+                // 6. FAIRNESS / AUDIT
                 // =================================================
 
                 var occupancy =
-                    membership.MaxOpenTickets <=
-                    0
+                    validation.Capacity <=
+                        0
                         ? 100d
                         :
                         Math.Round(
                             (
-                                (double)currentLoad
+                                (double)
+                                    validation.CurrentLoad
                                 /
-                                membership.MaxOpenTickets
+                                validation.Capacity
                             )
                             *
                             100d,
                             2);
 
                 var summary =
-                    "Autoasignación enterprise: " +
+                    "Autoasignación enterprise: "
+                    +
                     BuildRoutingReason(
                         routing.RequesterLocation
                         ??
                         "Localidad no disponible",
-                        currentTicket.Category,
+                        ticket.Category,
                         candidate)
                     +
                     $" Ocupación previa {occupancy:0.##}%.";
 
-                _db
-                    .HelpdeskTicketEvents
-                    .Add(
-                        new HelpdeskTicketEvent(
-                            organizationId,
-                            ticketId,
-                            null,
-                            "auto_assigned",
-                            TrimSummary(
-                                summary)));
+                _db.HelpdeskTicketEvents.Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticketId,
+                        null,
+                        "auto_assigned",
+                        TrimSummary(
+                            summary)));
 
-                await _db
-                    .SaveChangesAsync(
-                        cancellationToken);
+                await _db.SaveChangesAsync(
+                    cancellationToken);
 
-                await transaction
-                    .CommitAsync(
-                        cancellationToken);
+                await transaction.CommitAsync(
+                    cancellationToken);
 
                 /*
-                 * ExecuteUpdate no sincroniza el ChangeTracker.
+                 * ExecuteUpdateAsync no sincroniza automáticamente
+                 * entidades previamente cargadas en ChangeTracker.
                  */
-                _db
-                    .ChangeTracker
-                    .Clear();
+                _db.ChangeTracker.Clear();
 
                 return true;
             });
     }
 
     // ============================================================
+    // EMAIL REQUESTER IDENTITY
+    // ============================================================
+
+    private async Task<bool>
+        ValidateEmailRequesterIdentityAsync(
+            Guid organizationId,
+            HelpdeskTicket ticket,
+            CancellationToken cancellationToken)
+    {
+        /*
+         * Tickets creados directamente desde TitanMDM
+         * no requieren esta comprobación.
+         */
+        if (
+            !string.Equals(
+                ticket.Source,
+                "email",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            string.IsNullOrWhiteSpace(
+                ticket.ExternalRequesterEmail))
+        {
+            return true;
+        }
+
+        var requester =
+            await _db.Users
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            ticket.RequesterUserId
+                        &&
+                        x.IsActive)
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.Email
+                        })
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
+        if (requester is null)
+        {
+            return false;
+        }
+
+        /*
+         * Impide confundir la cuenta técnica del buzón
+         * con el remitente real.
+         */
+        return string.Equals(
+            requester.Email?
+                .Trim(),
+            ticket.ExternalRequesterEmail
+                .Trim(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ============================================================
+    // FINAL CANDIDATE VALIDATION
+    // ============================================================
+
+    private async Task<CandidateValidation>
+        RevalidateCandidateAsync(
+            Guid organizationId,
+            Guid ticketId,
+            RoutingCandidate candidate,
+            CancellationToken cancellationToken)
+    {
+        // --------------------------------------------------------
+        // Active account
+        // --------------------------------------------------------
+
+        var technicianActive =
+            await _db.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            candidate.UserId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
+
+        if (!technicianActive)
+        {
+            return CandidateValidation.Fail(
+                "El técnico seleccionado dejó de estar activo.");
+        }
+
+        // --------------------------------------------------------
+        // Membership
+        // --------------------------------------------------------
+
+        var membership =
+            await _db.HelpdeskTeamMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.TeamId ==
+                            candidate.TeamId
+                        &&
+                        x.UserId ==
+                            candidate.UserId
+                        &&
+                        x.IsAvailable
+                        &&
+                        x.AcceptsAutomaticAssignments
+                        &&
+                        x.MaxOpenTickets >
+                            0,
+                    cancellationToken);
+
+        if (membership is null)
+        {
+            return CandidateValidation.Fail(
+                "El técnico seleccionado ya no está habilitado para autoasignación en este grupo.");
+        }
+
+        // --------------------------------------------------------
+        // Current workload
+        // --------------------------------------------------------
+
+        var currentLoad =
+            await GetTechnicianCurrentLoadAsync(
+                organizationId,
+                ticketId,
+                candidate.UserId,
+                cancellationToken);
+
+        if (
+            currentLoad >=
+                membership.MaxOpenTickets)
+        {
+            return CandidateValidation.Fail(
+                "El técnico seleccionado alcanzó su capacidad máxima.");
+        }
+
+        // --------------------------------------------------------
+        // Schedule
+        // --------------------------------------------------------
+
+        var schedules =
+            await _db
+                .Set<HelpdeskTechnicianSchedule>()
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.TeamId ==
+                            candidate.TeamId
+                        &&
+                        x.UserId ==
+                            candidate.UserId)
+                .ToListAsync(
+                    cancellationToken);
+
+        /*
+         * Misma regla utilizada por RoutingCore:
+         *
+         * sin schedule:
+         *     IsAvailable gobierna.
+         *
+         * con schedule:
+         *     uno debe estar activo.
+         */
+        if (
+            schedules.Count >
+                0
+            &&
+            !schedules.Any(
+                x =>
+                    x.IsOnDuty(
+                        DateTime.UtcNow)))
+        {
+            return CandidateValidation.Fail(
+                "El técnico seleccionado se encuentra fuera de turno.");
+        }
+
+        // --------------------------------------------------------
+        // Final capacity read
+        // --------------------------------------------------------
+
+        currentLoad =
+            await GetTechnicianCurrentLoadAsync(
+                organizationId,
+                ticketId,
+                candidate.UserId,
+                cancellationToken);
+
+        if (
+            currentLoad >=
+                membership.MaxOpenTickets)
+        {
+            return CandidateValidation.Fail(
+                "La capacidad del técnico cambió antes de confirmar la asignación.");
+        }
+
+        return CandidateValidation.Ok(
+            currentLoad,
+            membership.MaxOpenTickets);
+    }
+
+    // ============================================================
+    // CURRENT LOAD
+    // ============================================================
+
+    private async Task<int>
+        GetTechnicianCurrentLoadAsync(
+            Guid organizationId,
+            Guid currentTicketId,
+            Guid technicianId,
+            CancellationToken cancellationToken)
+    {
+        return await _db.HelpdeskTickets
+            .AsNoTracking()
+            .CountAsync(
+                x =>
+                    x.OrganizationId ==
+                        organizationId
+                    &&
+                    x.AssigneeUserId ==
+                        technicianId
+                    &&
+                    x.Id !=
+                        currentTicketId
+                    &&
+                    x.Status !=
+                        "resolved"
+                    &&
+                    x.Status !=
+                        "closed",
+                cancellationToken);
+    }
+
+    // ============================================================
     // ROUTING WAITING AUDIT
-    //
-    // No escribimos un evento cada minuto.
     // ============================================================
 
     private async Task
@@ -540,14 +557,17 @@ public sealed partial class HelpdeskService
             string reason,
             CancellationToken cancellationToken)
     {
+        /*
+         * Evitamos insertar un evento idéntico cada ciclo
+         * del background worker.
+         */
         var since =
             DateTime.UtcNow
                 .AddMinutes(
                     -30);
 
         var alreadyRecorded =
-            await _db
-                .HelpdeskTicketEvents
+            await _db.HelpdeskTicketEvents
                 .AsNoTracking()
                 .AnyAsync(
                     x =>
@@ -572,23 +592,55 @@ public sealed partial class HelpdeskService
         var summary =
             string.IsNullOrWhiteSpace(
                 reason)
-                ? "Autoasignación pendiente: no existe un candidato válido."
-                : "Autoasignación pendiente: " +
-                  reason.Trim();
+                ?
+                "Autoasignación pendiente: no existe un candidato válido."
+                :
+                "Autoasignación pendiente: "
+                +
+                reason.Trim();
 
-        _db
-            .HelpdeskTicketEvents
-            .Add(
-                new HelpdeskTicketEvent(
-                    organizationId,
-                    ticketId,
-                    null,
-                    "routing_waiting",
-                    TrimSummary(
-                        summary)));
+        _db.HelpdeskTicketEvents.Add(
+            new HelpdeskTicketEvent(
+                organizationId,
+                ticketId,
+                null,
+                "routing_waiting",
+                TrimSummary(
+                    summary)));
 
-        await _db
-            .SaveChangesAsync(
-                cancellationToken);
+        await _db.SaveChangesAsync(
+            cancellationToken);
+    }
+
+    // ============================================================
+    // RESULT
+    // ============================================================
+
+    private sealed record CandidateValidation(
+        bool CanAssign,
+        string Reason,
+        int CurrentLoad,
+        int Capacity)
+    {
+        public static CandidateValidation Ok(
+            int currentLoad,
+            int capacity)
+        {
+            return new CandidateValidation(
+                true,
+                string.Empty,
+                currentLoad,
+                capacity);
+        }
+
+        public static CandidateValidation Fail(
+            string reason)
+        {
+            return new CandidateValidation(
+                false,
+                reason,
+                0,
+                0);
+        }
     }
 }

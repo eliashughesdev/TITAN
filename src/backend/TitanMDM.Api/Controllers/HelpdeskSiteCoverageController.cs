@@ -579,48 +579,48 @@ public sealed class HelpdeskSiteCoverageController
             out organizationId);
     }
 
-   private bool CanManage()
-{
-    return User.Claims.Any(
-        claim =>
-            claim.Type ==
-                "permission"
-            &&
-            (
-                string.Equals(
-                    claim.Value,
-                    "helpdesk.sites.manage",
-                    StringComparison.OrdinalIgnoreCase)
+    private bool CanManage()
+    {
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                (
+                    string.Equals(
+                        claim.Value,
+                        "helpdesk.sites.manage",
+                        StringComparison.OrdinalIgnoreCase)
 
-                ||
+                    ||
 
-                string.Equals(
-                    claim.Value,
-                    "helpdesk.sites.view",
-                    StringComparison.OrdinalIgnoreCase)
+                    string.Equals(
+                        claim.Value,
+                        "helpdesk.sites.view",
+                        StringComparison.OrdinalIgnoreCase)
 
-                ||
+                    ||
 
-                string.Equals(
-                    claim.Value,
-                    "helpdesk.admin.access",
-                    StringComparison.OrdinalIgnoreCase)
+                    string.Equals(
+                        claim.Value,
+                        "helpdesk.admin.access",
+                        StringComparison.OrdinalIgnoreCase)
 
-                ||
+                    ||
 
-                string.Equals(
-                    claim.Value,
-                    "helpdesk.manage",
-                    StringComparison.OrdinalIgnoreCase)
+                    string.Equals(
+                        claim.Value,
+                        "helpdesk.manage",
+                        StringComparison.OrdinalIgnoreCase)
 
-                ||
+                    ||
 
-                string.Equals(
-                    claim.Value,
-                    "settings.manage",
-                    StringComparison.OrdinalIgnoreCase)
-            ));
-}
+                    string.Equals(
+                        claim.Value,
+                        "settings.manage",
+                        StringComparison.OrdinalIgnoreCase)
+                ));
+    }
 }
 
 public sealed record

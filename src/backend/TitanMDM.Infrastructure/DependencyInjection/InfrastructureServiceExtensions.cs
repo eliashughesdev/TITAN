@@ -251,9 +251,9 @@ public static class InfrastructureServiceExtensions
         // IDENTITY / AUTHENTICATION
         // ============================================================
 
-services.AddScoped<
-            IPasswordHasher<User>,
-            PasswordHasher<User>>();
+        services.AddScoped<
+                    IPasswordHasher<User>,
+                    PasswordHasher<User>>();
 
         services.AddScoped<
             ITokenService,
@@ -495,8 +495,8 @@ services.AddScoped<
          *
          * HelpdeskService depende directamente de este servicio.
          */
-      services.AddScoped<
-            HelpdeskTicketNumberGenerator>();
+        services.AddScoped<
+              HelpdeskTicketNumberGenerator>();
 
         services.AddScoped<
             IHelpdeskService,

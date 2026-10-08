@@ -180,33 +180,33 @@ public sealed class RemoteSupportApiClient
         return request;
     }
 
-public async Task<RemoteHostBootstrap>
-    CreateHostBootstrapAsync(
-        Guid sessionId,
-        CancellationToken cancellationToken = default)
-{
-    using var request =
-        await CreateRequestAsync(
-            HttpMethod.Post,
-            $"api/device/remote-support/{sessionId}/host-bootstrap",
-            cancellationToken);
+    public async Task<RemoteHostBootstrap>
+        CreateHostBootstrapAsync(
+            Guid sessionId,
+            CancellationToken cancellationToken = default)
+    {
+        using var request =
+            await CreateRequestAsync(
+                HttpMethod.Post,
+                $"api/device/remote-support/{sessionId}/host-bootstrap",
+                cancellationToken);
 
-    using var response =
-        await _httpClient.SendAsync(
-            request,
-            cancellationToken);
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                cancellationToken);
 
-    response.EnsureSuccessStatusCode();
+        response.EnsureSuccessStatusCode();
 
-    var bootstrap =
-        await response.Content
-            .ReadFromJsonAsync<
-                RemoteHostBootstrap>(
-                cancellationToken:
-                    cancellationToken);
+        var bootstrap =
+            await response.Content
+                .ReadFromJsonAsync<
+                    RemoteHostBootstrap>(
+                    cancellationToken:
+                        cancellationToken);
 
-    return bootstrap
-        ?? throw new InvalidOperationException(
-            "TitanMDM no devolvió la configuración del Remote Host.");
-}
+        return bootstrap
+            ?? throw new InvalidOperationException(
+                "TitanMDM no devolvió la configuración del Remote Host.");
+    }
 }

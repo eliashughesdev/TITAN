@@ -240,121 +240,121 @@ public sealed class DeviceCommandAgentService
             // =====================================================
 
             case "DEVICE_INFO":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _windowsInventoryProcessor
-                    .ProcessDeviceInfoAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _windowsInventoryProcessor
+                        .ProcessDeviceInfoAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             case "DEVICE_INVENTORY":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _windowsInventoryProcessor
-                    .ProcessInventoryAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _windowsInventoryProcessor
+                        .ProcessInventoryAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             case "NETWORK_INFO":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _windowsInventoryProcessor
-                    .ProcessNetworkAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _windowsInventoryProcessor
+                        .ProcessNetworkAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             // =====================================================
             // APPLICATIONS
             // =====================================================
 
             case "APP_INVENTORY":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _applicationInventoryService
-                    .ProcessInventoryAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _applicationInventoryService
+                        .ProcessInventoryAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             // =====================================================
             // SECURITY
             // =====================================================
 
             case "SECURITY_STATUS":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _securityPostureService
-                    .ProcessSecurityStatusAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _securityPostureService
+                        .ProcessSecurityStatusAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             case "COMPLIANCE_CHECK":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _securityPostureService
-                    .ProcessComplianceAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _securityPostureService
+                        .ProcessComplianceAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
 
             // =====================================================
             // LOCATION
             // =====================================================
 
             case "LOCATION_REQUEST":
-            {
-                RequireResult(
-                    resultJson,
-                    commandType);
+                {
+                    RequireResult(
+                        resultJson,
+                        commandType);
 
-                await _deviceLocationService
-                    .ProcessLocationAsync(
-                        deviceId,
-                        resultJson!,
-                        cancellationToken);
+                    await _deviceLocationService
+                        .ProcessLocationAsync(
+                            deviceId,
+                            resultJson!,
+                            cancellationToken);
 
-                break;
-            }
+                    break;
+                }
         }
 
         command

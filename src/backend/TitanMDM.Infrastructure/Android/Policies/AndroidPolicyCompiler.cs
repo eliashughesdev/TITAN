@@ -233,8 +233,8 @@ public sealed class AndroidPolicyCompiler
         restrictions,
         "blockCamera"))
         {
-    policy["cameraAccess"] =
-        "CAMERA_ACCESS_DISABLED";
+            policy["cameraAccess"] =
+                "CAMERA_ACCESS_DISABLED";
         }
 
         if (GetBool(
@@ -269,15 +269,15 @@ public sealed class AndroidPolicyCompiler
     policy["advancedSecurityOverrides"] as JsonObject
     ?? new JsonObject();
 
-        advancedSecurityOverrides["untrustedAppsPolicy"] =
-            GetBool(
-                restrictions,
-                "blockUnknownSources")
-                ? "DISALLOW_INSTALL"
-                : "ALLOW_INSTALL_DEVICE_WIDE";
+            advancedSecurityOverrides["untrustedAppsPolicy"] =
+                GetBool(
+                    restrictions,
+                    "blockUnknownSources")
+                    ? "DISALLOW_INSTALL"
+                    : "ALLOW_INSTALL_DEVICE_WIDE";
 
-        policy["advancedSecurityOverrides"] =
-            advancedSecurityOverrides;
+            policy["advancedSecurityOverrides"] =
+                advancedSecurityOverrides;
         }
 
         if (GetBool(
@@ -406,45 +406,45 @@ public sealed class AndroidPolicyCompiler
         "privateDnsMode",
         "UNSPECIFIED");
 
-if (!string.Equals(
-        privateDnsMode,
-        "UNSPECIFIED",
-        StringComparison.OrdinalIgnoreCase))
-{
-    var deviceConnectivityManagement =
-        policy["deviceConnectivityManagement"] as JsonObject
-        ?? new JsonObject();
+        if (!string.Equals(
+                privateDnsMode,
+                "UNSPECIFIED",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var deviceConnectivityManagement =
+                policy["deviceConnectivityManagement"] as JsonObject
+                ?? new JsonObject();
 
-    var privateDnsSettings =
-        new JsonObject();
+            var privateDnsSettings =
+                new JsonObject();
 
-    switch (privateDnsMode.ToUpperInvariant())
-    {
-        case "OPPORTUNISTIC":
-            privateDnsSettings["privateDnsMode"] =
-                "PRIVATE_DNS_AUTOMATIC";
-            break;
+            switch (privateDnsMode.ToUpperInvariant())
+            {
+                case "OPPORTUNISTIC":
+                    privateDnsSettings["privateDnsMode"] =
+                        "PRIVATE_DNS_AUTOMATIC";
+                    break;
 
-        case "OFF":
-            // La API actual no ofrece un modo "OFF".
-            // USER_CHOICE es la traducción segura del contrato
-            // TitanMDM actual mientras ampliamos el editor.
-            privateDnsSettings["privateDnsMode"] =
-                "PRIVATE_DNS_USER_CHOICE";
-            break;
+                case "OFF":
+                    // La API actual no ofrece un modo "OFF".
+                    // USER_CHOICE es la traducción segura del contrato
+                    // TitanMDM actual mientras ampliamos el editor.
+                    privateDnsSettings["privateDnsMode"] =
+                        "PRIVATE_DNS_USER_CHOICE";
+                    break;
 
-        default:
-            privateDnsSettings["privateDnsMode"] =
-                "PRIVATE_DNS_USER_CHOICE";
-            break;
-    }
+                default:
+                    privateDnsSettings["privateDnsMode"] =
+                        "PRIVATE_DNS_USER_CHOICE";
+                    break;
+            }
 
-    deviceConnectivityManagement["privateDnsSettings"] =
-        privateDnsSettings;
+            deviceConnectivityManagement["privateDnsSettings"] =
+                privateDnsSettings;
 
-    policy["deviceConnectivityManagement"] =
-        deviceConnectivityManagement;
-}
+            policy["deviceConnectivityManagement"] =
+                deviceConnectivityManagement;
+        }
     }
 
     private static void CompileLocation(

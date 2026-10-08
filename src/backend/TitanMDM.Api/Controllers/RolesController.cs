@@ -22,7 +22,7 @@ public sealed class RolesController
 
     private readonly ILogger<
         RolesController> _logger;
-    
+
     private readonly SessionSecurityService
     _sessionSecurity;
 
@@ -30,16 +30,16 @@ public sealed class RolesController
     TitanMdmDbContext dbContext,
     SessionSecurityService sessionSecurity,
     ILogger<RolesController> logger)
-{
-    _dbContext =
-        dbContext;
+    {
+        _dbContext =
+            dbContext;
 
-    _sessionSecurity =
-        sessionSecurity;
+        _sessionSecurity =
+            sessionSecurity;
 
-    _logger =
-        logger;
-}
+        _logger =
+            logger;
+    }
 
     /*
      * ============================================================
@@ -479,20 +479,20 @@ public sealed class RolesController
 
                 await _dbContext.SaveChangesAsync(
                     cancellationToken);
-                
+
                 /*
  * Todos los usuarios que poseen este rol deben
  * obtener un nuevo conjunto de permisos.
  */
 
-            await _sessionSecurity
-                .RevokeRoleSessionsAsync(
-                    role.Id,
-                    HttpContext
-                        .Connection
-                        .RemoteIpAddress
-                        ?.ToString(),
-                    cancellationToken);
+                await _sessionSecurity
+                    .RevokeRoleSessionsAsync(
+                        role.Id,
+                        HttpContext
+                            .Connection
+                            .RemoteIpAddress
+                            ?.ToString(),
+                        cancellationToken);
 
                 return result;
             }

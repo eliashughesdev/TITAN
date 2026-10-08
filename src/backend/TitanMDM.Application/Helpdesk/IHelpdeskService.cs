@@ -57,6 +57,12 @@ public interface IHelpdeskService
     Guid organizationId,
     CancellationToken cancellationToken = default);
 
+
+    Task<HelpdeskRoutingDiagnosticSnapshot?>
+        GetRoutingDiagnosticByReferenceAsync(
+            Guid organizationId,
+            string ticketReference,
+            CancellationToken cancellationToken = default);
     Task<HelpdeskRoutingDiagnosticSnapshot?> GetRoutingDiagnosticAsync(
         Guid organizationId,
         Guid ticketId,

@@ -232,7 +232,7 @@ public sealed class HelpdeskAutomationSettings
                     HighFirstResponseMinutes,
                     HighResolutionMinutes),
 
-            "critical" or "urgent"  =>
+            "critical" or "urgent" =>
                 new HelpdeskSlaDefinition(
                     CriticalFirstResponseMinutes,
                     CriticalResolutionMinutes),

@@ -12,19 +12,19 @@ public sealed partial class HelpdeskService
     private readonly TitanMdmDbContext
     _db;
 
-private readonly HelpdeskTicketNumberGenerator
-    _ticketNumbers;
+    private readonly HelpdeskTicketNumberGenerator
+        _ticketNumbers;
 
- public HelpdeskService(
-    TitanMdmDbContext db,
-    HelpdeskTicketNumberGenerator ticketNumbers)
-{
-    _db =
-        db;
+    public HelpdeskService(
+       TitanMdmDbContext db,
+       HelpdeskTicketNumberGenerator ticketNumbers)
+    {
+        _db =
+            db;
 
-    _ticketNumbers =
-        ticketNumbers;
-}
+        _ticketNumbers =
+            ticketNumbers;
+    }
 
     // ============================================================
     // LIST
@@ -630,31 +630,31 @@ private readonly HelpdeskTicketNumberGenerator
         // SLA
         // ========================================================
 
-      var slaSettings =
-    await _db
-        .Set<HelpdeskAutomationSettings>()
-        .AsNoTracking()
-        .FirstOrDefaultAsync(
-            x =>
-                x.OrganizationId ==
-                    organizationId,
-            cancellationToken)
-    ??
-    new HelpdeskAutomationSettings(
-        organizationId);
+        var slaSettings =
+      await _db
+          .Set<HelpdeskAutomationSettings>()
+          .AsNoTracking()
+          .FirstOrDefaultAsync(
+              x =>
+                  x.OrganizationId ==
+                      organizationId,
+              cancellationToken)
+      ??
+      new HelpdeskAutomationSettings(
+          organizationId);
 
-var sla =
-    slaSettings.GetSla(
-        ticket.Priority);
+        var sla =
+            slaSettings.GetSla(
+                ticket.Priority);
 
-var now =
-    DateTime.UtcNow;
+        var now =
+            DateTime.UtcNow;
 
-ticket.ApplySla(
-    now.AddMinutes(
-        sla.FirstResponseMinutes),
-    now.AddMinutes(
-        sla.ResolutionMinutes));
+        ticket.ApplySla(
+            now.AddMinutes(
+                sla.FirstResponseMinutes),
+            now.AddMinutes(
+                sla.ResolutionMinutes));
 
         _db.HelpdeskTickets
             .Add(
@@ -685,43 +685,75 @@ ticket.ApplySla(
         }
 
         // ========================================================
-        // ROUTING
+        // HD-D4 - IMMEDIATE ENTERPRISE ROUTING
         // ========================================================
 
         /*
-         * El usuario técnico utilizado por el buzón no representa
-         * necesariamente la ubicación física del remitente.
+         * El routing determinÃ­stico se intenta inmediatamente.
+         *
+         * Reglas:
+         *
+         * - dispositivo -> localidad;
+         * - solicitante -> localidad;
+         * - grupo solicitado -> cobertura;
+         * - cobertura global -> no requiere Site;
+         * - categorÃ­a general puede ser clasificada posteriormente
+         *   por HelpdeskRoutingWorker;
+         * - OpenRouter NO selecciona tÃ©cnico.
          */
-        var externalEmail =
-            source ==
-                "email"
-            &&
-            requesterId ==
-                actorUserId;
+        var routingEvaluation =
+            await EvaluateRoutingAsync(
+                organizationId,
+                requesterId,
+                ticket.Category,
+                cancellationToken,
+                ticket.RequestedTeamId,
+                ticket.SiteId,
+                ticket.SiteLocationId);
 
         var routing =
-            externalEmail
-                ? null
-                : await FindAutomaticAssigneeAsync(
-                    organizationId,
-                    requesterId,
-                    ticket.Category,
-                    cancellationToken);
+            routingEvaluation.Candidate;
 
         if (
             routing is not null)
         {
+            /*
+             * Si el motor pudo inferir una localidad segura,
+             * persistimos dicha informaciÃ³n en el ticket.
+             */
+            if (
+                !ticket.SiteId.HasValue
+                &&
+                routingEvaluation.SiteId.HasValue)
+            {
+                ticket.AssignSite(
+                    routingEvaluation.SiteId,
+                    routingEvaluation.SiteLocationId);
+
+                _db.HelpdeskTicketEvents
+                    .Add(
+                        new HelpdeskTicketEvent(
+                            organizationId,
+                            ticket.Id,
+                            actorUserId,
+                            "site_inferred",
+                            "Localidad inferida automÃ¡ticamente por el motor de routing."));
+            }
+
+            ticket.SelectGroup(
+                routing.TeamId);
+
             ticket.Assign(
                 routing.UserId);
 
             var autoAssignmentSummary =
-                "Asignación automática: " +
-                $"categoría {ticket.Category}, " +
-                $"grupo {routing.TeamName}, " +
-                $"cobertura {routing.CoverageLocation}, " +
-                $"técnico {routing.UserName}, " +
-                $"ubicación técnico {routing.TechnicianLocation}, " +
-                $"carga {routing.OpenTickets}/{routing.Capacity}.";
+                "AsignaciÃ³n automÃ¡tica inmediata: " +
+                BuildRoutingReason(
+                    routingEvaluation.RequesterLocation
+                    ??
+                    "Sin localidad",
+                    ticket.Category,
+                    routing);
 
             _db.HelpdeskTicketEvents
                 .Add(
@@ -730,19 +762,11 @@ ticket.ApplySla(
                         ticket.Id,
                         actorUserId,
                         "auto_assigned",
-                        autoAssignmentSummary[
-                            ..Math.Min(
-                                500,
-                                autoAssignmentSummary.Length)]));
+                        TrimSummary(
+                            autoAssignmentSummary)));
         }
         else
         {
-            var explanation =
-                externalEmail
-                    ? "Remitente externo sin ubicación confirmada."
-                    : "No hay un técnico disponible con cobertura por localidad, " +
-                      "categoría, horario y capacidad para la ubicación del solicitante.";
-
             _db.HelpdeskTicketEvents
                 .Add(
                     new HelpdeskTicketEvent(
@@ -750,10 +774,10 @@ ticket.ApplySla(
                         ticket.Id,
                         actorUserId,
                         "routing_pending",
-                        "Sin asignación automática: " +
-                        explanation));
+                        TrimSummary(
+                            "Sin asignaciÃ³n automÃ¡tica inmediata: " +
+                            routingEvaluation.Reason)));
         }
-
         await _db
             .SaveChangesAsync(
                 cancellationToken);

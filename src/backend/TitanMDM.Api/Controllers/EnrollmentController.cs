@@ -15,13 +15,13 @@ public sealed class EnrollmentController : ControllerBase
     _deviceRegistrationService;
     private readonly IEnrollmentService _enrollmentService;
 
-  public EnrollmentController(
-    IEnrollmentService enrollmentService,
-    IDeviceRegistrationService deviceRegistrationService)
-{
-    _enrollmentService = enrollmentService;
-    _deviceRegistrationService = deviceRegistrationService;
-}
+    public EnrollmentController(
+      IEnrollmentService enrollmentService,
+      IDeviceRegistrationService deviceRegistrationService)
+    {
+        _enrollmentService = enrollmentService;
+        _deviceRegistrationService = deviceRegistrationService;
+    }
 
     [Authorize]
     [HttpPost("tokens")]
@@ -73,95 +73,95 @@ public sealed class EnrollmentController : ControllerBase
                 message = ex.Message
             });
         }
-      catch (InvalidOperationException ex)
-{
-    return BadRequest(new
-    {
-        message = ex.Message
-    });
-}
-}
-
-[AllowAnonymous]
-[HttpPost("register")]
-
-
-public async Task<IActionResult> RegisterDevice(
-    [FromBody] RegisterDeviceRequest request,
-    CancellationToken cancellationToken)
-{
-    try
-    {
-        var result =
-            await _deviceRegistrationService.RegisterAsync(
-                request,
-                cancellationToken);
-
-        return StatusCode(
-            StatusCodes.Status201Created,
-            result);
-    }
-    catch (DeviceRegistrationException ex)
-    {
-        var statusCode =
-            ex.Code switch
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
             {
-                "INVALID_REQUEST" =>
-                    StatusCodes.Status400BadRequest,
-
-                "INVALID_PLATFORM" =>
-                    StatusCodes.Status400BadRequest,
-
-                "INVALID_TOKEN" =>
-                    StatusCodes.Status401Unauthorized,
-
-                "TOKEN_EXPIRED" =>
-                    StatusCodes.Status401Unauthorized,
-
-                "TOKEN_REVOKED" =>
-                    StatusCodes.Status401Unauthorized,
-
-                "TOKEN_EXHAUSTED" =>
-                    StatusCodes.Status409Conflict,
-
-                "TOKEN_NOT_ACTIVE" =>
-                    StatusCodes.Status409Conflict,
-
-                "PLATFORM_MISMATCH" =>
-                    StatusCodes.Status409Conflict,
-
-                "SERIAL_ALREADY_REGISTERED" =>
-                    StatusCodes.Status409Conflict,
-
-                "RECOVERY_ORGANIZATION_MISMATCH" =>
-                    StatusCodes.Status409Conflict,
-
-                "RECOVERY_PLATFORM_MISMATCH" =>
-                    StatusCodes.Status409Conflict,
-
-                "RECOVERY_DEVICE_NAME_MISMATCH" =>
-                    StatusCodes.Status409Conflict,
-
-                "RECOVERY_DEVICE_STILL_ACTIVE" =>
-                    StatusCodes.Status409Conflict,
-
-                _ =>
-                    StatusCodes.Status400BadRequest
-
-                
-            
-            };
-
-        return StatusCode(
-            statusCode,
-            new
-            {
-                code = ex.Code,
                 message = ex.Message
             });
+        }
     }
-}
-    
+
+    [AllowAnonymous]
+    [HttpPost("register")]
+
+
+    public async Task<IActionResult> RegisterDevice(
+        [FromBody] RegisterDeviceRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result =
+                await _deviceRegistrationService.RegisterAsync(
+                    request,
+                    cancellationToken);
+
+            return StatusCode(
+                StatusCodes.Status201Created,
+                result);
+        }
+        catch (DeviceRegistrationException ex)
+        {
+            var statusCode =
+                ex.Code switch
+                {
+                    "INVALID_REQUEST" =>
+                        StatusCodes.Status400BadRequest,
+
+                    "INVALID_PLATFORM" =>
+                        StatusCodes.Status400BadRequest,
+
+                    "INVALID_TOKEN" =>
+                        StatusCodes.Status401Unauthorized,
+
+                    "TOKEN_EXPIRED" =>
+                        StatusCodes.Status401Unauthorized,
+
+                    "TOKEN_REVOKED" =>
+                        StatusCodes.Status401Unauthorized,
+
+                    "TOKEN_EXHAUSTED" =>
+                        StatusCodes.Status409Conflict,
+
+                    "TOKEN_NOT_ACTIVE" =>
+                        StatusCodes.Status409Conflict,
+
+                    "PLATFORM_MISMATCH" =>
+                        StatusCodes.Status409Conflict,
+
+                    "SERIAL_ALREADY_REGISTERED" =>
+                        StatusCodes.Status409Conflict,
+
+                    "RECOVERY_ORGANIZATION_MISMATCH" =>
+                        StatusCodes.Status409Conflict,
+
+                    "RECOVERY_PLATFORM_MISMATCH" =>
+                        StatusCodes.Status409Conflict,
+
+                    "RECOVERY_DEVICE_NAME_MISMATCH" =>
+                        StatusCodes.Status409Conflict,
+
+                    "RECOVERY_DEVICE_STILL_ACTIVE" =>
+                        StatusCodes.Status409Conflict,
+
+                    _ =>
+                        StatusCodes.Status400BadRequest
+
+
+
+                };
+
+            return StatusCode(
+                statusCode,
+                new
+                {
+                    code = ex.Code,
+                    message = ex.Message
+                });
+        }
+    }
+
 
     [Authorize]
     [HttpGet("tokens")]

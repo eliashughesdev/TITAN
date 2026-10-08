@@ -963,13 +963,55 @@ export function HelpdeskSpecialtiesPage() {
   // ============================================================
 
   function addCoverage() {
+    if (!selected) {
+      return
+    }
+
+    /*
+     * Enterprise rule:
+     *
+     * __all__ = cobertura global.
+     *
+     * Cero registros de cobertura significa:
+     *
+     * - todas las localidades activas;
+     * - todas las sublocalidades activas;
+     * - sin necesidad de duplicar registros en DB.
+     */
     if (
-      !selected
-      ||
-      !coverageSiteId
+      coverageSiteId ===
+      '__all__'
     ) {
+      update({
+        coverages: [],
+      })
+
+      setCoverageSiteId(
+        '',
+      )
+
+      setCoverageLocationId(
+        '',
+      )
+
+      setCoverageCategory(
+        '',
+      )
+
+      setCoveragePriority(
+        100,
+      )
+
+      setSuccess(
+        'Cobertura global activada: el grupo podrÃ¡ recibir tickets de todas las localidades y sublocalidades activas.',
+      )
+
+      return
+    }
+
+    if (!coverageSiteId) {
       setError(
-        'Selecciona una localidad.',
+        'Selecciona una localidad o utiliza "Todas las localidades".',
       )
 
       return
@@ -991,7 +1033,7 @@ export function HelpdeskSpecialtiesPage() {
         )
     ) {
       setError(
-        'La categoría seleccionada debe existir dentro del grupo.',
+        'La categorÃ­a seleccionada debe existir dentro del grupo.',
       )
 
       return
@@ -1025,7 +1067,7 @@ export function HelpdeskSpecialtiesPage() {
 
     if (duplicate) {
       setError(
-        'Esa cobertura ya está agregada al grupo.',
+        'Esa cobertura ya estÃ¡ agregada al grupo.',
       )
 
       return
@@ -1052,6 +1094,10 @@ export function HelpdeskSpecialtiesPage() {
       ],
     })
 
+    setCoverageSiteId(
+      '',
+    )
+
     setCoverageLocationId(
       '',
     )
@@ -1064,7 +1110,6 @@ export function HelpdeskSpecialtiesPage() {
       100,
     )
   }
-
   function removeCoverage(
     index:
       number,
@@ -1309,16 +1354,6 @@ export function HelpdeskSpecialtiesPage() {
     ) {
       setError(
         'Agrega al menos una categoría al grupo.',
-      )
-
-      return
-    }
-
-    if (
-      !selected.coverages.length
-    ) {
-      setError(
-        'Agrega al menos una localidad de cobertura.',
       )
 
       return
@@ -2154,6 +2189,10 @@ export function HelpdeskSpecialtiesPage() {
                             Selecciona
                           </option>
 
+                          <option value="__all__">
+                            Todas las localidades
+                          </option>
+
                           {catalog.sites
                             .filter(
                               site =>
@@ -2187,6 +2226,9 @@ export function HelpdeskSpecialtiesPage() {
                           }
                           disabled={
                             !coverageSiteId
+                            ||
+                            coverageSiteId ===
+                              '__all__'
                           }
                           onChange={
                             event =>
@@ -2327,7 +2369,7 @@ export function HelpdeskSpecialtiesPage() {
                               <td
                                 colSpan={5}
                               >
-                                Sin cobertura configurada.
+                                Cobertura global Â· Todas las localidades y sublocalidades activas.
                               </td>
                             </tr>
                           ) : (

@@ -8,11 +8,11 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
     public partial class HD_A1_ShortTicketSequence : Migration
     {
         /// <inheritdoc />
- protected override void Up(
-    MigrationBuilder migrationBuilder)
-{
-    migrationBuilder.Sql(
-        """
+        protected override void Up(
+           MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql(
+                """
         /*
          * ============================================================
          * TITANMDM HELPDESK
@@ -146,13 +146,13 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
         EXEC sys.sp_executesql
             @SequenceSql;
         """);
-}
+        }
 
-protected override void Down(
-    MigrationBuilder migrationBuilder)
-{
-    migrationBuilder.Sql(
-        """
+        protected override void Down(
+            MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql(
+                """
         IF EXISTS
         (
             SELECT 1
@@ -168,6 +168,6 @@ protected override void Down(
                 dbo.HelpdeskTicketNumberSequence;
         END;
         """);
-}
+        }
     }
 }

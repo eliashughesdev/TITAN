@@ -58,7 +58,8 @@ public sealed class AndroidEnrollment
 
     public AndroidEnrollmentMode Mode { get; private set; }
 
-    public string GoogleEnrollmentTokenName {
+    public string GoogleEnrollmentTokenName
+    {
         get;
         private set;
     } = string.Empty;

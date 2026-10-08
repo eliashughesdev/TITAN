@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Domain.Entities;
@@ -142,6 +142,97 @@ public sealed partial class HelpdeskService
             membersOnDutyNow);
     }
 
+    // ============================================================
+    // HD-D5
+    // DIAGNOSTIC BY BUSINESS NUMBER OR INTERNAL GUID
+    // ============================================================
+
+    public async Task<HelpdeskRoutingDiagnosticSnapshot?>
+        GetRoutingDiagnosticByReferenceAsync(
+            Guid organizationId,
+            string ticketReference,
+            CancellationToken cancellationToken = default)
+    {
+        var reference =
+            (
+                ticketReference
+                ??
+                string.Empty
+            )
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                reference))
+        {
+            return null;
+        }
+
+        if (
+            Guid.TryParse(
+                reference,
+                out var ticketId))
+        {
+            return await GetRoutingDiagnosticAsync(
+                organizationId,
+                ticketId,
+                cancellationToken);
+        }
+
+        var normalized =
+            reference
+                .Trim()
+                .ToUpperInvariant();
+
+        /*
+         * Permitimos:
+         *
+         * HD-5
+         * hd-5
+         * 5
+         *
+         * pero el identificador comercial almacenado continÃºa
+         * siendo el canÃ³nico HD-X.
+         */
+        if (
+            int.TryParse(
+                normalized,
+                out var numericTicket)
+            &&
+            numericTicket >
+                0)
+        {
+            normalized =
+                $"HD-{numericTicket}";
+        }
+
+        var resolvedId =
+            await _db.HelpdeskTickets
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Number
+                            .ToUpper() ==
+                            normalized)
+                .Select(
+                    x =>
+                        (Guid?)
+                        x.Id)
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
+        if (!resolvedId.HasValue)
+        {
+            return null;
+        }
+
+        return await GetRoutingDiagnosticAsync(
+            organizationId,
+            resolvedId.Value,
+            cancellationToken);
+    }
     public async Task<HelpdeskRoutingDiagnosticSnapshot?> GetRoutingDiagnosticAsync(
         Guid organizationId,
         Guid ticketId,
@@ -277,7 +368,34 @@ public sealed partial class HelpdeskService
 
         foreach (var team in teams)
         {
-            if (!TeamContainsCategory(team.Categories, ticket.Category))
+            var genericCategory =
+                string.Equals(
+                    ticket.Category,
+                    "general",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var teamMatches =
+                ticket.RequestedTeamId.HasValue
+                    ? team.Id ==
+                      ticket.RequestedTeamId.Value
+                    : TeamContainsCategory(
+                        team.Categories,
+                        ticket.Category);
+
+            /*
+             * Si el motor ya encontrÃ³ el grupo como candidato,
+             * el diagnÃ³stico debe mostrarlo aunque el ticket
+             * continÃºe temporalmente en "general".
+             */
+            if (
+                !teamMatches
+                &&
+                !(
+                    genericCategory
+                    &&
+                    routing.Candidate?.TeamId ==
+                        team.Id
+                ))
             {
                 continue;
             }

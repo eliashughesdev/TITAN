@@ -17,15 +17,15 @@ public sealed class LostModeService
     private readonly IAutomationEventDispatcher
     _automation;
 
-  public LostModeService(
-    TitanMdmDbContext db,
-    IDeviceCommandService commands,
-    IAutomationEventDispatcher automation)
-{
-    _db = db;
-    _commands = commands;
-    _automation = automation;
-}
+    public LostModeService(
+      TitanMdmDbContext db,
+      IDeviceCommandService commands,
+      IAutomationEventDispatcher automation)
+    {
+        _db = db;
+        _commands = commands;
+        _automation = automation;
+    }
 
     public async Task<LostModeDto>
         ActivateAsync(
@@ -106,7 +106,7 @@ public sealed class LostModeService
                 "{}",
                 60),
             cancellationToken);
-        
+
         await _automation.DispatchAsync(
     organizationId,
     device.Id,

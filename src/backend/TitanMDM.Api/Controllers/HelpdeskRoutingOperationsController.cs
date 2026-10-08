@@ -57,6 +57,52 @@ public sealed class HelpdeskRoutingOperationsController
     // TICKET DIAGNOSTIC
     // ============================================================
 
+    // ============================================================
+    // HD-D5 - TICKET DIAGNOSTIC BY REFERENCE
+    //
+    // Accepts:
+    // - HD-16
+    // - 16
+    // - internal GUID
+    // ============================================================
+
+    [HttpGet("tickets/reference/{ticketReference}/diagnostic")]
+    public async Task<ActionResult<HelpdeskRoutingDiagnosticSnapshot>>
+        DiagnosticByReference(
+            string ticketReference,
+            CancellationToken cancellationToken)
+    {
+        if (!CanView())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(
+                out var organizationId))
+        {
+            return Unauthorized();
+        }
+
+        var result =
+            await _helpdesk
+                .GetRoutingDiagnosticByReferenceAsync(
+                    organizationId,
+                    ticketReference,
+                    cancellationToken);
+
+        if (result is null)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        $"No se encontrÃ³ el ticket '{ticketReference}'."
+                });
+        }
+
+        return Ok(
+            result);
+    }
     [HttpGet("tickets/{ticketId:guid}/diagnostic")]
     public async Task<ActionResult<HelpdeskRoutingDiagnosticSnapshot>>
         Diagnostic(

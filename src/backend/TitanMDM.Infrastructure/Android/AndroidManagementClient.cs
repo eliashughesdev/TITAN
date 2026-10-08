@@ -47,25 +47,25 @@ public sealed class AndroidManagementClient
     IOptions<AndroidManagementOptions> options,
     IGoogleAndroidAccessTokenProvider accessTokenProvider,
     ILogger<AndroidManagementClient> logger)
-{
-    _httpClient =
-        httpClient ??
-        throw new ArgumentNullException(nameof(httpClient));
+    {
+        _httpClient =
+            httpClient ??
+            throw new ArgumentNullException(nameof(httpClient));
 
-    _options =
-        options?.Value ??
-        throw new ArgumentNullException(nameof(options));
+        _options =
+            options?.Value ??
+            throw new ArgumentNullException(nameof(options));
 
-    _accessTokenProvider =
-        accessTokenProvider ??
-        throw new ArgumentNullException(nameof(accessTokenProvider));
+        _accessTokenProvider =
+            accessTokenProvider ??
+            throw new ArgumentNullException(nameof(accessTokenProvider));
 
-    _logger =
-        logger ??
-        throw new ArgumentNullException(nameof(logger));
+        _logger =
+            logger ??
+            throw new ArgumentNullException(nameof(logger));
 
-    ConfigureHttpClient();
-}
+        ConfigureHttpClient();
+    }
 
     // ============================================================
     // ENTERPRISE SIGNUP
@@ -180,33 +180,33 @@ public sealed class AndroidManagementClient
     int pageSize = 100,
     string? pageToken = null,
     CancellationToken cancellationToken = default)
-{
-    ValidateEnterpriseName(
-        enterpriseName);
-
-    if (pageSize is < 1 or > 100)
     {
-        throw new ArgumentOutOfRangeException(
-            nameof(pageSize),
-            "Page size must be between 1 and 100.");
+        ValidateEnterpriseName(
+            enterpriseName);
+
+        if (pageSize is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(pageSize),
+                "Page size must be between 1 and 100.");
+        }
+
+        var path =
+            $"{enterpriseName}/enrollmentTokens" +
+            $"?pageSize={pageSize}";
+
+        if (!string.IsNullOrWhiteSpace(pageToken))
+        {
+            path +=
+                $"&pageToken={Uri.EscapeDataString(pageToken)}";
+        }
+
+        return SendAsync(
+            HttpMethod.Get,
+            path,
+            null,
+            cancellationToken);
     }
-
-    var path =
-        $"{enterpriseName}/enrollmentTokens" +
-        $"?pageSize={pageSize}";
-
-    if (!string.IsNullOrWhiteSpace(pageToken))
-    {
-        path +=
-            $"&pageToken={Uri.EscapeDataString(pageToken)}";
-    }
-
-    return SendAsync(
-        HttpMethod.Get,
-        path,
-        null,
-        cancellationToken);
-}
 
     public Task<JsonNode> GetEnrollmentTokenAsync(
         string enterpriseName,
@@ -854,11 +854,11 @@ public sealed class AndroidManagementClient
 
     private Task<string> GetAccessTokenAsync(
     CancellationToken cancellationToken)
-{
-    return _accessTokenProvider
-        .GetAccessTokenAsync(
-            cancellationToken);
-}
+    {
+        return _accessTokenProvider
+            .GetAccessTokenAsync(
+                cancellationToken);
+    }
 
     // ============================================================
     // HELPERS

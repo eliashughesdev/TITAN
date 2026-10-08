@@ -79,25 +79,25 @@ public sealed class User
     public void SetSite(
     Guid? siteId,
     Guid? siteLocationId = null)
-{
-    if (
-        !siteId.HasValue
-        &&
-        siteLocationId.HasValue)
     {
-        throw new InvalidOperationException(
-            "No se puede asignar una ubicación sin una localidad.");
+        if (
+            !siteId.HasValue
+            &&
+            siteLocationId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "No se puede asignar una ubicación sin una localidad.");
+        }
+
+        SiteId =
+            siteId;
+
+        SiteLocationId =
+            siteLocationId;
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
     }
-
-    SiteId =
-        siteId;
-
-    SiteLocationId =
-        siteLocationId;
-
-    UpdatedAtUtc =
-        DateTime.UtcNow;
-}
 
     public Guid Id
     {
@@ -117,7 +117,7 @@ public sealed class User
         private set;
     }
 
-        public Guid? SiteId
+    public Guid? SiteId
     {
         get;
         private set;

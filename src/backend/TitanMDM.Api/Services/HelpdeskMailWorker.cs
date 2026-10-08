@@ -1303,243 +1303,243 @@ public sealed class HelpdeskMailWorker
     // ATTACHMENT COLLECTION
     // ============================================================
 
-   private static async Task<GraphAttachmentResult>
-    GetAttachmentsAsync(
-        HttpClient client,
-        string token,
-        string mailbox,
-        string graphId,
-        CancellationToken cancellationToken)
-{
-    /*
-     * IMPORTANTE:
-     *
-     * /attachments devuelve microsoft.graph.attachment.
-     *
-     * contentId NO pertenece al tipo base attachment.
-     * contentId se obtiene posteriormente cuando consultamos
-     * individualmente el fileAttachment.
-     *
-     * Por eso NO debe formar parte de este $select.
-     */
-    var url =
-        $"https://graph.microsoft.com/v1.0/users/" +
-        $"{Uri.EscapeDataString(mailbox)}/messages/" +
-        $"{Uri.EscapeDataString(graphId)}/attachments" +
-        "?$select=" +
-        "id," +
-        "name," +
-        "contentType," +
-        "size," +
-        "isInline";
+    private static async Task<GraphAttachmentResult>
+     GetAttachmentsAsync(
+         HttpClient client,
+         string token,
+         string mailbox,
+         string graphId,
+         CancellationToken cancellationToken)
+    {
+        /*
+         * IMPORTANTE:
+         *
+         * /attachments devuelve microsoft.graph.attachment.
+         *
+         * contentId NO pertenece al tipo base attachment.
+         * contentId se obtiene posteriormente cuando consultamos
+         * individualmente el fileAttachment.
+         *
+         * Por eso NO debe formar parte de este $select.
+         */
+        var url =
+            $"https://graph.microsoft.com/v1.0/users/" +
+            $"{Uri.EscapeDataString(mailbox)}/messages/" +
+            $"{Uri.EscapeDataString(graphId)}/attachments" +
+            "?$select=" +
+            "id," +
+            "name," +
+            "contentType," +
+            "size," +
+            "isInline";
 
-    EnsureGraphUrl(
-        url);
-
-    using var request =
-        new HttpRequestMessage(
-            HttpMethod.Get,
+        EnsureGraphUrl(
             url);
 
-    request.Headers.Authorization =
-        new AuthenticationHeaderValue(
-            "Bearer",
-            token);
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                url);
 
-    using var response =
-        await client.SendAsync(
-            request,
-            cancellationToken);
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                token);
 
-    if (
-        !response
-            .IsSuccessStatusCode)
-    {
-        var errorBody =
-            await SafeReadContentAsync(
-                response,
+        using var response =
+            await client.SendAsync(
+                request,
                 cancellationToken);
 
-        throw new InvalidOperationException(
-            $"Microsoft Graph devolvió HTTP {(int)response.StatusCode} " +
-            $"al consultar adjuntos. {TrimDiagnostic(errorBody)}");
-    }
-
-    using var document =
-        JsonDocument.Parse(
-            await response.Content
-                .ReadAsStringAsync(
-                    cancellationToken));
-
-    if (
-        !document.RootElement
-            .TryGetProperty(
-                "value",
-                out var value)
-        ||
-        value.ValueKind !=
-            JsonValueKind.Array)
-    {
-        throw new InvalidOperationException(
-            "Microsoft Graph devolvió una colección de adjuntos inválida.");
-    }
-
-    var attachments =
-        new List<
-            IncomingHelpdeskAttachment>();
-
-    var skipped =
-        0;
-
-    long totalBytes =
-        0;
-
-    foreach (
-        var item
-        in value.EnumerateArray())
-    {
-        cancellationToken
-            .ThrowIfCancellationRequested();
-
-        // ====================================================
-        // IDENTIFICADOR
-        // ====================================================
-
-        var attachmentId =
-            item.TryGetProperty(
-                "id",
-                out var idElement)
-                ? idElement.GetString()
-                : null;
-
         if (
-            string.IsNullOrWhiteSpace(
-                attachmentId))
+            !response
+                .IsSuccessStatusCode)
         {
-            skipped++;
+            var errorBody =
+                await SafeReadContentAsync(
+                    response,
+                    cancellationToken);
 
-            continue;
+            throw new InvalidOperationException(
+                $"Microsoft Graph devolvió HTTP {(int)response.StatusCode} " +
+                $"al consultar adjuntos. {TrimDiagnostic(errorBody)}");
         }
 
-        // ====================================================
-        // METADATOS
-        // ====================================================
-
-        var name =
-            item.TryGetProperty(
-                "name",
-                out var nameElement)
-                ? nameElement.GetString()
-                : null;
-
-        var contentType =
-            item.TryGetProperty(
-                "contentType",
-                out var contentTypeElement)
-                ? contentTypeElement.GetString()
-                : null;
-
-        var isInline =
-            item.TryGetProperty(
-                "isInline",
-                out var inlineElement)
-            &&
-            inlineElement.ValueKind ==
-                JsonValueKind.True;
-
-        var size =
-            item.TryGetProperty(
-                "size",
-                out var sizeElement)
-            &&
-            sizeElement.TryGetInt64(
-                out var parsedSize)
-                ? parsedSize
-                : 0;
-
-        // ====================================================
-        // SIZE SECURITY
-        // ====================================================
+        using var document =
+            JsonDocument.Parse(
+                await response.Content
+                    .ReadAsStringAsync(
+                        cancellationToken));
 
         if (
-            size <= 0
+            !document.RootElement
+                .TryGetProperty(
+                    "value",
+                    out var value)
             ||
-            size >
-                MaxAttachmentBytes
-            ||
-            totalBytes +
+            value.ValueKind !=
+                JsonValueKind.Array)
+        {
+            throw new InvalidOperationException(
+                "Microsoft Graph devolvió una colección de adjuntos inválida.");
+        }
+
+        var attachments =
+            new List<
+                IncomingHelpdeskAttachment>();
+
+        var skipped =
+            0;
+
+        long totalBytes =
+            0;
+
+        foreach (
+            var item
+            in value.EnumerateArray())
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            // ====================================================
+            // IDENTIFICADOR
+            // ====================================================
+
+            var attachmentId =
+                item.TryGetProperty(
+                    "id",
+                    out var idElement)
+                    ? idElement.GetString()
+                    : null;
+
+            if (
+                string.IsNullOrWhiteSpace(
+                    attachmentId))
+            {
+                skipped++;
+
+                continue;
+            }
+
+            // ====================================================
+            // METADATOS
+            // ====================================================
+
+            var name =
+                item.TryGetProperty(
+                    "name",
+                    out var nameElement)
+                    ? nameElement.GetString()
+                    : null;
+
+            var contentType =
+                item.TryGetProperty(
+                    "contentType",
+                    out var contentTypeElement)
+                    ? contentTypeElement.GetString()
+                    : null;
+
+            var isInline =
+                item.TryGetProperty(
+                    "isInline",
+                    out var inlineElement)
+                &&
+                inlineElement.ValueKind ==
+                    JsonValueKind.True;
+
+            var size =
+                item.TryGetProperty(
+                    "size",
+                    out var sizeElement)
+                &&
+                sizeElement.TryGetInt64(
+                    out var parsedSize)
+                    ? parsedSize
+                    : 0;
+
+            // ====================================================
+            // SIZE SECURITY
+            // ====================================================
+
+            if (
+                size <= 0
+                ||
                 size >
-                MaxTotalAttachmentBytes)
-        {
-            skipped++;
+                    MaxAttachmentBytes
+                ||
+                totalBytes +
+                    size >
+                    MaxTotalAttachmentBytes)
+            {
+                skipped++;
 
-            continue;
-        }
+                continue;
+            }
 
-        /*
-         * No filtramos por isInline.
-         *
-         * Las firmas y logos de Outlook pueden venir
-         * como fileAttachment inline.
-         *
-         * Tampoco filtramos aquí únicamente por extensión:
-         * GetAttachmentAsync + el importador hacen la
-         * validación definitiva de MIME/firma.
-         */
-        var attachment =
-            await GetAttachmentAsync(
-                client,
-                token,
-                mailbox,
-                graphId,
-                attachmentId,
-                name,
-                contentType,
-                cancellationToken);
+            /*
+             * No filtramos por isInline.
+             *
+             * Las firmas y logos de Outlook pueden venir
+             * como fileAttachment inline.
+             *
+             * Tampoco filtramos aquí únicamente por extensión:
+             * GetAttachmentAsync + el importador hacen la
+             * validación definitiva de MIME/firma.
+             */
+            var attachment =
+                await GetAttachmentAsync(
+                    client,
+                    token,
+                    mailbox,
+                    graphId,
+                    attachmentId,
+                    name,
+                    contentType,
+                    cancellationToken);
 
-        if (attachment is null)
-        {
-            skipped++;
+            if (attachment is null)
+            {
+                skipped++;
 
-            continue;
-        }
+                continue;
+            }
 
-        if (
-            attachment.Content
-                .LongLength >
-                MaxAttachmentBytes
-            ||
-            totalBytes +
+            if (
                 attachment.Content
                     .LongLength >
-                MaxTotalAttachmentBytes)
-        {
-            skipped++;
+                    MaxAttachmentBytes
+                ||
+                totalBytes +
+                    attachment.Content
+                        .LongLength >
+                    MaxTotalAttachmentBytes)
+            {
+                skipped++;
 
-            continue;
+                continue;
+            }
+
+            totalBytes +=
+                attachment.Content
+                    .LongLength;
+
+            attachments.Add(
+                attachment);
+
+            /*
+             * Log útil para HD-A5.
+             *
+             * Así podremos distinguir inmediatamente
+             * adjuntos normales de imágenes de firma.
+             */
+            // No usar ILogger aquí porque este método es static.
+            // El importador ya registra el resultado final.
         }
 
-        totalBytes +=
-            attachment.Content
-                .LongLength;
-
-        attachments.Add(
-            attachment);
-
-        /*
-         * Log útil para HD-A5.
-         *
-         * Así podremos distinguir inmediatamente
-         * adjuntos normales de imágenes de firma.
-         */
-        // No usar ILogger aquí porque este método es static.
-        // El importador ya registra el resultado final.
+        return new GraphAttachmentResult(
+            attachments,
+            skipped);
     }
-
-    return new GraphAttachmentResult(
-        attachments,
-        skipped);
-}
     // ============================================================
     // SINGLE ATTACHMENT
     // ============================================================

@@ -204,7 +204,7 @@ export function HelpdeskRoutingOperationsPanel({
 
     if (!normalized) {
       setError(
-        'Introduce el ID interno del ticket.',
+        'Introduce el nÃºmero del ticket (ej. HD-16) o su GUID interno.',
       )
 
       return
@@ -635,7 +635,7 @@ export function HelpdeskRoutingOperationsPanel({
                               .value,
                           )
                       }
-                      placeholder="GUID interno del ticket"
+                      placeholder="HD-16 o GUID interno"
                     />
 
                     <button

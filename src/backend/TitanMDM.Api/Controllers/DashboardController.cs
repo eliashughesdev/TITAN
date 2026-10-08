@@ -125,19 +125,19 @@ public sealed class DashboardController
             .Trim()
             .ToLowerInvariant()
             switch
-            {
-                "windows" =>
-                    DashboardWorkspace.Windows,
+        {
+            "windows" =>
+                DashboardWorkspace.Windows,
 
-                "android" =>
-                    DashboardWorkspace.Android,
+            "android" =>
+                DashboardWorkspace.Android,
 
-                "global" =>
-                    DashboardWorkspace.Global,
+            "global" =>
+                DashboardWorkspace.Global,
 
-                _ =>
-                    DashboardWorkspace.Global
-            };
+            _ =>
+                DashboardWorkspace.Global
+        };
     }
 
     /*

@@ -144,11 +144,11 @@ public sealed class ActiveSessionProcessLauncher
              * LocalSystem se seguirá usando CreateProcessAsUser.
              */
 
-                      return LaunchInteractiveFallback(
-                executablePath,
-                arguments,
-                workingDirectory,
-                checked((int)sessionId));
+            return LaunchInteractiveFallback(
+      executablePath,
+      arguments,
+      workingDirectory,
+      checked((int)sessionId));
         }
     }
 

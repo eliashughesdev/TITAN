@@ -32,19 +32,19 @@ public sealed class UsersController
     IPasswordHasher<User> passwordHasher,
     SessionSecurityService sessionSecurity,
     ILogger<UsersController> logger)
-{
-    _dbContext =
-        dbContext;
+    {
+        _dbContext =
+            dbContext;
 
-    _passwordHasher =
-        passwordHasher;
+        _passwordHasher =
+            passwordHasher;
 
-    _sessionSecurity =
-        sessionSecurity;
+        _sessionSecurity =
+            sessionSecurity;
 
-    _logger =
-        logger;
-}
+        _logger =
+            logger;
+    }
 
     /*
      * ============================================================
@@ -448,7 +448,7 @@ public sealed class UsersController
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
-        
+
         /*
  * Los permisos efectivos del usuario cambiaron.
  * Invalidamos sus sesiones renovables.
@@ -610,10 +610,10 @@ public sealed class UsersController
             }
         }
 
-       user.UpdateProfile(
-            request.FirstName,
-            request.LastName);
-            
+        user.UpdateProfile(
+             request.FirstName,
+             request.LastName);
+
         user.SetJobTitle(
             request.JobTitle);
 

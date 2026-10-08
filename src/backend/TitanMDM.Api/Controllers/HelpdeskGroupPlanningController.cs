@@ -781,9 +781,6 @@ public sealed class HelpdeskGroupPlanningController
                     "Categorías, cobertura, técnicos, capacidad y horarios guardados correctamente.",
 
                 readyForAutomaticRouting =
-                    request.Coverages.Length >
-                    0
-                    &&
                     request.Technicians.Any(
                         x =>
                             x.IsAvailable
@@ -1333,14 +1330,6 @@ public sealed class HelpdeskGroupPlanningController
         {
             issues.Add(
                 "Sin categorías");
-        }
-
-        if (
-            coverageCount ==
-            0)
-        {
-            issues.Add(
-                "Sin cobertura");
         }
 
         if (

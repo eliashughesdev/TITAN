@@ -183,3 +183,6 @@ desktop.ini
 ~$*
 # TitanMDM Helpdesk runtime attachments
 src/backend/TitanMDM.Api/App_Data/helpdesk-attachments/
+**/*.backup
+**/*.bak
+**/*.tmp

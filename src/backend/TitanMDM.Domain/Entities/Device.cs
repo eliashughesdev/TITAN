@@ -225,21 +225,21 @@ public sealed class Device
     }
 
     public void MarkOffline()
-{
-    if (
-        Status == DeviceStatus.Wiped ||
-        Status == DeviceStatus.Retired ||
-        Status == DeviceStatus.Quarantined)
     {
-        return;
+        if (
+            Status == DeviceStatus.Wiped ||
+            Status == DeviceStatus.Retired ||
+            Status == DeviceStatus.Quarantined)
+        {
+            return;
+        }
+
+        Status =
+            DeviceStatus.Offline;
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
     }
-
-    Status =
-        DeviceStatus.Offline;
-
-    UpdatedAtUtc =
-        DateTime.UtcNow;
-}
 
     public void MarkAndroidMissing()
     {
@@ -321,24 +321,23 @@ public sealed class Device
     public void AssignSite(
     Guid? siteId,
     Guid? siteLocationId = null)
-{
-    if (
-        !siteId.HasValue
-        &&
-        siteLocationId.HasValue)
     {
-        throw new InvalidOperationException(
-            "No se puede asignar una ubicación sin una localidad.");
+        if (
+            !siteId.HasValue
+            &&
+            siteLocationId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "No se puede asignar una ubicación sin una localidad.");
+        }
+
+        SiteId =
+            siteId;
+
+        SiteLocationId =
+            siteLocationId;
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
     }
-
-    SiteId =
-        siteId;
-
-    SiteLocationId =
-        siteLocationId;
-
-    UpdatedAtUtc =
-        DateTime.UtcNow;
-}
-        };
-     
+};
