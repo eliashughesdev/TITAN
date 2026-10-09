@@ -82,9 +82,9 @@ public sealed class HelpdeskRequesterIntelligenceService
         }
 
         if (
-            ticket.Status
+            ticket.AssigneeUserId.HasValue || ticket.Status
                 is "closed"
-                or "resolved")
+                or "resolved" or "pendinguser")
         {
             return HelpdeskRequesterIntelligenceResult
                 .Skipped(
@@ -97,6 +97,7 @@ public sealed class HelpdeskRequesterIntelligenceService
         // REQUESTER BASE
         // ========================================================
 
+        var ticketVersion = ticket.UpdatedAtUtc;
         var requesterUser =
             await _db.Users
                 .FirstOrDefaultAsync(
@@ -236,21 +237,8 @@ public sealed class HelpdeskRequesterIntelligenceService
             possibleDeviceUsers,
             entraUser?.UserPrincipalName);
 
-        if (titanUser is not null)
-        {
-            AddIdentity(
-                possibleDeviceUsers,
-                titanUser.FullName);
-        }
-
-        if (
-            !string.IsNullOrWhiteSpace(
-                ticket.ExternalRequesterName))
-        {
-            AddIdentity(
-                possibleDeviceUsers,
-                ticket.ExternalRequesterName);
-        }
+        // Display names and email signatures are not device identities.
+        var exactIdentities = possibleDeviceUsers.ToArray();
 
         var candidateDevices =
             await _db.Devices
@@ -262,8 +250,8 @@ public sealed class HelpdeskRequesterIntelligenceService
                         &&
                         !x.IsDeleted
                         &&
-                        x.AssignedUser !=
-                            null)
+                        x.AssignedUser != null &&
+                        exactIdentities.Contains(x.AssignedUser.Trim().ToLower()))
                 .OrderByDescending(
                     x =>
                         x.IsManaged)
@@ -363,7 +351,7 @@ public sealed class HelpdeskRequesterIntelligenceService
                                 organizationId
                             &&
                             x.Id ==
-                                resolvedSiteId.Value,
+                                resolvedSiteId.Value && x.IsActive,
                         cancellationToken);
 
             if (!siteExists)
@@ -395,7 +383,7 @@ public sealed class HelpdeskRequesterIntelligenceService
                                 resolvedSiteLocationId.Value
                             &&
                             x.SiteId ==
-                                resolvedSiteId,
+                                resolvedSiteId && x.IsActive,
                         cancellationToken);
 
             if (!locationExists)
@@ -414,6 +402,12 @@ public sealed class HelpdeskRequesterIntelligenceService
 
         var changes =
             new List<string>();
+
+        if (titanUser is not null && titanUser.Id != ticket.RequesterUserId)
+        {
+            changed = true;
+            changes.Add("solicitante corporativo resuelto");
+        }
 
         // --------------------------------------------------------
         // ENTRA LINK
@@ -489,6 +483,23 @@ public sealed class HelpdeskRequesterIntelligenceService
 
         if (changed)
         {
+            var updated = await _db.HelpdeskTickets.Where(x =>
+                    x.OrganizationId == organizationId && x.Id == ticketId &&
+                    x.UpdatedAtUtc == ticketVersion && x.AssigneeUserId == null &&
+                    x.Status != "closed" && x.Status != "resolved" && x.Status != "pendinguser")
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.RequesterUserId, titanUser != null ? titanUser.Id : ticket.RequesterUserId)
+                    .SetProperty(x => x.SiteId, ticket.SiteId)
+                    .SetProperty(x => x.SiteLocationId, ticket.SiteLocationId)
+                    .SetProperty(x => x.DeviceId, ticket.DeviceId)
+                    .SetProperty(x => x.EntraObjectId, ticket.EntraObjectId)
+                    .SetProperty(x => x.EntraUserPrincipalName, ticket.EntraUserPrincipalName)
+                    .SetProperty(x => x.UpdatedAtUtc, DateTime.UtcNow), cancellationToken);
+            _db.Entry(ticket).State = EntityState.Detached;
+            if (updated != 1)
+                return HelpdeskRequesterIntelligenceResult.Skipped(ticket.Id, ticket.Number,
+                    "El ticket cambió durante el enriquecimiento; se reintentará con contexto actualizado.");
+
             var requesterDescription =
                 BuildRequesterDescription(
                     normalizedEmail,

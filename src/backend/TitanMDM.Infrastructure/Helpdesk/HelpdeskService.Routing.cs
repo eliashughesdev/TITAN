@@ -233,6 +233,22 @@ public sealed partial class HelpdeskService
                 .ToListAsync(
                     cancellationToken);
 
+        // A group with no explicit coverage covers every active site, including
+        // its active sublocations. Disabled rows still express explicit scope.
+        var explicitlyScopedTeams = await _db.HelpdeskSiteCoverages
+            .AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId && teamIds.Contains(x.TeamId))
+            .Select(x => x.TeamId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var scoped = explicitlyScopedTeams.ToHashSet();
+        foreach (var teamId in teamIds.Where(id => !scoped.Contains(id)))
+        {
+            coverages.Add(new HelpdeskSiteCoverage(
+                organizationId, teamId, siteId, null, null));
+        }
+
         var generalCategory =
             normalizedCategory ==
                 "general";
@@ -629,13 +645,13 @@ public sealed partial class HelpdeskService
                     ticketEvent.EventType ==
                         "auto_assigned"
                     &&
-                    ticket.AssigneeUserId.HasValue
+                    (ticketEvent.AssignedToUserId ?? ticket.AssigneeUserId).HasValue
                     &&
                     technicianIds.Contains(
-                        ticket.AssigneeUserId.Value)
+                        (ticketEvent.AssignedToUserId ?? ticket.AssigneeUserId)!.Value)
 
                 group ticketEvent
-                    by ticket.AssigneeUserId!.Value
+                    by (ticketEvent.AssignedToUserId ?? ticket.AssigneeUserId)!.Value
                     into technicianGroup
 
                 select new

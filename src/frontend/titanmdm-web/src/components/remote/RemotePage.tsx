@@ -30,6 +30,7 @@ import {
   RemoteSupportSignalRClient,
 } from '../../api/remoteSupportSignalR'
 import type {
+  RemoteControlState,
   RemoteFrame,
   RemoteSessionChanged,
 } from '../../api/remoteSupportSignalR'
@@ -62,6 +63,12 @@ function isTerminal(status: string): boolean {
     .includes(status)
 }
 
+interface RemoteStreamMetrics {
+  fps: number
+  latencyMs: number
+  kilobitsPerSecond: number
+}
+
 export function RemotePage() {
   const { user } = useAuth()
   const canManage =
@@ -73,6 +80,11 @@ export function RemotePage() {
     useRef<RemoteSupportSignalRClient | null>(null)
   const selectedSessionIdRef = useRef('')
   const viewerContainerRef = useRef<HTMLDivElement | null>(null)
+  const metricWindowRef = useRef({
+    startedAt: 0,
+    frames: 0,
+    bytes: 0,
+  })
 
   const [devices, setDevices] = useState<DeviceListItem[]>([])
   const [sessions, setSessions] = useState<RemoteSession[]>([])
@@ -90,6 +102,11 @@ export function RemotePage() {
   const [allowFileTransfer, setAllowFileTransfer] = useState(false)
 
   const [frame, setFrame] = useState<RemoteFrame | null>(null)
+  const [streamMetrics, setStreamMetrics] =
+    useState<RemoteStreamMetrics | null>(null)
+  const [controlState, setControlState] =
+    useState<RemoteControlState | null>(null)
+  const [changingControl, setChangingControl] = useState(false)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [terminating, setTerminating] = useState(false)
@@ -99,13 +116,6 @@ export function RemotePage() {
   useEffect(() => {
     selectedSessionIdRef.current = selectedSessionId
   }, [selectedSessionId])
-
-  const frameUrl = useMemo(
-    () => frame
-      ? `data:${frame.mimeType};base64,${frame.base64Data}`
-      : null,
-    [frame],
-  )
 
   const windowsDevices = useMemo(
     () => devices.filter(x =>
@@ -209,6 +219,7 @@ export function RemotePage() {
 
       try {
         await client.joinSession(sessionId)
+        await client.requestControlState(sessionId)
       } catch (joinError) {
         console.error('JoinSession falló.', joinError)
         if (!disposed) {
@@ -226,6 +237,34 @@ export function RemotePage() {
           nextFrame.sessionId !== selectedSessionIdRef.current
         ) return
 
+        const metricWindow = metricWindowRef.current
+        const now = performance.now()
+
+        if (metricWindow.startedAt === 0) {
+          metricWindow.startedAt = now
+        }
+
+        metricWindow.frames += 1
+        metricWindow.bytes += nextFrame.data.byteLength
+
+        const elapsed = now - metricWindow.startedAt
+        if (elapsed >= 1000) {
+          setStreamMetrics({
+            fps: Math.round(metricWindow.frames * 1000 / elapsed),
+            latencyMs: Math.max(
+              0,
+              Date.now() - Date.parse(nextFrame.capturedAtUtc),
+            ),
+            kilobitsPerSecond: Math.round(
+              metricWindow.bytes * 8 / elapsed,
+            ),
+          })
+
+          metricWindow.startedAt = now
+          metricWindow.frames = 0
+          metricWindow.bytes = 0
+        }
+
         setFrame(current => {
           if (
             current &&
@@ -238,6 +277,13 @@ export function RemotePage() {
       },
       onSessionChanged: (update: RemoteSessionChanged) => {
         void refreshActiveSession(update.sessionId)
+      },
+      onControlStateChanged: nextControlState => {
+        if (
+          nextControlState.sessionId !== selectedSessionIdRef.current
+        ) return
+
+        setControlState(nextControlState)
       },
       onReconnecting: () => {
         if (!disposed) setChannelConnected(false)
@@ -280,6 +326,13 @@ export function RemotePage() {
     try {
       setError(null)
       setFrame(null)
+      setStreamMetrics(null)
+      metricWindowRef.current = {
+        startedAt: 0,
+        frames: 0,
+        bytes: 0,
+      }
+      setControlState(null)
       setActiveSession(null)
 
       const previousSessionId = selectedSessionIdRef.current
@@ -314,6 +367,7 @@ export function RemotePage() {
       if (signalRRef.current && channelConnected) {
         try {
           await signalRRef.current.joinSession(sessionId)
+          await signalRRef.current.requestControlState(sessionId)
         } catch (joinError) {
           console.error(joinError)
           setError(
@@ -350,6 +404,13 @@ export function RemotePage() {
       setCreating(true)
       setError(null)
       setFrame(null)
+      setStreamMetrics(null)
+      metricWindowRef.current = {
+        startedAt: 0,
+        frames: 0,
+        bytes: 0,
+      }
+      setControlState(null)
 
       const session = await createRemoteSession({
         deviceId: selectedDeviceId,
@@ -373,6 +434,7 @@ export function RemotePage() {
       if (signalRRef.current && channelConnected) {
         try {
           await signalRRef.current.joinSession(session.id)
+          await signalRRef.current.requestControlState(session.id)
         } catch (joinError) {
           const message = joinError instanceof Error
             ? joinError.message
@@ -403,6 +465,7 @@ export function RemotePage() {
       setError(null)
       await terminateRemoteSession(sessionId)
       setFrame(null)
+      setStreamMetrics(null)
       await refreshActiveSession(sessionId)
       await loadData()
     } catch {
@@ -412,18 +475,85 @@ export function RemotePage() {
     }
   }
 
+  const ownsControl = Boolean(
+    controlState?.hasController &&
+    controlState.userId &&
+    user?.id &&
+    controlState.userId.toLowerCase() === user.id.toLowerCase(),
+  )
+
+  useEffect(() => {
+    if (!ownsControl || !selectedSessionId || !channelConnected) {
+      return
+    }
+
+    const renew = async () => {
+      const client = signalRRef.current
+      if (!client || selectedSessionIdRef.current !== selectedSessionId) {
+        return
+      }
+
+      try {
+        await client.renewControl(selectedSessionId)
+      } catch (renewError) {
+        console.error('RenewControl falló.', renewError)
+        setControlState(null)
+        setError('Se perdió el control remoto. Solicítalo nuevamente.')
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void renew()
+    }, 20000)
+
+    return () => window.clearInterval(timer)
+  }, [channelConnected, ownsControl, selectedSessionId])
+
+  const toggleControl = async () => {
+    const client = signalRRef.current
+    if (
+      !canManage ||
+      !activeSession ||
+      !client ||
+      !channelConnected ||
+      changingControl
+    ) return
+
+    try {
+      setChangingControl(true)
+      setError(null)
+
+      if (ownsControl) {
+        await client.releaseControl(activeSession.id)
+        return
+      }
+
+      const nextControlState =
+        await client.acquireControl(activeSession.id)
+      setControlState(nextControlState)
+    } catch (controlError) {
+      const message = controlError instanceof Error
+        ? controlError.message
+        : String(controlError)
+      setError(`No fue posible cambiar el control remoto. ${message}`)
+    } finally {
+      setChangingControl(false)
+    }
+  }
+
   const pointerMove = useCallback((x: number, y: number) => {
     if (
       !activeSession ||
       !signalRRef.current ||
       !channelConnected ||
+      !ownsControl ||
       activeSession.status !== 'Connected'
     ) return
 
     void signalRRef.current
       .pointerMove(activeSession.id, x, y)
       .catch(console.error)
-  }, [activeSession, channelConnected])
+  }, [activeSession, channelConnected, ownsControl])
 
   const pointerButton = useCallback((
     action: 'left-down' | 'left-up' | 'right-down' | 'right-up',
@@ -432,26 +562,28 @@ export function RemotePage() {
       !activeSession ||
       !signalRRef.current ||
       !channelConnected ||
+      !ownsControl ||
       activeSession.status !== 'Connected'
     ) return
 
     void signalRRef.current
       .pointerButton(activeSession.id, action)
       .catch(console.error)
-  }, [activeSession, channelConnected])
+  }, [activeSession, channelConnected, ownsControl])
 
   const wheel = useCallback((delta: number) => {
     if (
       !activeSession ||
       !signalRRef.current ||
       !channelConnected ||
+      !ownsControl ||
       activeSession.status !== 'Connected'
     ) return
 
     void signalRRef.current
       .pointerWheel(activeSession.id, delta)
       .catch(console.error)
-  }, [activeSession, channelConnected])
+  }, [activeSession, channelConnected, ownsControl])
 
   const keyboard = useCallback((
     virtualKey: number,
@@ -461,13 +593,14 @@ export function RemotePage() {
       !activeSession ||
       !signalRRef.current ||
       !channelConnected ||
+      !ownsControl ||
       activeSession.status !== 'Connected'
     ) return
 
     void signalRRef.current
       .keyboard(activeSession.id, virtualKey, keyDown)
       .catch(console.error)
-  }, [activeSession, channelConnected])
+  }, [activeSession, channelConnected, ownsControl])
 
   const toggleFullscreen = async () => {
     const element = viewerContainerRef.current
@@ -761,7 +894,7 @@ export function RemotePage() {
             <div>
               <span className={
                 `wr-chip ${
-                  connected && activeSession?.allowMouse
+                  connected && ownsControl && activeSession?.allowMouse
                     ? 'wr-online'
                     : ''
                 }`
@@ -771,13 +904,34 @@ export function RemotePage() {
 
               <span className={
                 `wr-chip ${
-                  connected && activeSession?.allowKeyboard
+                  connected && ownsControl && activeSession?.allowKeyboard
                     ? 'wr-online'
                     : ''
                 }`
               }>
                 <Keyboard size={15} /> Teclado
               </span>
+
+              {canManage && activeSession && (
+                <button
+                  className={ownsControl ? '' : 'wr-primary'}
+                  disabled={
+                    !channelConnected ||
+                    changingControl ||
+                    isTerminal(activeSession.status)
+                  }
+                  onClick={() => void toggleControl()}
+                >
+                  <MousePointer2 size={16} />
+                  {changingControl
+                    ? 'Actualizando…'
+                    : ownsControl
+                      ? 'Liberar control'
+                      : controlState?.hasController
+                        ? `Control: ${controlState.displayName ?? 'otro técnico'}`
+                        : 'Tomar control'}
+                </button>
+              )}
 
               <button
                 disabled={!activeSession}
@@ -802,18 +956,20 @@ export function RemotePage() {
           <div
             ref={viewerContainerRef}
             className={
-              `wr-viewer ${frameUrl ? 'wr-viewer-live' : ''}`
+              `wr-viewer ${frame ? 'wr-viewer-live' : ''}`
             }
           >
-            {frameUrl ? (
+            {frame ? (
               <RemoteDesktopViewer
-                frameUrl={frameUrl}
+                frame={frame}
                 width={frame?.width}
                 height={frame?.height}
                 connected={connected}
-                allowMouse={activeSession?.allowMouse ?? false}
+                allowMouse={
+                  ownsControl && (activeSession?.allowMouse ?? false)
+                }
                 allowKeyboard={
-                  activeSession?.allowKeyboard ?? false
+                  ownsControl && (activeSession?.allowKeyboard ?? false)
                 }
                 onPointerMove={pointerMove}
                 onPointerButton={pointerButton}
@@ -860,6 +1016,12 @@ export function RemotePage() {
 
             <span>
               Técnico: {activeSession?.technicianName ?? '—'}
+            </span>
+
+            <span>
+              {streamMetrics
+                ? `${streamMetrics.fps} FPS · ${streamMetrics.latencyMs} ms · ${streamMetrics.kilobitsPerSecond} kbps`
+                : 'Sin métricas de video'}
             </span>
 
             <span>

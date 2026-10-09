@@ -1,5 +1,8 @@
 import * as signalR
   from '@microsoft/signalr'
+import {
+  MessagePackHubProtocol,
+} from '@microsoft/signalr-protocol-msgpack'
 
 import {
   tokenStorage,
@@ -22,7 +25,7 @@ export interface RemoteFrame {
 
   mimeType: string
 
-  base64Data: string
+  data: Uint8Array
 
   capturedAtUtc: string
 
@@ -278,6 +281,9 @@ export class RemoteSupportSignalRClient {
                 ??
                 '',
           },
+        )
+        .withHubProtocol(
+          new MessagePackHubProtocol(),
         )
         .withAutomaticReconnect(
           [

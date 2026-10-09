@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using TitanMDM.Application.Helpdesk;
-using TitanMDM.Infrastructure.Helpdesk;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -22,85 +21,6 @@ public sealed class HelpdeskRoutingController
     {
         _service =
             service;
-    }
-
-    // ============================================================
-    // PREVIEW BY REQUESTER
-    // ============================================================
-
-    [HttpGet("preview")]
-    public async Task<IActionResult>
-        Preview(
-            [FromQuery]
-            Guid requesterId,
-            [FromQuery]
-            string category = "general",
-            CancellationToken cancellationToken = default)
-    {
-        if (!CanViewRouting())
-        {
-            return Forbid();
-        }
-
-        if (!TryGetOrganization(
-                out var organizationId))
-        {
-            return Unauthorized();
-        }
-
-        if (requesterId == Guid.Empty)
-        {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Indica un solicitante válido."
-                });
-        }
-
-        category =
-            category?
-                .Trim()
-                .ToLowerInvariant()
-            ??
-            "general";
-
-        if (string.IsNullOrWhiteSpace(
-                category)
-            ||
-            category.Length > 80)
-        {
-            return BadRequest(
-                new
-                {
-                    message =
-                        "Indica una categoría válida."
-                });
-        }
-
-        var routing =
-            GetRoutingService();
-
-        if (routing is null)
-        {
-            return Problem(
-                detail:
-                    "El servicio de routing de Helpdesk no está disponible.",
-                statusCode:
-                    StatusCodes
-                        .Status503ServiceUnavailable);
-        }
-
-        var result =
-            await routing
-                .PreviewRoutingAsync(
-                    organizationId,
-                    requesterId,
-                    category,
-                    cancellationToken);
-
-        return Ok(
-            result);
     }
 
     // ============================================================
@@ -134,27 +54,14 @@ public sealed class HelpdeskRoutingController
                 });
         }
 
-        var routing =
-            GetRoutingService();
-
-        if (routing is null)
-        {
-            return Problem(
-                detail:
-                    "El servicio de routing de Helpdesk no está disponible.",
-                statusCode:
-                    StatusCodes
-                        .Status503ServiceUnavailable);
-        }
-
-        var result =
-            await routing
-                .PreviewTicketRoutingAsync(
+        var diagnostic =
+            await _service
+                .GetRoutingDiagnosticAsync(
                     organizationId,
                     ticketId,
                     cancellationToken);
 
-        if (result is null)
+        if (diagnostic is null)
         {
             return NotFound(
                 new
@@ -165,14 +72,15 @@ public sealed class HelpdeskRoutingController
         }
 
         return Ok(
-            result);
+            diagnostic);
     }
 
     // ============================================================
     // RETRY AUTOMATIC ASSIGNMENT
     // ============================================================
 
-    [HttpPost("tickets/{ticketId:guid}/retry")]
+    // The canonical retry contract is owned by HelpdeskRoutingOperationsController.
+    [NonAction]
     public async Task<IActionResult>
         Retry(
             Guid ticketId,
@@ -199,28 +107,13 @@ public sealed class HelpdeskRoutingController
                 });
         }
 
-        var routing =
-            GetRoutingService();
+        // ========================================================
+        // 1. DIAGNOSTIC BEFORE WRITE
+        // ========================================================
 
-        if (routing is null)
-        {
-            return Problem(
-                detail:
-                    "El servicio de routing de Helpdesk no está disponible.",
-                statusCode:
-                    StatusCodes
-                        .Status503ServiceUnavailable);
-        }
-
-        /*
-         * Primero obtenemos el diagnóstico.
-         *
-         * Esto permite devolver al operador una explicación
-         * útil si no existe candidato elegible.
-         */
         var diagnostic =
-            await routing
-                .PreviewTicketRoutingAsync(
+            await _service
+                .GetRoutingDiagnosticAsync(
                     organizationId,
                     ticketId,
                     cancellationToken);
@@ -235,21 +128,63 @@ public sealed class HelpdeskRoutingController
                 });
         }
 
-        if (!diagnostic.CanAssign)
+        /*
+         * El ticket ya puede estar asignado.
+         *
+         * En ese caso no debemos volver a ejecutar el motor.
+         */
+        if (diagnostic.AlreadyAssigned)
         {
             return Conflict(
                 new
                 {
                     message =
-                        diagnostic.Reason,
+                        "El ticket ya tiene un técnico asignado.",
 
                     diagnostic
                 });
         }
 
+        if (diagnostic.PendingUser)
+        {
+            return Conflict(
+                new
+                {
+                    message =
+                        "El ticket está esperando respuesta del usuario y no puede autoasignarse.",
+
+                    diagnostic
+                });
+        }
+
+        /*
+         * SelectedCandidate representa el candidato real que
+         * devolvió EvaluateRoutingAsync().
+         */
+        if (diagnostic.SelectedCandidate is null)
+        {
+            return Conflict(
+                new
+                {
+                    message =
+                        string.IsNullOrWhiteSpace(
+                            diagnostic.EngineReason)
+                            ?
+                            "No existe un técnico elegible para este ticket."
+                            :
+                            diagnostic.EngineReason,
+
+                    diagnostic
+                });
+        }
+
+        // ========================================================
+        // 2. ENTERPRISE WRITE PATH
+        // ========================================================
+
         var assigned =
-            await routing
-                .RetryAutomaticAssignmentAsync(
+            await _service
+                .RetryAutomaticAssignmentEnterpriseAsync(
                     organizationId,
                     ticketId,
                     cancellationToken);
@@ -257,13 +192,21 @@ public sealed class HelpdeskRoutingController
         if (!assigned)
         {
             /*
-             * Puede ocurrir si entre el preview y el commit
-             * cambió la carga/capacidad o otro operador
-             * asignó el ticket.
+             * Entre diagnóstico y commit pudieron cambiar:
+             *
+             * - carga;
+             * - capacidad;
+             * - disponibilidad;
+             * - horario;
+             * - membresía;
+             * - estado del ticket;
+             * - asignación por otro proceso.
+             *
+             * Volvemos a consultar el estado real.
              */
             var refreshed =
-                await routing
-                    .PreviewTicketRoutingAsync(
+                await _service
+                    .GetRoutingDiagnosticAsync(
                         organizationId,
                         ticketId,
                         cancellationToken);
@@ -272,18 +215,29 @@ public sealed class HelpdeskRoutingController
                 new
                 {
                     message =
-                        refreshed?.Reason
-                        ??
-                        "No se pudo completar la autoasignación porque el estado del ticket o la capacidad del técnico cambió.",
+                        refreshed is not null
+                        &&
+                        !string.IsNullOrWhiteSpace(
+                            refreshed.EngineReason)
+                            ?
+                            refreshed.EngineReason
+                            :
+                            "No se pudo completar la autoasignación durante la revalidación transaccional.",
 
                     diagnostic =
                         refreshed
+                        ??
+                        diagnostic
                 });
         }
 
+        // ========================================================
+        // 3. FINAL STATE
+        // ========================================================
+
         var finalDiagnostic =
-            await routing
-                .PreviewTicketRoutingAsync(
+            await _service
+                .GetRoutingDiagnosticAsync(
                     organizationId,
                     ticketId,
                     cancellationToken);
@@ -305,14 +259,167 @@ public sealed class HelpdeskRoutingController
     }
 
     // ============================================================
-    // SERVICE
+    // ROUTING HEALTH
     // ============================================================
 
-    private HelpdeskService?
-        GetRoutingService()
+    // Avoid an ambiguous endpoint with HelpdeskRoutingOperationsController.
+    [NonAction]
+    public async Task<IActionResult>
+        Health(
+            CancellationToken cancellationToken = default)
     {
-        return _service
-            as HelpdeskService;
+        if (!CanViewRouting())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(
+                out var organizationId))
+        {
+            return Unauthorized();
+        }
+
+        var result =
+            await _service
+                .GetRoutingHealthAsync(
+                    organizationId,
+                    cancellationToken);
+
+        return Ok(
+            result);
+    }
+
+    // ============================================================
+    // DIAGNOSTIC BY BUSINESS REFERENCE
+    //
+    // Supports:
+    // HD-18
+    // hd-18
+    // 18
+    // GUID
+    // ============================================================
+
+    [HttpGet("diagnostic/{ticketReference}")]
+    public async Task<IActionResult>
+        DiagnosticByReference(
+            string ticketReference,
+            CancellationToken cancellationToken = default)
+    {
+        if (!CanViewRouting())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(
+                out var organizationId))
+        {
+            return Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                ticketReference))
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Indica un ticket válido."
+                });
+        }
+
+        var diagnostic =
+            await _service
+                .GetRoutingDiagnosticByReferenceAsync(
+                    organizationId,
+                    ticketReference,
+                    cancellationToken);
+
+        if (diagnostic is null)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        "El ticket no existe."
+                });
+        }
+
+        return Ok(
+            diagnostic);
+    }
+
+    // ============================================================
+    // QUEUE SIMULATION
+    // ============================================================
+
+    [HttpPost("queue/simulate")]
+    public async Task<IActionResult>
+        SimulateQueue(
+            [FromQuery]
+            int maxTickets = 100,
+            CancellationToken cancellationToken = default)
+    {
+        if (!CanViewRouting())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(
+                out var organizationId))
+        {
+            return Unauthorized();
+        }
+
+        var result =
+            await _service
+                .RetryAutomaticAssignmentForOpenTicketsAsync(
+                    organizationId,
+                    Math.Clamp(
+                        maxTickets,
+                        1,
+                        200),
+                    true,
+                    cancellationToken);
+
+        return Ok(
+            result);
+    }
+
+    // ============================================================
+    // QUEUE PROCESS
+    // ============================================================
+
+    [HttpPost("queue/process")]
+    public async Task<IActionResult>
+        ProcessQueue(
+            [FromQuery]
+            int maxTickets = 100,
+            CancellationToken cancellationToken = default)
+    {
+        if (!CanManageRouting())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(
+                out var organizationId))
+        {
+            return Unauthorized();
+        }
+
+        var result =
+            await _service
+                .RetryAutomaticAssignmentForOpenTicketsAsync(
+                    organizationId,
+                    Math.Clamp(
+                        maxTickets,
+                        1,
+                        200),
+                    false,
+                    cancellationToken);
+
+        return Ok(
+            result);
     }
 
     // ============================================================
@@ -347,7 +454,7 @@ public sealed class HelpdeskRoutingController
             "helpdesk.ticket.details.view",
             "helpdesk.admin.access",
 
-            // Compatibilidad legacy.
+            // Legacy compatibility.
             "tickets.view",
             "helpdesk.view",
             "helpdesk.manage",
@@ -363,7 +470,7 @@ public sealed class HelpdeskRoutingController
             "helpdesk.technicians.manage",
             "helpdesk.admin.access",
 
-            // Compatibilidad legacy.
+            // Legacy compatibility.
             "tickets.assign",
             "helpdesk.manage",
             "settings.manage");

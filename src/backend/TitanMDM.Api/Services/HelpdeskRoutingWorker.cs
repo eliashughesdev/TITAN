@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 using TitanMDM.Api.AI;
 using TitanMDM.Domain.Entities;
-using TitanMDM.Infrastructure.Helpdesk;
+using TitanMDM.Application.Helpdesk;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Services;
@@ -92,6 +92,7 @@ public sealed class HelpdeskRoutingWorker(
     private async Task ExecuteCycleAsync(
         CancellationToken cancellationToken)
     {
+        var cycleStarted = System.Diagnostics.Stopwatch.StartNew();
         List<TicketKey> tickets;
 
         using (
@@ -116,6 +117,7 @@ public sealed class HelpdeskRoutingWorker(
                 DateTime.UtcNow
                     .AddSeconds(
                         -20);
+            var dueAt = DateTime.UtcNow;
 
             tickets =
                 await db
@@ -130,8 +132,11 @@ public sealed class HelpdeskRoutingWorker(
                                 "closed"
                             &&
                             x.Status !=
-                                "resolved")
-                    .OrderBy(
+                                "resolved"
+                            && x.Status != "pendinguser"
+                            && (x.RoutingNextAttemptAtUtc == null || x.RoutingNextAttemptAtUtc <= dueAt))
+                    .OrderBy(x => x.RoutingNextAttemptAtUtc)
+                    .ThenBy(
                         x =>
                             x.CreatedAtUtc)
                     .Select(
@@ -139,6 +144,7 @@ public sealed class HelpdeskRoutingWorker(
                             new TicketKey(
                                 x.OrganizationId,
                                 x.Id))
+                    .Take(50)
                     .ToListAsync(
                         cancellationToken);
         }
@@ -166,6 +172,18 @@ public sealed class HelpdeskRoutingWorker(
                     .ServiceProvider
                     .GetRequiredService<
                         TitanMdmDbContext>();
+
+            var claimedAt = DateTime.UtcNow;
+            var leaseUntil = claimedAt.AddMinutes(5);
+            var nextAttemptAt = claimedAt.AddMinutes(1);
+            var claimed = await db.HelpdeskTickets.Where(x =>
+                    x.OrganizationId == key.OrganizationId && x.Id == key.TicketId &&
+                    x.Status != "closed" && x.Status != "resolved" && x.Status != "pendinguser" &&
+                    (x.RoutingNextAttemptAtUtc == null || x.RoutingNextAttemptAtUtc <= claimedAt))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.RoutingNextAttemptAtUtc, leaseUntil)
+                    .SetProperty(x => x.RoutingAttempts, x => x.RoutingAttempts + 1), cancellationToken);
+            if (claimed != 1) continue;
 
             try
             {
@@ -203,10 +221,28 @@ public sealed class HelpdeskRoutingWorker(
                                     key.OrganizationId,
                             cancellationToken);
 
+                nextAttemptAt = claimedAt.AddSeconds(
+                    Math.Min(900, 30 * Math.Pow(2, Math.Min(ticket.RoutingAttempts, 5))));
+
+                if (ticket.AssigneeUserId is null)
+                {
+                    // Sequential pipeline, not independent timers hoping to run in order.
+                    var intelligence = scope.ServiceProvider
+                        .GetRequiredService<HelpdeskRequesterIntelligenceService>();
+                    await intelligence.EnrichAsync(key.OrganizationId, key.TicketId, cancellationToken);
+                    db.ChangeTracker.Clear();
+                    ticket = await db.HelpdeskTickets.AsNoTracking().FirstAsync(
+                        x => x.OrganizationId == key.OrganizationId && x.Id == key.TicketId,
+                        cancellationToken);
+                }
+
                 // =================================================
                 // SLA ESCALATION
                 // =================================================
 
+                var slaCutoff = DateTime.UtcNow.AddMinutes(-(settings?.EscalationDelayMinutes ?? 120));
+                if ((ticket.FirstRespondedAtUtc == null && ticket.FirstResponseDueAtUtc <= slaCutoff) ||
+                    (ticket.ResolvedAtUtc == null && ticket.ResolveDueAtUtc <= slaCutoff))
                 await EscalateAsync(
                     db,
                     key,
@@ -251,8 +287,7 @@ public sealed class HelpdeskRoutingWorker(
                         await TryClassifyAsync(
                             db,
                             ticket,
-                            remainingAiCalls >
-                                0,
+                            false,
                             cancellationToken);
 
                     if (
@@ -287,11 +322,19 @@ public sealed class HelpdeskRoutingWorker(
                 // HD-C3 / HD-C4 ROUTING
                 // =================================================
 
+                if (ticket.AssigneeUserId is null && settings?.ClassificationEnabled == true && remainingAiCalls > 0)
+                {
+                    remainingAiCalls--;
+                    var enrichment = scope.ServiceProvider.GetRequiredService<HelpdeskAiRoutingEnrichmentService>();
+                    await enrichment.EnrichAsync(key.OrganizationId, key.TicketId, cancellationToken);
+                    db.ChangeTracker.Clear();
+                }
+
                 var routing =
                     scope
                         .ServiceProvider
                         .GetRequiredService<
-                            HelpdeskService>();
+                            IHelpdeskService>();
 
                 if (
                     ticket.AssigneeUserId
@@ -306,6 +349,7 @@ public sealed class HelpdeskRoutingWorker(
 
                     if (assigned)
                     {
+                        nextAttemptAt = DateTime.UtcNow.AddMinutes(5);
                         logger.LogInformation(
                             "Ticket {TicketNumber} autoasignado correctamente.",
                             ticket.Number);
@@ -313,6 +357,7 @@ public sealed class HelpdeskRoutingWorker(
                 }
                 else
                 {
+                    nextAttemptAt = DateTime.UtcNow.AddMinutes(5);
                     /*
                      * Se conserva el handover existente.
                      */
@@ -338,7 +383,21 @@ public sealed class HelpdeskRoutingWorker(
                     "No se pudo procesar el routing automÃ¡tico del ticket {TicketId}.",
                     key.TicketId);
             }
+            finally
+            {
+                // Compare the lease value: an expired owner cannot overwrite a
+                // newer claim. Crash/shutdown recovery happens by lease expiry.
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await db.HelpdeskTickets.Where(x => x.OrganizationId == key.OrganizationId &&
+                            x.Id == key.TicketId && x.RoutingNextAttemptAtUtc == leaseUntil)
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.RoutingNextAttemptAtUtc, nextAttemptAt),
+                            cancellationToken);
+                }
+            }
         }
+        logger.LogInformation("Helpdesk routing cycle: {Selected} candidates, {ElapsedMs} ms.",
+            tickets.Count, cycleStarted.ElapsedMilliseconds);
     }
 
     // ============================================================

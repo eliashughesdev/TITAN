@@ -128,7 +128,8 @@ builder.Services.AddSignalR(
                     "SignalR:ClientTimeoutSeconds")
                 ??
                 30);
-    });
+    })
+    .AddMessagePackProtocol();
 
 // ============================================================================
 // OPENROUTER / AI
@@ -194,11 +195,8 @@ builder.Services.AddScoped<
 builder.Services.AddHostedService<
     HelpdeskMonitoringService>();
 
-builder.Services.AddHostedService<
-    HelpdeskRequesterIntelligenceWorker>();
-
-builder.Services.AddHostedService<
-    HelpdeskAiRoutingEnrichmentWorker>();
+// Requester and AI enrichment are coordinated by HelpdeskRoutingWorker under
+// the same persisted claim, before deterministic technician selection.
 
 builder.Services.AddHostedService<
     HelpdeskRoutingWorker>();

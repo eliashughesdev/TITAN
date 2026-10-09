@@ -73,6 +73,16 @@ public interface IHelpdeskService
         Guid ticketId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> RetryAutomaticAssignmentWithFallbackAsync(
+        Guid organizationId,
+        Guid ticketId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryAutomaticHandoverAsync(
+        Guid organizationId,
+        Guid ticketId,
+        CancellationToken cancellationToken = default);
+
     Task<HelpdeskRoutingQueueResult> RetryAutomaticAssignmentForOpenTicketsAsync(
         Guid organizationId,
         int maxTickets,

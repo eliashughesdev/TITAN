@@ -503,16 +503,6 @@ public static class InfrastructureServiceExtensions
             HelpdeskService>();
 
         services.AddScoped<
-            IEntraIdDirectoryService,
-            EntraIdDirectoryService>();
-
-        services.AddScoped<
-            HelpdeskEmailImportService>();
-
-        services.AddScoped<
-            HelpdeskEmailAttachmentImportService>();
-
-        services.AddScoped<
             HelpdeskMailIntakePolicy>();
 
         // ============================================================

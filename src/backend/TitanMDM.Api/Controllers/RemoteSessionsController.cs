@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
@@ -19,16 +20,30 @@ public sealed class RemoteSessionsController
     private readonly TitanMdmDbContext
         _dbContext;
 
+    private readonly RemoteControlLeaseService
+        _controlLeases;
+
+    private readonly RemoteSupportConnectionRegistry
+        _connections;
+
     private readonly ILogger<
         RemoteSessionsController>
         _logger;
 
     public RemoteSessionsController(
         TitanMdmDbContext dbContext,
+        RemoteControlLeaseService controlLeases,
+        RemoteSupportConnectionRegistry connections,
         ILogger<RemoteSessionsController> logger)
     {
         _dbContext =
             dbContext;
+
+        _controlLeases =
+            controlLeases;
+
+        _connections =
+            connections;
 
         _logger =
             logger;
@@ -614,25 +629,12 @@ public sealed class RemoteSessionsController
             return NotFound();
         }
 
-        await RemoveExpiredLeaseAsync(
+        var lease = await _controlLeases.GetStateAsync(
             organizationId,
             sessionId,
             cancellationToken);
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId,
-                    cancellationToken);
-
-        if (lease is null)
+        if (!lease.HasController)
         {
             return Ok(
                 new
@@ -648,10 +650,10 @@ public sealed class RemoteSessionsController
                 hasController =
                     true,
 
-                lease.UserId,
-                lease.DisplayName,
-                lease.AcquiredAtUtc,
-                lease.ExpiresAtUtc
+                userId = lease.UserId,
+                displayName = lease.DisplayName,
+                acquiredAtUtc = lease.AcquiredAtUtc,
+                expiresAtUtc = lease.ExpiresAtUtc
             });
     }
 
@@ -677,6 +679,12 @@ public sealed class RemoteSessionsController
             GetTechnicianName(
                 userId);
 
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
         var session =
             await GetActiveSessionAsync(
                 organizationId,
@@ -688,137 +696,14 @@ public sealed class RemoteSessionsController
             return NotFound();
         }
 
-        await EnsureParticipantAsync(
-            organizationId,
-            sessionId,
-            userId,
-            technicianName,
-            cancellationToken);
-
-        await RemoveExpiredLeaseAsync(
-            organizationId,
-            sessionId,
-            cancellationToken);
-
-        /*
-         * Serializable ayuda a evitar que dos técnicos obtengan
-         * control simultáneamente.
-         *
-         * El índice UNIQUE de SessionId es la segunda defensa.
-         */
-
-        await using var transaction =
-            await _dbContext
-                .Database
-                .BeginTransactionAsync(
-                    System.Data
-                        .IsolationLevel
-                        .Serializable,
-                    cancellationToken);
-
         try
         {
-            var lease =
-                await _dbContext
-                    .RemoteSessionControlLeases
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            x.RemoteSessionId ==
-                                sessionId,
-                        cancellationToken);
-
-            if (lease is not null)
-            {
-                if (
-                    lease.UserId ==
-                    userId)
-                {
-                    lease.Renew(
-                        TimeSpan.FromSeconds(
-                            45));
-
-                    await _dbContext
-                        .SaveChangesAsync(
-                            cancellationToken);
-
-                    await transaction
-                        .CommitAsync(
-                            cancellationToken);
-
-                    return Ok(
-                        BuildLeaseResponse(
-                            lease,
-                            ownedByCurrentUser:
-                                true));
-                }
-
-                await transaction
-                    .RollbackAsync(
-                        cancellationToken);
-
-                return Conflict(
-                    new
-                    {
-                        message =
-                            $"El control está siendo utilizado por {lease.DisplayName}.",
-
-                        controller =
-                            lease.DisplayName,
-
-                        lease.UserId,
-                        lease.ExpiresAtUtc
-                    });
-            }
-
-            lease =
-                new RemoteSessionControlLease(
-                    organizationId,
-                    sessionId,
-                    userId,
-                    technicianName,
-                    TimeSpan.FromSeconds(
-                        45));
-
-            _dbContext
-                .RemoteSessionControlLeases
-                .Add(
-                    lease);
-
-            var participant =
-                await _dbContext
-                    .RemoteSessionParticipants
-                    .FirstAsync(
-                        x =>
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            x.RemoteSessionId ==
-                                sessionId
-                            &&
-                            x.UserId ==
-                                userId,
-                        cancellationToken);
-
-            participant
-                .GrantControl();
-
-            AddEvent(
+            var lease = await _controlLeases.AcquireAsync(
                 organizationId,
                 sessionId,
-                "CONTROL_ACQUIRED",
-                $"{technicianName} obtuvo control de teclado y mouse.",
-                userId);
-
-            await _dbContext
-                .SaveChangesAsync(
-                    cancellationToken);
-
-            await transaction
-                .CommitAsync(
-                    cancellationToken);
+                userId,
+                technicianName,
+                cancellationToken);
 
             return Ok(
                 BuildLeaseResponse(
@@ -826,17 +711,12 @@ public sealed class RemoteSessionsController
                     ownedByCurrentUser:
                         true));
         }
-        catch (DbUpdateException)
+        catch (Microsoft.AspNetCore.SignalR.HubException exception)
         {
-            await transaction
-                .RollbackAsync(
-                    cancellationToken);
-
             return Conflict(
                 new
                 {
-                    message =
-                        "Otro técnico obtuvo el control de la sesión simultáneamente."
+                    message = exception.Message
                 });
         }
     }
@@ -859,44 +739,20 @@ public sealed class RemoteSessionsController
         var userId =
             GetUserId();
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.UserId ==
-                            userId,
-                    cancellationToken);
-
-        if (lease is null)
+        try
         {
-            return Conflict(
-                new
-                {
-                    message =
-                        "El usuario actual no posee el control."
-                });
-        }
-
-        lease.Renew(
-            TimeSpan.FromSeconds(
-                45));
-
-        await _dbContext
-            .SaveChangesAsync(
+            var lease = await _controlLeases.RenewAsync(
+                organizationId,
+                sessionId,
+                userId,
                 cancellationToken);
 
-        return Ok(
-            BuildLeaseResponse(
-                lease,
-                ownedByCurrentUser:
-                    true));
+            return Ok(BuildLeaseResponse(lease, true));
+        }
+        catch (Microsoft.AspNetCore.SignalR.HubException exception)
+        {
+            return Conflict(new { message = exception.Message });
+        }
     }
 
     [HttpPost("{sessionId:guid}/control/release")]
@@ -921,71 +777,14 @@ public sealed class RemoteSessionsController
             GetTechnicianName(
                 userId);
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.UserId ==
-                            userId,
-                    cancellationToken);
-
-        if (lease is null)
-        {
-            return Ok(
-                new
-                {
-                    released =
-                        false
-                });
-        }
-
-        _dbContext
-            .RemoteSessionControlLeases
-            .Remove(
-                lease);
-
-        var participant =
-            await _dbContext
-                .RemoteSessionParticipants
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.UserId ==
-                            userId,
-                    cancellationToken);
-
-        participant
-            ?.RevokeControl();
-
-        AddEvent(
+        var released = await _controlLeases.ReleaseAsync(
             organizationId,
             sessionId,
-            "CONTROL_RELEASED",
-            $"{technicianName} liberó el control remoto.",
-            userId);
+            userId,
+            technicianName,
+            cancellationToken);
 
-        await _dbContext
-            .SaveChangesAsync(
-                cancellationToken);
-
-        return Ok(
-            new
-            {
-                released =
-                    true
-            });
+        return Ok(new { released });
     }
 
     /*
@@ -1097,6 +896,10 @@ public sealed class RemoteSessionsController
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        _connections.RemoveControlLease(
+            organizationId,
+            sessionId);
 
         return Ok(
             new

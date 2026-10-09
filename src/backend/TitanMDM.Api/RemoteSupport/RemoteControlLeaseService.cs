@@ -18,12 +18,17 @@ public sealed class RemoteControlLeaseService
     private readonly RemoteSupportParticipantService
         _participants;
 
+    private readonly RemoteSupportConnectionRegistry
+        _connections;
+
     public RemoteControlLeaseService(
         TitanMdmDbContext dbContext,
-        RemoteSupportParticipantService participants)
+        RemoteSupportParticipantService participants,
+        RemoteSupportConnectionRegistry connections)
     {
         _dbContext = dbContext;
         _participants = participants;
+        _connections = connections;
     }
 
     public async Task<RemoteControlLeaseState>
@@ -34,6 +39,12 @@ public sealed class RemoteControlLeaseService
             string displayName,
             CancellationToken cancellationToken = default)
     {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
         await using var transaction =
             await _dbContext.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable,
@@ -81,7 +92,12 @@ public sealed class RemoteControlLeaseService
                 await transaction.CommitAsync(
                     cancellationToken);
 
-                return Map(existing);
+                var state = Map(existing);
+                _connections.SetControlLease(
+                    organizationId,
+                    sessionId,
+                    state);
+                return state;
             }
 
             var participant =
@@ -120,7 +136,12 @@ public sealed class RemoteControlLeaseService
             await transaction.CommitAsync(
                 cancellationToken);
 
-            return Map(lease);
+            var acquiredState = Map(lease);
+            _connections.SetControlLease(
+                organizationId,
+                sessionId,
+                acquiredState);
+            return acquiredState;
         }
         catch (DbUpdateException)
         {
@@ -132,12 +153,18 @@ public sealed class RemoteControlLeaseService
         }
     }
 
-    public async Task RenewAsync(
+    public async Task<RemoteControlLeaseState> RenewAsync(
         Guid organizationId,
         Guid sessionId,
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
         var lease =
             await _dbContext
                 .RemoteSessionControlLeases
@@ -165,6 +192,10 @@ public sealed class RemoteControlLeaseService
             await _dbContext.SaveChangesAsync(
                 cancellationToken);
 
+            _connections.RemoveControlLease(
+                organizationId,
+                sessionId);
+
             throw new HubException(
                 "El lease de control expiró.");
         }
@@ -174,15 +205,28 @@ public sealed class RemoteControlLeaseService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        var state = Map(lease);
+        _connections.SetControlLease(
+            organizationId,
+            sessionId,
+            state);
+        return state;
     }
 
-    public async Task ReleaseAsync(
+    public async Task<bool> ReleaseAsync(
         Guid organizationId,
         Guid sessionId,
         Guid userId,
         string displayName,
         CancellationToken cancellationToken = default)
     {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
         var lease =
             await _dbContext
                 .RemoteSessionControlLeases
@@ -197,7 +241,7 @@ public sealed class RemoteControlLeaseService
 
         if (lease is null)
         {
-            return;
+            return false;
         }
 
         await RemoveLeaseInternalAsync(
@@ -214,6 +258,12 @@ public sealed class RemoteControlLeaseService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        _connections.RemoveControlLease(
+            organizationId,
+            sessionId);
+
+        return true;
     }
 
     public async Task RequireOwnershipAsync(
@@ -222,6 +272,12 @@ public sealed class RemoteControlLeaseService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
         var lease =
             await _dbContext
                 .RemoteSessionControlLeases
@@ -235,13 +291,17 @@ public sealed class RemoteControlLeaseService
 
         if (lease is null)
         {
+            _connections.RemoveControlLease(
+                organizationId,
+                sessionId);
+
             throw new HubException(
                 "La sesión está en modo solo lectura. Solicita el control para utilizar teclado o mouse.");
         }
 
         if (lease.ExpiresAtUtc <= DateTime.UtcNow)
         {
-            await RemoveExpiredAsync(
+            await RemoveExpiredInternalAsync(
                 organizationId,
                 sessionId,
                 cancellationToken);
@@ -255,6 +315,11 @@ public sealed class RemoteControlLeaseService
             throw new HubException(
                 $"La sesión está siendo controlada por {lease.DisplayName}.");
         }
+
+        _connections.SetControlLease(
+            organizationId,
+            sessionId,
+            Map(lease));
     }
 
     public async Task<RemoteControlLeaseState>
@@ -263,7 +328,13 @@ public sealed class RemoteControlLeaseService
             Guid sessionId,
             CancellationToken cancellationToken = default)
     {
-        await RemoveExpiredAsync(
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
+        await RemoveExpiredInternalAsync(
             organizationId,
             sessionId,
             cancellationToken);
@@ -279,15 +350,39 @@ public sealed class RemoteControlLeaseService
                         x.RemoteSessionId == sessionId,
                     cancellationToken);
 
-        return lease is null
+        var state = lease is null
             ? RemoteControlLeaseState.Empty
             : Map(lease);
+
+        _connections.SetControlLease(
+            organizationId,
+            sessionId,
+            state);
+
+        return state;
     }
 
     public async Task RemoveExpiredAsync(
         Guid organizationId,
         Guid sessionId,
         CancellationToken cancellationToken = default)
+    {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
+        await RemoveExpiredInternalAsync(
+            organizationId,
+            sessionId,
+            cancellationToken);
+    }
+
+    private async Task RemoveExpiredInternalAsync(
+        Guid organizationId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
     {
         var lease =
             await _dbContext
@@ -312,6 +407,10 @@ public sealed class RemoteControlLeaseService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        _connections.RemoveControlLease(
+            organizationId,
+            sessionId);
     }
 
     private async Task RemoveLeaseInternalAsync(

@@ -14,6 +14,8 @@ public sealed class HelpdeskTicketEventConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.EventType).HasMaxLength(40).IsRequired();
         builder.Property(x => x.Summary).HasMaxLength(500).IsRequired();
         builder.HasIndex(x => x.TicketId);
+        builder.HasIndex(x => new { x.OrganizationId, x.AssignedToUserId, x.EventType, x.CreatedAtUtc });
+        builder.HasIndex(x => new { x.OrganizationId, x.TicketId, x.EventType, x.CreatedAtUtc });
         builder.HasOne<HelpdeskTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
     }

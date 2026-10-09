@@ -701,86 +701,21 @@ public sealed partial class HelpdeskService
          *   por HelpdeskRoutingWorker;
          * - OpenRouter NO selecciona tÃ©cnico.
          */
-        var routingEvaluation =
-            await EvaluateRoutingAsync(
-                organizationId,
-                requesterId,
-                ticket.Category,
-                cancellationToken,
-                ticket.RequestedTeamId,
-                ticket.SiteId,
-                ticket.SiteLocationId);
-
-        var routing =
-            routingEvaluation.Candidate;
-
-        if (
-            routing is not null)
-        {
-            /*
-             * Si el motor pudo inferir una localidad segura,
-             * persistimos dicha informaciÃ³n en el ticket.
-             */
-            if (
-                !ticket.SiteId.HasValue
-                &&
-                routingEvaluation.SiteId.HasValue)
-            {
-                ticket.AssignSite(
-                    routingEvaluation.SiteId,
-                    routingEvaluation.SiteLocationId);
-
-                _db.HelpdeskTicketEvents
-                    .Add(
-                        new HelpdeskTicketEvent(
-                            organizationId,
-                            ticket.Id,
-                            actorUserId,
-                            "site_inferred",
-                            "Localidad inferida automÃ¡ticamente por el motor de routing."));
-            }
-
-            ticket.SelectGroup(
-                routing.TeamId);
-
-            ticket.Assign(
-                routing.UserId);
-
-            var autoAssignmentSummary =
-                "AsignaciÃ³n automÃ¡tica inmediata: " +
-                BuildRoutingReason(
-                    routingEvaluation.RequesterLocation
-                    ??
-                    "Sin localidad",
-                    ticket.Category,
-                    routing);
-
-            _db.HelpdeskTicketEvents
-                .Add(
-                    new HelpdeskTicketEvent(
-                        organizationId,
-                        ticket.Id,
-                        actorUserId,
-                        "auto_assigned",
-                        TrimSummary(
-                            autoAssignmentSummary)));
-        }
-        else
-        {
-            _db.HelpdeskTicketEvents
-                .Add(
-                    new HelpdeskTicketEvent(
-                        organizationId,
-                        ticket.Id,
-                        actorUserId,
-                        "routing_pending",
-                        TrimSummary(
-                            "Sin asignaciÃ³n automÃ¡tica inmediata: " +
-                            routingEvaluation.Reason)));
-        }
+        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+            organizationId, ticket.Id, actorUserId, "routing_pending",
+            "Ticket registrado para autoasignación transaccional."));
         await _db
             .SaveChangesAsync(
                 cancellationToken);
+
+        // Mail intake must first persist the real sender, not route on behalf of
+        // the mailbox service account. An outer transaction is processed by the
+        // worker after commit; regular creation uses the enterprise write path.
+        if (source != "email" && _db.Database.CurrentTransaction is null)
+        {
+            await RetryAutomaticAssignmentWithFallbackAsync(
+                organizationId, ticket.Id, cancellationToken);
+        }
 
         return (
             await GetTicketAsync(

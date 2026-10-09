@@ -89,6 +89,10 @@ public sealed class HelpdeskTicketConfiguration
         // INDEXES
         // ========================================================
 
+        builder.HasIndex(x => new { x.RoutingNextAttemptAtUtc, x.CreatedAtUtc })
+            .HasFilter("[Status] <> 'closed' AND [Status] <> 'resolved' AND [Status] <> 'pendinguser'");
+        builder.HasIndex(x => new { x.OrganizationId, x.AssigneeUserId, x.Status });
+
         builder.HasIndex(
                 x =>
                     new

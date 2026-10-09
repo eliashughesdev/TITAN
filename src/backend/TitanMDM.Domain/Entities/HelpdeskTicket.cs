@@ -112,6 +112,9 @@ public sealed class HelpdeskTicket
 
     public Guid? AssigneeUserId { get; private set; }
 
+    public DateTime? RoutingNextAttemptAtUtc { get; private set; }
+    public int RoutingAttempts { get; private set; }
+
     public Guid? DeviceId { get; private set; }
 
     public Guid? QueueId { get; private set; }

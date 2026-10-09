@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Services;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
@@ -22,15 +23,21 @@ public sealed class RemoteSupportHub : Hub
 
     private readonly TitanMdmDbContext _dbContext;
     private readonly RemoteHostTokenService _tokenService;
+    private readonly RemoteSupportConnectionRegistry _connections;
+    private readonly RemoteControlLeaseService _controlLeases;
     private readonly ILogger<RemoteSupportHub> _logger;
 
     public RemoteSupportHub(
         TitanMdmDbContext dbContext,
         RemoteHostTokenService tokenService,
+        RemoteSupportConnectionRegistry connections,
+        RemoteControlLeaseService controlLeases,
         ILogger<RemoteSupportHub> logger)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
+        _connections = connections;
+        _controlLeases = controlLeases;
         _logger = logger;
     }
 
@@ -39,6 +46,13 @@ public sealed class RemoteSupportHub : Hub
         if (IsHumanConnection())
         {
             var organizationId = GetHumanOrganizationId();
+            var userId = GetHumanUserId();
+
+            _connections.RegisterHuman(
+                Context.ConnectionId,
+                organizationId,
+                userId,
+                GetHumanDisplayName(userId));
 
             await Groups.AddToGroupAsync(
                 Context.ConnectionId,
@@ -84,6 +98,8 @@ public sealed class RemoteSupportHub : Hub
                 "Remote Support disconnect cleanup failed. ConnectionId={ConnectionId}.",
                 Context.ConnectionId);
         }
+
+        _connections.Remove(Context.ConnectionId);
 
         if (exception is null)
         {
@@ -137,6 +153,15 @@ public sealed class RemoteSupportHub : Hub
 
         AddJoinedSession(
             session.Id);
+
+        _connections.JoinSession(
+            Context.ConnectionId,
+            new RemoteSessionAccessState(
+                session.OrganizationId,
+                session.Id,
+                session.ExpiresAtUtc,
+                session.AllowMouse,
+                session.AllowKeyboard));
 
         _dbContext
             .RemoteSessionEvents
@@ -229,6 +254,10 @@ public sealed class RemoteSupportHub : Hub
         RemoveJoinedSession(
             sessionId);
 
+        _connections.LeaveSession(
+            Context.ConnectionId,
+            sessionId);
+
         await Groups
             .RemoveFromGroupAsync(
                 Context.ConnectionId,
@@ -284,176 +313,28 @@ public sealed class RemoteSupportHub : Hub
             GetHumanDisplayName(
                 userId);
 
-        await using var transaction =
-            await _dbContext
-                .Database
-                .BeginTransactionAsync(
-                    System.Data
-                        .IsolationLevel
-                        .Serializable);
+        var lease = await _controlLeases.AcquireAsync(
+            session.OrganizationId,
+            session.Id,
+            userId,
+            displayName,
+            Context.ConnectionAborted);
 
-        try
+        await BroadcastControlStateAsync(
+            session.OrganizationId,
+            session.Id,
+            lease);
+
+        return new
         {
-            var existing =
-                await _dbContext
-                    .RemoteSessionControlLeases
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.OrganizationId ==
-                                session.OrganizationId
-                            &&
-                            x.RemoteSessionId ==
-                                session.Id);
-
-            if (
-                existing is not null
-                &&
-                existing.ExpiresAtUtc <=
-                    DateTime.UtcNow)
-            {
-                var previousParticipant =
-                    await _dbContext
-                        .RemoteSessionParticipants
-                        .FirstOrDefaultAsync(
-                            x =>
-                                x.OrganizationId ==
-                                    session.OrganizationId
-                                &&
-                                x.RemoteSessionId ==
-                                    session.Id
-                                &&
-                                x.UserId ==
-                                    existing.UserId);
-
-                previousParticipant
-                    ?.RevokeControl();
-
-                _dbContext
-                    .RemoteSessionControlLeases
-                    .Remove(
-                        existing);
-
-                await _dbContext
-                    .SaveChangesAsync();
-
-                existing =
-                    null;
-            }
-
-            if (existing is not null)
-            {
-                if (
-                    existing.UserId !=
-                    userId)
-                {
-                    await transaction
-                        .RollbackAsync();
-
-                    throw new HubException(
-                        $"El control está siendo utilizado por {existing.DisplayName}.");
-                }
-
-                existing.Renew(
-                    TimeSpan.FromSeconds(
-                        45));
-
-                await _dbContext
-                    .SaveChangesAsync();
-
-                await transaction
-                    .CommitAsync();
-
-                await BroadcastControlStateAsync(
-                    session.OrganizationId,
-                    session.Id);
-
-                return new
-                {
-                    hasController =
-                        true,
-
-                    ownedByCurrentUser =
-                        true,
-
-                    existing.UserId,
-
-                    existing.DisplayName,
-
-                    existing.AcquiredAtUtc,
-
-                    existing.ExpiresAtUtc
-                };
-            }
-
-            var participant =
-                await EnsureParticipantAsync(
-                    session.OrganizationId,
-                    session.Id,
-                    userId,
-                    displayName);
-
-            var lease =
-                new RemoteSessionControlLease(
-                    session.OrganizationId,
-                    session.Id,
-                    userId,
-                    displayName,
-                    TimeSpan.FromSeconds(
-                        45));
-
-            _dbContext
-                .RemoteSessionControlLeases
-                .Add(
-                    lease);
-
-            participant
-                .GrantControl();
-
-            _dbContext
-                .RemoteSessionEvents
-                .Add(
-                    new RemoteSessionEvent(
-                        session.OrganizationId,
-                        session.Id,
-                        "CONTROL_ACQUIRED",
-                        $"{displayName} obtuvo control de teclado y mouse.",
-                        userId));
-
-            await _dbContext
-                .SaveChangesAsync();
-
-            await transaction
-                .CommitAsync();
-
-            await BroadcastControlStateAsync(
-                session.OrganizationId,
-                session.Id);
-
-            return new
-            {
-                hasController =
-                    true,
-
-                ownedByCurrentUser =
-                    true,
-
-                lease.UserId,
-
-                lease.DisplayName,
-
-                lease.AcquiredAtUtc,
-
-                lease.ExpiresAtUtc
-            };
-        }
-        catch (DbUpdateException)
-        {
-            await transaction
-                .RollbackAsync();
-
-            throw new HubException(
-                "Otro técnico obtuvo el control de la sesión simultáneamente.");
-        }
+            sessionId = session.Id,
+            hasController = lease.HasController,
+            ownedByCurrentUser = true,
+            userId = lease.UserId,
+            displayName = lease.DisplayName,
+            acquiredAtUtc = lease.AcquiredAtUtc,
+            expiresAtUtc = lease.ExpiresAtUtc
+        };
     }
 
     public async Task RenewControl(
@@ -467,73 +348,16 @@ public sealed class RemoteSupportHub : Hub
         var userId =
             GetHumanUserId();
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            session.OrganizationId
-                        &&
-                        x.RemoteSessionId ==
-                            session.Id
-                        &&
-                        x.UserId ==
-                            userId);
-
-        if (lease is null)
-        {
-            throw new HubException(
-                "El usuario actual no posee el control.");
-        }
-
-        if (
-            lease.ExpiresAtUtc <=
-            DateTime.UtcNow)
-        {
-            _dbContext
-                .RemoteSessionControlLeases
-                .Remove(
-                    lease);
-
-            var participant =
-                await _dbContext
-                    .RemoteSessionParticipants
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.OrganizationId ==
-                                session.OrganizationId
-                            &&
-                            x.RemoteSessionId ==
-                                session.Id
-                            &&
-                            x.UserId ==
-                                userId);
-
-            participant
-                ?.RevokeControl();
-
-            await _dbContext
-                .SaveChangesAsync();
-
-            await BroadcastControlStateAsync(
-                session.OrganizationId,
-                session.Id);
-
-            throw new HubException(
-                "El lease de control expiró.");
-        }
-
-        lease.Renew(
-            TimeSpan.FromSeconds(
-                45));
-
-        await _dbContext
-            .SaveChangesAsync();
+        var lease = await _controlLeases.RenewAsync(
+            session.OrganizationId,
+            session.Id,
+            userId,
+            Context.ConnectionAborted);
 
         await BroadcastControlStateAsync(
             session.OrganizationId,
-            session.Id);
+            session.Id,
+            lease);
     }
 
     public async Task ReleaseControl(
@@ -551,59 +375,12 @@ public sealed class RemoteSupportHub : Hub
             GetHumanDisplayName(
                 userId);
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            session.OrganizationId
-                        &&
-                        x.RemoteSessionId ==
-                            session.Id
-                        &&
-                        x.UserId ==
-                            userId);
-
-        if (lease is null)
-        {
-            return;
-        }
-
-        _dbContext
-            .RemoteSessionControlLeases
-            .Remove(
-                lease);
-
-        var participant =
-            await _dbContext
-                .RemoteSessionParticipants
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            session.OrganizationId
-                        &&
-                        x.RemoteSessionId ==
-                            session.Id
-                        &&
-                        x.UserId ==
-                            userId);
-
-        participant
-            ?.RevokeControl();
-
-        _dbContext
-            .RemoteSessionEvents
-            .Add(
-                new RemoteSessionEvent(
-                    session.OrganizationId,
-                    session.Id,
-                    "CONTROL_RELEASED",
-                    $"{displayName} liberó el control remoto.",
-                    userId));
-
-        await _dbContext
-            .SaveChangesAsync();
+        await _controlLeases.ReleaseAsync(
+            session.OrganizationId,
+            session.Id,
+            userId,
+            displayName,
+            Context.ConnectionAborted);
 
         await BroadcastControlStateAsync(
             session.OrganizationId,
@@ -760,7 +537,15 @@ public sealed class RemoteSupportHub : Hub
 
                     selectedMonitorIndex,
 
-                    monitors
+                    monitors = monitors.Select(monitor => new
+                    {
+                        index = monitor.Index,
+                        deviceName = monitor.DeviceName,
+                        width = monitor.Width,
+                        height = monitor.Height,
+                        isPrimary = monitor.IsPrimary,
+                        label = monitor.Label
+                    })
                 });
     }
 
@@ -857,6 +642,12 @@ public sealed class RemoteSupportHub : Hub
                     session.OrganizationId,
                     session.Id));
 
+        _connections.RegisterRemoteHost(
+            Context.ConnectionId,
+            session.OrganizationId,
+            session.DeviceId,
+            session.Id);
+
         await Clients
             .Group(
                 TechnicianGroup(
@@ -919,7 +710,7 @@ public sealed class RemoteSupportHub : Hub
         int width,
         int height,
         string mimeType,
-        string base64Data,
+        byte[] data,
         DateTime capturedAtUtc,
         int displayIndex,
         int displayCount,
@@ -993,15 +784,16 @@ public sealed class RemoteSupportHub : Hub
         }
 
         if (
-            string.IsNullOrWhiteSpace(
-                base64Data))
+            data is null
+            ||
+            data.Length == 0)
         {
             return;
         }
 
         if (
-            base64Data.Length >
-            8_000_000)
+            data.Length >
+            6_000_000)
         {
             throw new HubException(
                 "Frame demasiado grande.");
@@ -1026,9 +818,9 @@ public sealed class RemoteSupportHub : Hub
 
                     mimeType,
 
-                    base64Data,
+                    data,
 
-                    capturedAtUtc,
+                    capturedAtUtc = capturedAtUtc.ToString("O"),
 
                     displayIndex,
 
@@ -1049,24 +841,22 @@ public sealed class RemoteSupportHub : Hub
         double x,
         double y)
     {
-        var session =
-            await GetHumanSessionAsync(
-                sessionId,
-                "remote.manage");
+        var session = GetJoinedSessionAccess(
+            sessionId,
+            "remote.manage");
 
         if (!session.AllowMouse)
         {
             return;
         }
 
-        await RequireControlLeaseAsync(
-            session);
+        RequireCachedControlLease(session);
 
         await Clients
             .Group(
                 HostGroup(
                     session.OrganizationId,
-                    session.Id))
+                    session.SessionId))
             .SendAsync(
                 "PointerMove",
                 Math.Clamp(
@@ -1083,18 +873,16 @@ public sealed class RemoteSupportHub : Hub
         Guid sessionId,
         string action)
     {
-        var session =
-            await GetHumanSessionAsync(
-                sessionId,
-                "remote.manage");
+        var session = GetJoinedSessionAccess(
+            sessionId,
+            "remote.manage");
 
         if (!session.AllowMouse)
         {
             return;
         }
 
-        await RequireControlLeaseAsync(
-            session);
+        RequireCachedControlLease(session);
 
         var allowed =
             action is
@@ -1113,7 +901,7 @@ public sealed class RemoteSupportHub : Hub
             .Group(
                 HostGroup(
                     session.OrganizationId,
-                    session.Id))
+                    session.SessionId))
             .SendAsync(
                 "PointerButton",
                 action);
@@ -1123,18 +911,16 @@ public sealed class RemoteSupportHub : Hub
         Guid sessionId,
         int delta)
     {
-        var session =
-            await GetHumanSessionAsync(
-                sessionId,
-                "remote.manage");
+        var session = GetJoinedSessionAccess(
+            sessionId,
+            "remote.manage");
 
         if (!session.AllowMouse)
         {
             return;
         }
 
-        await RequireControlLeaseAsync(
-            session);
+        RequireCachedControlLease(session);
 
         delta =
             Math.Clamp(
@@ -1146,7 +932,7 @@ public sealed class RemoteSupportHub : Hub
             .Group(
                 HostGroup(
                     session.OrganizationId,
-                    session.Id))
+                    session.SessionId))
             .SendAsync(
                 "PointerWheel",
                 delta);
@@ -1163,18 +949,16 @@ public sealed class RemoteSupportHub : Hub
         int virtualKey,
         bool keyDown)
     {
-        var session =
-            await GetHumanSessionAsync(
-                sessionId,
-                "remote.manage");
+        var session = GetJoinedSessionAccess(
+            sessionId,
+            "remote.manage");
 
         if (!session.AllowKeyboard)
         {
             return;
         }
 
-        await RequireControlLeaseAsync(
-            session);
+        RequireCachedControlLease(session);
 
         if (
             virtualKey is
@@ -1188,7 +972,7 @@ public sealed class RemoteSupportHub : Hub
             .Group(
                 HostGroup(
                     session.OrganizationId,
-                    session.Id))
+                    session.SessionId))
             .SendAsync(
                 "Keyboard",
                 virtualKey,
@@ -1263,6 +1047,34 @@ public sealed class RemoteSupportHub : Hub
         return session;
     }
 
+    private RemoteSessionAccessState GetJoinedSessionAccess(
+        Guid sessionId,
+        string permission)
+    {
+        RequireHumanPermission(permission);
+
+        if (!_connections.TryGetJoinedSession(
+                Context.ConnectionId,
+                sessionId,
+                out var session))
+        {
+            throw new HubException(
+                "La conexión no está unida a la sesión remota.");
+        }
+
+        if (session.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            _connections.LeaveSession(
+                Context.ConnectionId,
+                sessionId);
+
+            throw new HubException(
+                "La sesión remota expiró.");
+        }
+
+        return session;
+    }
+
     /*
      * ============================================================
      * PARTICIPANTS
@@ -1318,6 +1130,12 @@ public sealed class RemoteSupportHub : Hub
         Guid userId,
         string displayName)
     {
+        await using var sessionLock =
+            await _connections.LockSessionAsync(
+                organizationId,
+                sessionId,
+                Context.ConnectionAborted);
+
         var participant =
             await _dbContext
                 .RemoteSessionParticipants
@@ -1375,6 +1193,13 @@ public sealed class RemoteSupportHub : Hub
 
         await _dbContext
             .SaveChangesAsync();
+
+        if (lease is not null)
+        {
+            _connections.RemoveControlLease(
+                organizationId,
+                sessionId);
+        }
     }
 
     /*
@@ -1386,118 +1211,53 @@ public sealed class RemoteSupportHub : Hub
     private async Task RequireControlLeaseAsync(
         RemoteSession session)
     {
-        var userId =
-            GetHumanUserId();
+        await _controlLeases.RequireOwnershipAsync(
+            session.OrganizationId,
+            session.Id,
+            GetHumanUserId(),
+            Context.ConnectionAborted);
+    }
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            session.OrganizationId
-                        &&
-                        x.RemoteSessionId ==
-                            session.Id);
-
-        if (lease is null)
+    private void RequireCachedControlLease(
+        RemoteSessionAccessState session)
+    {
+        if (!_connections.TryGetControlLease(
+                session.OrganizationId,
+                session.SessionId,
+                out var lease))
         {
             throw new HubException(
                 "La sesión está en modo solo lectura. Solicita el control para utilizar teclado o mouse.");
         }
 
-        if (
-            lease.ExpiresAtUtc <=
-            DateTime.UtcNow)
-        {
-            await RemoveExpiredControlLeaseAsync(
-                session.OrganizationId,
-                session.Id);
-
-            throw new HubException(
-                "El control remoto expiró. Solicita el control nuevamente.");
-        }
-
-        if (
-            lease.UserId !=
-            userId)
+        if (lease.UserId != GetHumanUserId())
         {
             throw new HubException(
                 $"La sesión está siendo controlada por {lease.DisplayName}.");
         }
     }
 
-    private async Task RemoveExpiredControlLeaseAsync(
-        Guid organizationId,
-        Guid sessionId)
-    {
-        var expired =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.ExpiresAtUtc <=
-                            DateTime.UtcNow);
-
-        if (expired is null)
-        {
-            return;
-        }
-
-        var participant =
-            await _dbContext
-                .RemoteSessionParticipants
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.UserId ==
-                            expired.UserId);
-
-        participant
-            ?.RevokeControl();
-
-        _dbContext
-            .RemoteSessionControlLeases
-            .Remove(
-                expired);
-
-        await _dbContext
-            .SaveChangesAsync();
-    }
-
     private async Task BroadcastControlStateAsync(
         Guid organizationId,
         Guid sessionId)
     {
-        await RemoveExpiredControlLeaseAsync(
+        var lease = await _controlLeases.GetStateAsync(
             organizationId,
-            sessionId);
+            sessionId,
+            Context.ConnectionAborted);
 
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId);
+        await BroadcastControlStateAsync(
+            organizationId,
+            sessionId,
+            lease);
+    }
 
-        if (lease is null)
+    private async Task BroadcastControlStateAsync(
+        Guid organizationId,
+        Guid sessionId,
+        RemoteControlLeaseState lease)
+    {
+        if (!lease.HasController)
         {
             await Clients
                 .Group(
@@ -1509,9 +1269,7 @@ public sealed class RemoteSupportHub : Hub
                     new
                     {
                         sessionId,
-
-                        hasController =
-                            false
+                        hasController = false
                     });
 
             return;
@@ -1527,17 +1285,11 @@ public sealed class RemoteSupportHub : Hub
                 new
                 {
                     sessionId,
-
-                    hasController =
-                        true,
-
-                    lease.UserId,
-
-                    lease.DisplayName,
-
-                    lease.AcquiredAtUtc,
-
-                    lease.ExpiresAtUtc
+                    hasController = lease.HasController,
+                    userId = lease.UserId,
+                    displayName = lease.DisplayName,
+                    acquiredAtUtc = lease.AcquiredAtUtc,
+                    expiresAtUtc = lease.ExpiresAtUtc
                 });
     }
 

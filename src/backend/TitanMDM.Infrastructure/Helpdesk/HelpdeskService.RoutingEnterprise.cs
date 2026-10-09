@@ -42,6 +42,8 @@ public sealed partial class HelpdeskService
                                 .Serializable,
                             cancellationToken);
 
+                await AcquireAutomaticAssignmentLockAsync(organizationId, cancellationToken);
+
                 // =================================================
                 // 1. FRESH TICKET
                 // =================================================
@@ -228,7 +230,9 @@ public sealed partial class HelpdeskService
                                     .SetProperty(
                                         x =>
                                             x.UpdatedAtUtc,
-                                        now),
+                                        now)
+                                    .SetProperty(x => x.SiteId, routing.SiteId)
+                                    .SetProperty(x => x.SiteLocationId, routing.SiteLocationId),
                             cancellationToken);
 
                 if (changed != 1)
@@ -279,7 +283,8 @@ public sealed partial class HelpdeskService
                         null,
                         "auto_assigned",
                         TrimSummary(
-                            summary)));
+                            summary),
+                        candidate.UserId));
 
                 await _db.SaveChangesAsync(
                     cancellationToken);
@@ -353,12 +358,18 @@ public sealed partial class HelpdeskService
          * Impide confundir la cuenta técnica del buzón
          * con el remitente real.
          */
-        return string.Equals(
+        if (string.Equals(
             requester.Email?
                 .Trim(),
             ticket.ExternalRequesterEmail
                 .Trim(),
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase)) return true;
+
+        var email = ticket.ExternalRequesterEmail.Trim().ToLowerInvariant();
+        return await _db.EntraDirectoryUsers.AsNoTracking().AnyAsync(x =>
+            x.OrganizationId == organizationId && x.IsActive &&
+            x.LinkedTitanUserId == ticket.RequesterUserId &&
+            (x.Mail == email || x.UserPrincipalName == email), cancellationToken);
     }
 
     // ============================================================
@@ -376,19 +387,8 @@ public sealed partial class HelpdeskService
         // Active account
         // --------------------------------------------------------
 
-        var technicianActive =
-            await _db.Users
-                .AsNoTracking()
-                .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.Id ==
-                            candidate.UserId
-                        &&
-                        x.IsActive,
-                    cancellationToken);
+        var technicianActive = await EligibleTechnicians(organizationId)
+            .AnyAsync(id => id == candidate.UserId, cancellationToken);
 
         if (!technicianActive)
         {

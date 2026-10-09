@@ -17,6 +17,8 @@ public sealed partial class HelpdeskService
                 System.Data.IsolationLevel.Serializable,
                 cancellationToken);
 
+            await AcquireAutomaticAssignmentLockAsync(organizationId, cancellationToken);
+
             var ticket = await _db.HelpdeskTickets.AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.OrganizationId == organizationId &&
@@ -69,7 +71,9 @@ public sealed partial class HelpdeskService
                 ticket.RequesterUserId,
                 ticket.Category,
                 cancellationToken,
-                ticket.RequestedTeamId);
+                ticket.RequestedTeamId,
+                ticket.SiteId,
+                ticket.SiteLocationId);
 
             if (result.Candidate is not { } next ||
                 next.UserId == previousId)
@@ -111,7 +115,8 @@ public sealed partial class HelpdeskService
                 ticketId,
                 null,
                 "auto_handover",
-                summary[..Math.Min(500, summary.Length)]);
+                summary[..Math.Min(500, summary.Length)],
+                next.UserId);
 
             _db.HelpdeskTicketEvents.Add(audit);
 
@@ -154,10 +159,8 @@ public sealed partial class HelpdeskService
         var matchingTeamIds = teams
             .Where(x =>
                 x.HandlesCategory(category) ||
-                (
-                    category == "general" &&
-                    string.IsNullOrWhiteSpace(x.Categories)
-                ))
+                NormalizeRoutingCategory(category) == "general" ||
+                string.IsNullOrWhiteSpace(x.Categories))
             .Select(x => x.Id)
             .ToArray();
 

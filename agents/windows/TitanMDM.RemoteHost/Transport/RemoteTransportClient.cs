@@ -1,4 +1,7 @@
+using System.Diagnostics;
+
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 
 using TitanMDM.RemoteHost.Capture;
 using TitanMDM.RemoteHost.Input;
@@ -9,6 +12,8 @@ namespace TitanMDM.RemoteHost.Transport;
 
 public sealed class RemoteTransportClient : IAsyncDisposable
 {
+    private const int TargetFrameIntervalMilliseconds = 60;
+
     private readonly RemoteHostSession _session;
     private readonly DesktopCaptureService _captureService;
     private readonly RemoteInputController _inputController;
@@ -50,6 +55,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             $"{_session.ServerUrl.TrimEnd('/')}/hubs/remote-support";
 
         var connection = new HubConnectionBuilder()
+            .AddMessagePackProtocol()
             .WithUrl(
                 hubUrl,
                 options =>
@@ -401,6 +407,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            var cycleStarted = Stopwatch.GetTimestamp();
             var connection = _connection;
 
             if (connection?.State !=
@@ -449,8 +456,12 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                         "DesktopCapture devolvió un frame vacío.");
                 }
 
-                var base64 =
-                    Convert.ToBase64String(frame.Data);
+                using var sendCancellation =
+                    CancellationTokenSource.CreateLinkedTokenSource(
+                        cancellationToken);
+
+                sendCancellation.CancelAfter(
+                    TimeSpan.FromSeconds(5));
 
                 await connection.InvokeAsync(
                     "PublishFrame",
@@ -459,12 +470,12 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                     frame.Width,
                     frame.Height,
                     frame.MimeType,
-                    base64,
+                    frame.Data,
                     frame.CapturedAtUtc,
                     frame.DisplayIndex,
                     frame.DisplayCount,
                     frame.DisplayLabel,
-                    cancellationToken);
+                    sendCancellation.Token);
 
                 _framesPublished++;
 
@@ -480,6 +491,17 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             {
                 break;
             }
+            catch (OperationCanceledException)
+            {
+                StatusChanged?.Invoke(
+                    "Frame descartado por congestión del canal");
+
+                await DelaySafeAsync(
+                    250,
+                    cancellationToken);
+
+                continue;
+            }
             catch (Exception ex)
             {
                 StatusChanged?.Invoke(
@@ -492,9 +514,18 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                 continue;
             }
 
-            await DelaySafeAsync(
-                110,
-                cancellationToken);
+            var elapsed = Stopwatch.GetElapsedTime(cycleStarted);
+            var delay = Math.Max(
+                0,
+                TargetFrameIntervalMilliseconds -
+                (int)elapsed.TotalMilliseconds);
+
+            if (delay > 0)
+            {
+                await DelaySafeAsync(
+                    delay,
+                    cancellationToken);
+            }
         }
     }
 

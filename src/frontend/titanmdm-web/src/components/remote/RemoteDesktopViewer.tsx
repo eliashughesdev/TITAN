@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useRef,
 } from 'react'
 
@@ -8,9 +9,10 @@ import type {
   MouseEvent,
   WheelEvent,
 } from 'react'
+import type { RemoteFrame } from '../../api/remoteSupportSignalR'
 
 interface RemoteDesktopViewerProps {
-  frameUrl: string | null;
+  frame: RemoteFrame | null;
   width?: number;
   height?: number;
   connected: boolean;
@@ -98,7 +100,7 @@ function getVirtualKey(
 }
 
 export default function RemoteDesktopViewer({
-  frameUrl,
+  frame,
   width,
   height,
   connected,
@@ -114,6 +116,59 @@ export default function RemoteDesktopViewer({
       null,
     );
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const pendingPointerRef = useRef<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const pointerTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (pointerTimerRef.current !== null) {
+      window.clearTimeout(pointerTimerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !frame) return;
+
+    let disposed = false;
+    let bitmap: ImageBitmap | null = null;
+
+    const render = async () => {
+      const bytes = new Uint8Array(frame.data.byteLength);
+      bytes.set(frame.data);
+
+      bitmap = await createImageBitmap(
+        new Blob([bytes], { type: frame.mimeType }),
+      );
+
+      if (disposed) {
+        bitmap.close();
+        return;
+      }
+
+      canvas.width = frame.width;
+      canvas.height = frame.height;
+      canvas.getContext('2d', { alpha: false })
+        ?.drawImage(bitmap, 0, 0, frame.width, frame.height);
+    };
+
+    void render().catch(error => {
+      if (!disposed) {
+        console.error('No fue posible decodificar el frame remoto.', error);
+      }
+    });
+
+    return () => {
+      disposed = true;
+      bitmap?.close();
+    };
+  }, [frame]);
+
   const calculatePosition =
     useCallback(
       (
@@ -124,19 +179,39 @@ export default function RemoteDesktopViewer({
           event.currentTarget
             .getBoundingClientRect();
 
-        return {
-          x:
-            (event.clientX -
-              rect.left) /
-            rect.width,
+        if (!width || !height) {
+          return {
+            x: (event.clientX - rect.left) / rect.width,
+            y: (event.clientY - rect.top) / rect.height,
+          };
+        }
 
-          y:
-            (event.clientY -
-              rect.top) /
-            rect.height,
+        const scale = Math.min(
+          rect.width / width,
+          rect.height / height,
+        );
+        const renderedWidth = width * scale;
+        const renderedHeight = height * scale;
+        const offsetX = (rect.width - renderedWidth) / 2;
+        const offsetY = (rect.height - renderedHeight) / 2;
+        const localX = event.clientX - rect.left - offsetX;
+        const localY = event.clientY - rect.top - offsetY;
+
+        if (
+          localX < 0 ||
+          localY < 0 ||
+          localX > renderedWidth ||
+          localY > renderedHeight
+        ) {
+          return null;
+        }
+
+        return {
+          x: localX / renderedWidth,
+          y: localY / renderedHeight,
         };
       },
-      [],
+      [height, width],
     );
 
   const handleMouseMove =
@@ -157,10 +232,21 @@ export default function RemoteDesktopViewer({
             event,
           );
 
-        onPointerMove(
-          position.x,
-          position.y,
-        );
+        if (!position) return;
+
+        pendingPointerRef.current = position;
+
+        if (pointerTimerRef.current !== null) return;
+
+        pointerTimerRef.current = window.setTimeout(() => {
+          pointerTimerRef.current = null;
+          const latest = pendingPointerRef.current;
+          pendingPointerRef.current = null;
+
+          if (latest) {
+            onPointerMove(latest.x, latest.y);
+          }
+        }, 33);
       },
       [
         connected,
@@ -187,6 +273,11 @@ export default function RemoteDesktopViewer({
 
         containerRef.current?.focus();
 
+        const position = calculatePosition(event);
+        if (!position) return;
+
+        onPointerMove(position.x, position.y);
+
         if (event.button === 0) {
           onPointerButton(
             "left-down",
@@ -202,6 +293,8 @@ export default function RemoteDesktopViewer({
       [
         connected,
         allowMouse,
+        calculatePosition,
+        onPointerMove,
         onPointerButton,
       ],
     );
@@ -384,11 +477,11 @@ export default function RemoteDesktopViewer({
             : "not-allowed",
       }}
     >
-      {frameUrl ? (
-        <img
-          src={frameUrl}
-          alt="Escritorio remoto"
-          draggable={false}
+      {frame ? (
+        <canvas
+          ref={canvasRef}
+          aria-label="Escritorio remoto"
+          role="img"
           style={{
             width: "100%",
             height: "100%",

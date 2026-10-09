@@ -42,6 +42,7 @@ public sealed partial class HelpdeskService
 
             try
             {
+                await AcquireAutomaticAssignmentLockAsync(org, ct);
                 if (!await _db.Users.AnyAsync(x =>
                     x.Id == actor &&
                     x.OrganizationId == org &&
@@ -63,9 +64,7 @@ public sealed partial class HelpdeskService
                         "Selecciona una categoría del grupo activo elegido.");
                 }
 
-                var number =
-                    $"HD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]
-                        .ToUpperInvariant();
+                var number = await _ticketNumbers.NextAsync(ct);
 
                 var ticket = new HelpdeskTicket(
                     org,
@@ -112,7 +111,8 @@ public sealed partial class HelpdeskService
                         null,
                         "auto_assigned",
                         evaluation.Reason[
-                            ..Math.Min(500, evaluation.Reason.Length)]));
+                            ..Math.Min(500, evaluation.Reason.Length)],
+                        candidate.UserId));
                 }
                 else
                 {
