@@ -41,7 +41,7 @@ public sealed class DevicesController
     }
 
     // ============================================================
-    // GLOBAL DEVICE LIST
+    // LIST
     // ============================================================
 
     [HttpGet]
@@ -64,31 +64,12 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        var securityContext =
+        var context =
             GetSecurityContext();
 
-        if (securityContext is null)
+        if (context is null)
         {
             return Unauthorized();
-        }
-
-        /*
-         * La consulta global solamente está disponible
-         * para Organization scope.
-         *
-         * Usuarios limitados a Sites utilizarán
-         * /api/sites/{siteId}/operations/...
-         */
-        var organizationWide =
-            await _scopeAccessService
-                .HasOrganizationScopeAsync(
-                    securityContext.Value.OrganizationId,
-                    securityContext.Value.UserId,
-                    cancellationToken);
-
-        if (!organizationWide)
-        {
-            return Forbid();
         }
 
         var hasWindowsAccess =
@@ -129,7 +110,8 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 normalizedPlatform))
         {
             if (
@@ -150,10 +132,46 @@ public sealed class DevicesController
             }
         }
 
+        /*
+         * ========================================================
+         * SCOPE
+         * ========================================================
+         */
+
+        var organizationWide =
+            await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken);
+
+        IReadOnlyCollection<Guid>?
+            accessibleSiteIds =
+                null;
+
+        if (!organizationWide)
+        {
+            accessibleSiteIds =
+                await _scopeAccessService
+                    .GetAccessibleSiteIdsAsync(
+                        context.Value.OrganizationId,
+                        context.Value.UserId,
+                        cancellationToken);
+        }
+
+        /*
+         * Nunca devolvemos 403 solamente porque el usuario
+         * sea Site-scoped.
+         *
+         * Si no tiene Sites:
+         * devuelve una lista vacía.
+         */
+
         var result =
             await _deviceQueryService
                 .GetDevicesAsync(
-                    securityContext.Value.OrganizationId,
+                    context.Value.OrganizationId,
+                    accessibleSiteIds,
                     search,
                     normalizedPlatform,
                     status,
@@ -170,7 +188,7 @@ public sealed class DevicesController
     }
 
     // ============================================================
-    // DEVICE DETAILS
+    // DETAILS
     // ============================================================
 
     [HttpGet("{deviceId:guid}")]
@@ -185,10 +203,10 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        var securityContext =
+        var context =
             GetSecurityContext();
 
-        if (securityContext is null)
+        if (context is null)
         {
             return Unauthorized();
         }
@@ -196,8 +214,8 @@ public sealed class DevicesController
         if (
             !await _scopeAccessService
                 .CanAccessDeviceAsync(
-                    securityContext.Value.OrganizationId,
-                    securityContext.Value.UserId,
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
                     deviceId,
                     cancellationToken))
         {
@@ -207,7 +225,7 @@ public sealed class DevicesController
         var device =
             await _deviceQueryService
                 .GetDeviceByIdAsync(
-                    securityContext.Value.OrganizationId,
+                    context.Value.OrganizationId,
                     deviceId,
                     cancellationToken);
 
@@ -264,10 +282,10 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        var securityContext =
+        var context =
             GetSecurityContext();
 
-        if (securityContext is null)
+        if (context is null)
         {
             return Unauthorized();
         }
@@ -275,8 +293,8 @@ public sealed class DevicesController
         if (
             !await _scopeAccessService
                 .CanAccessDeviceAsync(
-                    securityContext.Value.OrganizationId,
-                    securityContext.Value.UserId,
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
                     deviceId,
                     cancellationToken))
         {
@@ -286,17 +304,18 @@ public sealed class DevicesController
         var android =
             await _deviceQueryService
                 .GetAndroidDeviceDetailsAsync(
-                    securityContext.Value.OrganizationId,
+                    context.Value.OrganizationId,
                     deviceId,
                     cancellationToken);
 
         return android is null
             ? NotFound()
-            : Ok(android);
+            : Ok(
+                android);
     }
 
     // ============================================================
-    // OPERATIONAL SNAPSHOT
+    // SNAPSHOT
     // ============================================================
 
     [HttpGet("{deviceId:guid}/snapshot")]
@@ -311,10 +330,10 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        var securityContext =
+        var context =
             GetSecurityContext();
 
-        if (securityContext is null)
+        if (context is null)
         {
             return Unauthorized();
         }
@@ -322,8 +341,8 @@ public sealed class DevicesController
         if (
             !await _scopeAccessService
                 .CanAccessDeviceAsync(
-                    securityContext.Value.OrganizationId,
-                    securityContext.Value.UserId,
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
                     deviceId,
                     cancellationToken))
         {
@@ -333,7 +352,7 @@ public sealed class DevicesController
         var snapshot =
             await _deviceQueryService
                 .GetOperationalSnapshotAsync(
-                    securityContext.Value.OrganizationId,
+                    context.Value.OrganizationId,
                     deviceId,
                     cancellationToken);
 
@@ -374,7 +393,8 @@ public sealed class DevicesController
         NormalizePlatform(
             string? platform)
     {
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 platform))
         {
             return null;
@@ -405,14 +425,14 @@ public sealed class DevicesController
     private SecurityContext?
         GetSecurityContext()
     {
-        var organizationValue =
+        var organizationText =
             User.FindFirstValue(
                 "organization_id")
             ??
             User.FindFirstValue(
                 "organizationId");
 
-        var userValue =
+        var userText =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)
             ??
@@ -421,11 +441,11 @@ public sealed class DevicesController
 
         if (
             !Guid.TryParse(
-                organizationValue,
+                organizationText,
                 out var organizationId)
             ||
             !Guid.TryParse(
-                userValue,
+                userText,
                 out var userId))
         {
             return null;

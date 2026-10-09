@@ -16,6 +16,7 @@ public interface IApplicationInventoryService
     Task<IReadOnlyCollection<ApplicationSummaryDto>>
         GetApplicationsAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             string? search,
             bool? systemApp,
             CancellationToken cancellationToken = default);

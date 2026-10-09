@@ -2,9 +2,11 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Api.RemoteSupport;
+using TitanMDM.Application.Security;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
@@ -26,6 +28,9 @@ public sealed class RemoteSessionsController
     private readonly RemoteSupportConnectionRegistry
         _connections;
 
+    private readonly IScopeAccessService
+        _scopeAccessService;
+
     private readonly ILogger<
         RemoteSessionsController>
         _logger;
@@ -34,6 +39,7 @@ public sealed class RemoteSessionsController
         TitanMdmDbContext dbContext,
         RemoteControlLeaseService controlLeases,
         RemoteSupportConnectionRegistry connections,
+        IScopeAccessService scopeAccessService,
         ILogger<RemoteSessionsController> logger)
     {
         _dbContext =
@@ -45,21 +51,21 @@ public sealed class RemoteSessionsController
         _connections =
             connections;
 
+        _scopeAccessService =
+            scopeAccessService;
+
         _logger =
             logger;
     }
 
-    /*
-     * ============================================================
-     * LIST
-     * ============================================================
-     */
+    // ============================================================
+    // LIST
+    // ============================================================
 
     [HttpGet]
     public async Task<ActionResult>
         GetSessions(
-            [FromQuery]
-            int take = 50,
+            [FromQuery] int take = 50,
             CancellationToken cancellationToken = default)
     {
         if (!HasPermission(
@@ -68,8 +74,13 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
+
+        if (context is null)
+        {
+            return Unauthorized();
+        }
 
         take =
             Math.Clamp(
@@ -77,68 +88,137 @@ public sealed class RemoteSessionsController
                 1,
                 200);
 
-        var sessions =
-            await _dbContext
+        var scope =
+            await _scopeAccessService
+                .GetScopeSnapshotAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken);
+
+        var query =
+            _dbContext
                 .RemoteSessions
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId)
+                    session =>
+                        session.OrganizationId ==
+                            context.Value.OrganizationId);
+
+        /*
+         * Organization scope:
+         * ve todas las sesiones.
+         *
+         * Site scope:
+         * solamente sesiones cuyos Devices pertenecen
+         * a localidades autorizadas.
+         *
+         * Sin scope:
+         * consulta válida pero vacía.
+         */
+
+        if (!scope.OrganizationWide)
+        {
+            var siteIds =
+                scope
+                    .SiteIds
+                    .Where(
+                        id =>
+                            id != Guid.Empty)
+                    .Distinct()
+                    .ToArray();
+
+            if (
+                siteIds.Length ==
+                0)
+            {
+                query =
+                    query.Where(
+                        _ =>
+                            false);
+            }
+            else
+            {
+                query =
+                    query.Where(
+                        session =>
+                            _dbContext
+                                .Devices
+                                .Any(
+                                    device =>
+                                        device.Id ==
+                                            session.DeviceId
+                                        &&
+                                        device.OrganizationId ==
+                                            context.Value.OrganizationId
+                                        &&
+                                        !device.IsDeleted
+                                        &&
+                                        device.SiteId.HasValue
+                                        &&
+                                        siteIds.Contains(
+                                            device.SiteId.Value)));
+            }
+        }
+
+        var sessions =
+            await query
                 .OrderByDescending(
-                    x =>
-                        x.RequestedAtUtc)
-                .Take(take)
+                    session =>
+                        session.RequestedAtUtc)
+                .Take(
+                    take)
                 .Select(
-                    x => new
-                    {
-                        x.Id,
-                        x.DeviceId,
-                        x.RequestedByUserId,
-                        x.TechnicianName,
-                        x.Reason,
+                    session =>
+                        new
+                        {
+                            session.Id,
+                            session.DeviceId,
+                            session.RequestedByUserId,
+                            session.TechnicianName,
+                            session.Reason,
 
-                        status =
-                            x.Status.ToString(),
+                            status =
+                                session.Status
+                                    .ToString(),
 
-                        x.AllowKeyboard,
-                        x.AllowMouse,
-                        x.AllowClipboard,
-                        x.AllowFileTransfer,
+                            session.AllowKeyboard,
+                            session.AllowMouse,
+                            session.AllowClipboard,
+                            session.AllowFileTransfer,
 
-                        x.RequestedAtUtc,
-                        x.ExpiresAtUtc,
-                        x.ConnectedAtUtc,
-                        x.DisconnectedAtUtc,
+                            session.RequestedAtUtc,
+                            session.ExpiresAtUtc,
+                            session.ConnectedAtUtc,
+                            session.DisconnectedAtUtc,
 
-                        x.FailureReason,
-                        x.TerminationReason,
-                        x.TerminatedBy,
+                            session.FailureReason,
+                            session.TerminationReason,
+                            session.TerminatedBy,
 
-                        participantCount =
-                            _dbContext
-                                .RemoteSessionParticipants
-                                .Count(
-                                    participant =>
-                                        participant.RemoteSessionId ==
-                                            x.Id
-                                        &&
-                                        participant.OrganizationId ==
-                                            organizationId),
+                            participantCount =
+                                _dbContext
+                                    .RemoteSessionParticipants
+                                    .Count(
+                                        participant =>
+                                            participant.RemoteSessionId ==
+                                                session.Id
+                                            &&
+                                            participant.OrganizationId ==
+                                                context.Value.OrganizationId),
 
-                        connectedParticipants =
-                            _dbContext
-                                .RemoteSessionParticipants
-                                .Count(
-                                    participant =>
-                                        participant.RemoteSessionId ==
-                                            x.Id
-                                        &&
-                                        participant.OrganizationId ==
-                                            organizationId
-                                        &&
-                                        participant.IsConnected)
-                    })
+                            connectedParticipants =
+                                _dbContext
+                                    .RemoteSessionParticipants
+                                    .Count(
+                                        participant =>
+                                            participant.RemoteSessionId ==
+                                                session.Id
+                                            &&
+                                            participant.OrganizationId ==
+                                                context.Value.OrganizationId
+                                            &&
+                                            participant.IsConnected)
+                        })
                 .ToListAsync(
                     cancellationToken);
 
@@ -146,11 +226,9 @@ public sealed class RemoteSessionsController
             sessions);
     }
 
-    /*
-     * ============================================================
-     * DETAIL
-     * ============================================================
-     */
+    // ============================================================
+    // DETAIL
+    // ============================================================
 
     [HttpGet("{sessionId:guid}")]
     public async Task<ActionResult>
@@ -164,20 +242,25 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
+
+        if (context is null)
+        {
+            return Unauthorized();
+        }
 
         var session =
             await _dbContext
                 .RemoteSessions
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    x =>
-                        x.Id ==
+                    item =>
+                        item.Id ==
                             sessionId
                         &&
-                        x.OrganizationId ==
-                            organizationId,
+                        item.OrganizationId ==
+                            context.Value.OrganizationId,
                     cancellationToken);
 
         if (session is null)
@@ -185,30 +268,40 @@ public sealed class RemoteSessionsController
             return NotFound();
         }
 
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
         var events =
             await _dbContext
                 .RemoteSessionEvents
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.RemoteSessionId ==
+                    item =>
+                        item.RemoteSessionId ==
                             sessionId
                         &&
-                        x.OrganizationId ==
-                            organizationId)
+                        item.OrganizationId ==
+                            context.Value.OrganizationId)
                 .OrderBy(
-                    x =>
-                        x.OccurredAtUtc)
+                    item =>
+                        item.OccurredAtUtc)
                 .Select(
-                    x => new
-                    {
-                        x.Id,
-                        x.EventType,
-                        x.Description,
-                        x.UserId,
-                        x.MetadataJson,
-                        x.OccurredAtUtc
-                    })
+                    item =>
+                        new
+                        {
+                            item.Id,
+                            item.EventType,
+                            item.Description,
+                            item.UserId,
+                            item.MetadataJson,
+                            item.OccurredAtUtc
+                        })
                 .ToListAsync(
                     cancellationToken);
 
@@ -217,27 +310,28 @@ public sealed class RemoteSessionsController
                 .RemoteSessionParticipants
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.RemoteSessionId ==
+                    item =>
+                        item.RemoteSessionId ==
                             sessionId
                         &&
-                        x.OrganizationId ==
-                            organizationId)
+                        item.OrganizationId ==
+                            context.Value.OrganizationId)
                 .OrderBy(
-                    x =>
-                        x.JoinedAtUtc)
+                    item =>
+                        item.JoinedAtUtc)
                 .Select(
-                    x => new
-                    {
-                        x.Id,
-                        x.UserId,
-                        x.DisplayName,
-                        x.CanControl,
-                        x.IsConnected,
-                        x.JoinedAtUtc,
-                        x.ConnectedAtUtc,
-                        x.DisconnectedAtUtc
-                    })
+                    item =>
+                        new
+                        {
+                            item.Id,
+                            item.UserId,
+                            item.DisplayName,
+                            item.CanControl,
+                            item.IsConnected,
+                            item.JoinedAtUtc,
+                            item.ConnectedAtUtc,
+                            item.DisconnectedAtUtc
+                        })
                 .ToListAsync(
                     cancellationToken);
 
@@ -246,24 +340,25 @@ public sealed class RemoteSessionsController
                 .RemoteSessionControlLeases
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.RemoteSessionId ==
+                    item =>
+                        item.RemoteSessionId ==
                             sessionId
                         &&
-                        x.OrganizationId ==
-                            organizationId
+                        item.OrganizationId ==
+                            context.Value.OrganizationId
                         &&
-                        x.ExpiresAtUtc >
+                        item.ExpiresAtUtc >
                             DateTime.UtcNow)
                 .Select(
-                    x => new
-                    {
-                        x.Id,
-                        x.UserId,
-                        x.DisplayName,
-                        x.AcquiredAtUtc,
-                        x.ExpiresAtUtc
-                    })
+                    item =>
+                        new
+                        {
+                            item.Id,
+                            item.UserId,
+                            item.DisplayName,
+                            item.AcquiredAtUtc,
+                            item.ExpiresAtUtc
+                        })
                 .FirstOrDefaultAsync(
                     cancellationToken);
 
@@ -277,7 +372,8 @@ public sealed class RemoteSessionsController
                 session.Reason,
 
                 status =
-                    session.Status.ToString(),
+                    session.Status
+                        .ToString(),
 
                 session.AllowKeyboard,
                 session.AllowMouse,
@@ -294,18 +390,14 @@ public sealed class RemoteSessionsController
                 session.TerminatedBy,
 
                 participants,
-
                 controlLease,
-
                 events
             });
     }
 
-    /*
-     * ============================================================
-     * CREATE OR JOIN
-     * ============================================================
-     */
+    // ============================================================
+    // CREATE OR JOIN
+    // ============================================================
 
     [HttpPost]
     public async Task<ActionResult>
@@ -344,29 +436,52 @@ public sealed class RemoteSessionsController
                 });
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        var userId =
-            GetUserId();
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        /*
+         * Scope se valida ANTES de cargar/operar el Device.
+         */
+
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    request.DeviceId,
+                    cancellationToken))
+        {
+            _logger.LogWarning(
+                "Remote Support scope denied. User={UserId}, Device={DeviceId}, Organization={OrganizationId}.",
+                context.Value.UserId,
+                request.DeviceId,
+                context.Value.OrganizationId);
+
+            return Forbid();
+        }
 
         var technicianName =
             GetTechnicianName(
-                userId);
+                context.Value.UserId);
 
         var device =
             await _dbContext
                 .Devices
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    x =>
-                        x.Id ==
+                    item =>
+                        item.Id ==
                             request.DeviceId
                         &&
-                        x.OrganizationId ==
-                            organizationId
+                        item.OrganizationId ==
+                            context.Value.OrganizationId
                         &&
-                        !x.IsDeleted,
+                        !item.IsDeleted,
                     cancellationToken);
 
         if (device is null)
@@ -387,7 +502,7 @@ public sealed class RemoteSessionsController
                 new
                 {
                     message =
-                        "El control remoto interactivo de este bloque está disponible para Windows."
+                        "El control remoto interactivo está disponible actualmente para Windows."
                 });
         }
 
@@ -405,34 +520,30 @@ public sealed class RemoteSessionsController
          * ========================================================
          * MULTI TECHNICIAN
          * ========================================================
-         *
-         * Si ya existe una sesión activa para este dispositivo,
-         * NO creamos otro RemoteHost ni otro stream.
-         *
-         * El técnico se añade como participante.
          */
 
         var existingSession =
             await FindActiveSessionAsync(
-                organizationId,
+                context.Value.OrganizationId,
                 request.DeviceId,
                 cancellationToken);
 
-        if (existingSession is not null)
+        if (
+            existingSession is not null)
         {
             await EnsureParticipantAsync(
-                organizationId,
+                context.Value.OrganizationId,
                 existingSession.Id,
-                userId,
+                context.Value.UserId,
                 technicianName,
                 cancellationToken);
 
             AddEvent(
-                organizationId,
+                context.Value.OrganizationId,
                 existingSession.Id,
                 "PARTICIPANT_JOIN_REQUESTED",
                 $"{technicianName} se incorporó a la sesión remota existente.",
-                userId);
+                context.Value.UserId);
 
             await _dbContext
                 .SaveChangesAsync(
@@ -440,7 +551,7 @@ public sealed class RemoteSessionsController
 
             _logger.LogInformation(
                 "Technician {UserId} joined existing remote session {SessionId} for device {DeviceId}.",
-                userId,
+                context.Value.UserId,
                 existingSession.Id,
                 device.Id);
 
@@ -465,9 +576,9 @@ public sealed class RemoteSessionsController
 
         var session =
             new RemoteSession(
-                organizationId,
+                context.Value.OrganizationId,
                 device.Id,
-                userId,
+                context.Value.UserId,
                 technicianName,
                 request.Reason.Trim(),
                 request.AllowKeyboard,
@@ -482,33 +593,30 @@ public sealed class RemoteSessionsController
             .Add(
                 session);
 
-        var participant =
-            new RemoteSessionParticipant(
-                organizationId,
-                session.Id,
-                userId,
-                technicianName,
-                canControl:
-                    true);
-
         _dbContext
             .RemoteSessionParticipants
             .Add(
-                participant);
+                new RemoteSessionParticipant(
+                    context.Value.OrganizationId,
+                    session.Id,
+                    context.Value.UserId,
+                    technicianName,
+                    canControl:
+                        true));
 
         AddEvent(
-            organizationId,
+            context.Value.OrganizationId,
             session.Id,
             "SESSION_REQUESTED",
             $"Sesión remota solicitada por {technicianName}.",
-            userId);
+            context.Value.UserId);
 
         AddEvent(
-            organizationId,
+            context.Value.OrganizationId,
             session.Id,
             "PARTICIPANT_ADDED",
             $"{technicianName} fue agregado como participante inicial.",
-            userId);
+            context.Value.UserId);
 
         await _dbContext
             .SaveChangesAsync(
@@ -518,10 +626,11 @@ public sealed class RemoteSessionsController
             "Remote session {SessionId} created for device {DeviceId} by user {UserId}.",
             session.Id,
             device.Id,
-            userId);
+            context.Value.UserId);
 
         return CreatedAtAction(
-            nameof(GetSession),
+            nameof(
+                GetSession),
             new
             {
                 sessionId =
@@ -533,11 +642,9 @@ public sealed class RemoteSessionsController
                     false));
     }
 
-    /*
-     * ============================================================
-     * PARTICIPANTS
-     * ============================================================
-     */
+    // ============================================================
+    // PARTICIPANTS
+    // ============================================================
 
     [HttpGet("{sessionId:guid}/participants")]
     public async Task<ActionResult>
@@ -551,16 +658,32 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (
-            !await SessionExistsAsync(
-                organizationId,
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        var session =
+            await GetSessionForAccessAsync(
+                context.Value,
                 sessionId,
-                cancellationToken))
+                cancellationToken);
+
+        if (session is null)
         {
             return NotFound();
+        }
+
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
         }
 
         var participants =
@@ -568,30 +691,31 @@ public sealed class RemoteSessionsController
                 .RemoteSessionParticipants
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
+                    item =>
+                        item.OrganizationId ==
+                            context.Value.OrganizationId
                         &&
-                        x.RemoteSessionId ==
+                        item.RemoteSessionId ==
                             sessionId)
                 .OrderByDescending(
-                    x =>
-                        x.IsConnected)
+                    item =>
+                        item.IsConnected)
                 .ThenBy(
-                    x =>
-                        x.JoinedAtUtc)
+                    item =>
+                        item.JoinedAtUtc)
                 .Select(
-                    x => new
-                    {
-                        x.Id,
-                        x.UserId,
-                        x.DisplayName,
-                        x.CanControl,
-                        x.IsConnected,
-                        x.JoinedAtUtc,
-                        x.ConnectedAtUtc,
-                        x.DisconnectedAtUtc
-                    })
+                    item =>
+                        new
+                        {
+                            item.Id,
+                            item.UserId,
+                            item.DisplayName,
+                            item.CanControl,
+                            item.IsConnected,
+                            item.JoinedAtUtc,
+                            item.ConnectedAtUtc,
+                            item.DisconnectedAtUtc
+                        })
                 .ToListAsync(
                     cancellationToken);
 
@@ -599,11 +723,9 @@ public sealed class RemoteSessionsController
             participants);
     }
 
-    /*
-     * ============================================================
-     * CONTROL LEASE
-     * ============================================================
-     */
+    // ============================================================
+    // CONTROL STATE
+    // ============================================================
 
     [HttpGet("{sessionId:guid}/control")]
     public async Task<ActionResult>
@@ -617,45 +739,51 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (
-            !await SessionExistsAsync(
-                organizationId,
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        var session =
+            await GetSessionForAccessAsync(
+                context.Value,
                 sessionId,
-                cancellationToken))
+                cancellationToken);
+
+        if (session is null)
         {
             return NotFound();
         }
 
-        var lease = await _controlLeases.GetStateAsync(
-            organizationId,
-            sessionId,
-            cancellationToken);
-
-        if (!lease.HasController)
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
         {
-            return Ok(
-                new
-                {
-                    hasController =
-                        false
-                });
+            return Forbid();
         }
 
-        return Ok(
-            new
-            {
-                hasController =
-                    true,
+        var lease =
+            await _controlLeases
+                .GetStateAsync(
+                    context.Value.OrganizationId,
+                    sessionId,
+                    cancellationToken);
 
-                userId = lease.UserId,
-                displayName = lease.DisplayName,
-                acquiredAtUtc = lease.AcquiredAtUtc,
-                expiresAtUtc = lease.ExpiresAtUtc
-            });
+        return Ok(
+            BuildLeaseResponse(
+                lease,
+                lease.UserId ==
+                    context.Value.UserId));
     }
+
+    // ============================================================
+    // ACQUIRE CONTROL
+    // ============================================================
 
     [HttpPost("{sessionId:guid}/control/acquire")]
     public async Task<ActionResult>
@@ -669,25 +797,27 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        var userId =
-            GetUserId();
+        if (context is null)
+        {
+            return Unauthorized();
+        }
 
-        var technicianName =
-            GetTechnicianName(
-                userId);
-
-        await using var sessionLock =
-            await _connections.LockSessionAsync(
-                organizationId,
-                sessionId,
-                cancellationToken);
+        /*
+         * IMPORTANTE:
+         *
+         * No tomamos aquí RemoteSupportConnectionRegistry.SessionLock.
+         *
+         * RemoteControlLeaseService es la autoridad del lock.
+         *
+         * Esto evita el double-lock/deadlock anterior.
+         */
 
         var session =
             await GetActiveSessionAsync(
-                organizationId,
+                context.Value.OrganizationId,
                 sessionId,
                 cancellationToken);
 
@@ -696,14 +826,26 @@ public sealed class RemoteSessionsController
             return NotFound();
         }
 
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
         try
         {
-            var lease = await _controlLeases.AcquireAsync(
-                organizationId,
-                sessionId,
-                userId,
-                technicianName,
-                cancellationToken);
+            var lease =
+                await _controlLeases
+                    .AcquireAsync(
+                        context.Value.OrganizationId,
+                        sessionId,
+                        context.Value.UserId,
+                        GetTechnicianName(
+                            context.Value.UserId),
+                        cancellationToken);
 
             return Ok(
                 BuildLeaseResponse(
@@ -711,15 +853,21 @@ public sealed class RemoteSessionsController
                     ownedByCurrentUser:
                         true));
         }
-        catch (Microsoft.AspNetCore.SignalR.HubException exception)
+        catch (
+            HubException exception)
         {
             return Conflict(
                 new
                 {
-                    message = exception.Message
+                    message =
+                        exception.Message
                 });
         }
     }
+
+    // ============================================================
+    // RENEW CONTROL
+    // ============================================================
 
     [HttpPost("{sessionId:guid}/control/renew")]
     public async Task<ActionResult>
@@ -733,27 +881,64 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        var userId =
-            GetUserId();
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        var session =
+            await GetActiveSessionAsync(
+                context.Value.OrganizationId,
+                sessionId,
+                cancellationToken);
+
+        if (session is null)
+        {
+            return NotFound();
+        }
+
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
 
         try
         {
-            var lease = await _controlLeases.RenewAsync(
-                organizationId,
-                sessionId,
-                userId,
-                cancellationToken);
+            var lease =
+                await _controlLeases
+                    .RenewAsync(
+                        context.Value.OrganizationId,
+                        sessionId,
+                        context.Value.UserId,
+                        cancellationToken);
 
-            return Ok(BuildLeaseResponse(lease, true));
+            return Ok(
+                BuildLeaseResponse(
+                    lease,
+                    true));
         }
-        catch (Microsoft.AspNetCore.SignalR.HubException exception)
+        catch (
+            HubException exception)
         {
-            return Conflict(new { message = exception.Message });
+            return Conflict(
+                new
+                {
+                    message =
+                        exception.Message
+                });
         }
     }
+
+    // ============================================================
+    // RELEASE CONTROL
+    // ============================================================
 
     [HttpPost("{sessionId:guid}/control/release")]
     public async Task<ActionResult>
@@ -767,31 +952,54 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        var userId =
-            GetUserId();
+        if (context is null)
+        {
+            return Unauthorized();
+        }
 
-        var technicianName =
-            GetTechnicianName(
-                userId);
+        var session =
+            await GetSessionForAccessAsync(
+                context.Value,
+                sessionId,
+                cancellationToken);
 
-        var released = await _controlLeases.ReleaseAsync(
-            organizationId,
-            sessionId,
-            userId,
-            technicianName,
-            cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
 
-        return Ok(new { released });
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var released =
+            await _controlLeases
+                .ReleaseAsync(
+                    context.Value.OrganizationId,
+                    sessionId,
+                    context.Value.UserId,
+                    GetTechnicianName(
+                        context.Value.UserId),
+                    cancellationToken);
+
+        return Ok(
+            new
+            {
+                released
+            });
     }
 
-    /*
-     * ============================================================
-     * TERMINATE
-     * ============================================================
-     */
+    // ============================================================
+    // TERMINATE
+    // ============================================================
 
     [HttpPost("{sessionId:guid}/terminate")]
     public async Task<ActionResult>
@@ -807,32 +1015,43 @@ public sealed class RemoteSessionsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        var userId =
-            GetUserId();
-
-        var technicianName =
-            GetTechnicianName(
-                userId);
+        if (context is null)
+        {
+            return Unauthorized();
+        }
 
         var session =
             await _dbContext
                 .RemoteSessions
                 .FirstOrDefaultAsync(
-                    x =>
-                        x.Id ==
+                    item =>
+                        item.Id ==
                             sessionId
                         &&
-                        x.OrganizationId ==
-                            organizationId,
+                        item.OrganizationId ==
+                            context.Value.OrganizationId,
                     cancellationToken);
 
         if (session is null)
         {
             return NotFound();
         }
+
+        if (
+            !await CanAccessSessionDeviceAsync(
+                context.Value,
+                session.DeviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var technicianName =
+            GetTechnicianName(
+                context.Value.UserId);
 
         session.Complete(
             technicianName,
@@ -844,11 +1063,11 @@ public sealed class RemoteSessionsController
             await _dbContext
                 .RemoteSessionControlLeases
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
+                    item =>
+                        item.OrganizationId ==
+                            context.Value.OrganizationId
                         &&
-                        x.RemoteSessionId ==
+                        item.RemoteSessionId ==
                             sessionId)
                 .ToListAsync(
                     cancellationToken);
@@ -862,11 +1081,11 @@ public sealed class RemoteSessionsController
             await _dbContext
                 .RemoteSessionParticipants
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
+                    item =>
+                        item.OrganizationId ==
+                            context.Value.OrganizationId
                         &&
-                        x.RemoteSessionId ==
+                        item.RemoteSessionId ==
                             sessionId)
                 .ToListAsync(
                     cancellationToken);
@@ -887,19 +1106,20 @@ public sealed class RemoteSessionsController
         }
 
         AddEvent(
-            organizationId,
+            context.Value.OrganizationId,
             session.Id,
             "SESSION_TERMINATED",
             $"Sesión finalizada por {technicianName}.",
-            userId);
+            context.Value.UserId);
 
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
 
-        _connections.RemoveControlLease(
-            organizationId,
-            sessionId);
+        _connections
+            .RemoveControlLease(
+                context.Value.OrganizationId,
+                sessionId);
 
         return Ok(
             new
@@ -907,7 +1127,8 @@ public sealed class RemoteSessionsController
                 session.Id,
 
                 status =
-                    session.Status.ToString(),
+                    session.Status
+                        .ToString(),
 
                 session.DisconnectedAtUtc,
                 session.TerminatedBy,
@@ -915,11 +1136,9 @@ public sealed class RemoteSessionsController
             });
     }
 
-    /*
-     * ============================================================
-     * HELPERS
-     * ============================================================
-     */
+    // ============================================================
+    // HELPERS - SESSION
+    // ============================================================
 
     private async Task<RemoteSession?>
         FindActiveSessionAsync(
@@ -930,27 +1149,27 @@ public sealed class RemoteSessionsController
         return await _dbContext
             .RemoteSessions
             .FirstOrDefaultAsync(
-                x =>
-                    x.OrganizationId ==
+                session =>
+                    session.OrganizationId ==
                         organizationId
                     &&
-                    x.DeviceId ==
+                    session.DeviceId ==
                         deviceId
                     &&
-                    x.ExpiresAtUtc >
+                    session.ExpiresAtUtc >
                         DateTime.UtcNow
                     &&
                     (
-                        x.Status ==
+                        session.Status ==
                             RemoteSessionStatus.Requested
                         ||
-                        x.Status ==
+                        session.Status ==
                             RemoteSessionStatus.Connecting
                         ||
-                        x.Status ==
+                        session.Status ==
                             RemoteSessionStatus.Connected
                         ||
-                        x.Status ==
+                        session.Status ==
                             RemoteSessionStatus.Disconnecting
                     ),
                 cancellationToken);
@@ -965,48 +1184,73 @@ public sealed class RemoteSessionsController
         return await _dbContext
             .RemoteSessions
             .FirstOrDefaultAsync(
-                x =>
-                    x.OrganizationId ==
+                session =>
+                    session.OrganizationId ==
                         organizationId
                     &&
-                    x.Id ==
+                    session.Id ==
                         sessionId
                     &&
-                    x.ExpiresAtUtc >
+                    session.ExpiresAtUtc >
                         DateTime.UtcNow
                     &&
-                    x.Status !=
+                    session.Status !=
                         RemoteSessionStatus.Completed
                     &&
-                    x.Status !=
+                    session.Status !=
                         RemoteSessionStatus.Failed
                     &&
-                    x.Status !=
+                    session.Status !=
                         RemoteSessionStatus.Expired
                     &&
-                    x.Status !=
+                    session.Status !=
                         RemoteSessionStatus.Cancelled,
                 cancellationToken);
     }
 
-    private async Task<bool>
-        SessionExistsAsync(
-            Guid organizationId,
+    private async Task<RemoteSession?>
+        GetSessionForAccessAsync(
+            SecurityContext context,
             Guid sessionId,
             CancellationToken cancellationToken)
     {
+        if (
+            sessionId ==
+            Guid.Empty)
+        {
+            return null;
+        }
+
         return await _dbContext
             .RemoteSessions
             .AsNoTracking()
-            .AnyAsync(
-                x =>
-                    x.OrganizationId ==
-                        organizationId
+            .FirstOrDefaultAsync(
+                session =>
+                    session.OrganizationId ==
+                        context.OrganizationId
                     &&
-                    x.Id ==
+                    session.Id ==
                         sessionId,
                 cancellationToken);
     }
+
+    private Task<bool>
+        CanAccessSessionDeviceAsync(
+            SecurityContext context,
+            Guid deviceId,
+            CancellationToken cancellationToken)
+    {
+        return _scopeAccessService
+            .CanAccessDeviceAsync(
+                context.OrganizationId,
+                context.UserId,
+                deviceId,
+                cancellationToken);
+    }
+
+    // ============================================================
+    // HELPERS - PARTICIPANT
+    // ============================================================
 
     private async Task EnsureParticipantAsync(
         Guid organizationId,
@@ -1019,14 +1263,14 @@ public sealed class RemoteSessionsController
             await _dbContext
                 .RemoteSessionParticipants
                 .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
+                    participant =>
+                        participant.OrganizationId ==
                             organizationId
                         &&
-                        x.RemoteSessionId ==
+                        participant.RemoteSessionId ==
                             sessionId
                         &&
-                        x.UserId ==
+                        participant.UserId ==
                             userId,
                     cancellationToken);
 
@@ -1047,58 +1291,9 @@ public sealed class RemoteSessionsController
                         false));
     }
 
-    private async Task RemoveExpiredLeaseAsync(
-        Guid organizationId,
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        var lease =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.ExpiresAtUtc <=
-                            DateTime.UtcNow,
-                    cancellationToken);
-
-        if (lease is null)
-        {
-            return;
-        }
-
-        _dbContext
-            .RemoteSessionControlLeases
-            .Remove(
-                lease);
-
-        var participant =
-            await _dbContext
-                .RemoteSessionParticipants
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.RemoteSessionId ==
-                            sessionId
-                        &&
-                        x.UserId ==
-                            lease.UserId,
-                    cancellationToken);
-
-        participant
-            ?.RevokeControl();
-
-        await _dbContext
-            .SaveChangesAsync(
-                cancellationToken);
-    }
+    // ============================================================
+    // HELPERS - EVENTS
+    // ============================================================
 
     private void AddEvent(
         Guid organizationId,
@@ -1118,6 +1313,10 @@ public sealed class RemoteSessionsController
                     userId));
     }
 
+    // ============================================================
+    // RESPONSE
+    // ============================================================
+
     private static object BuildSessionResponse(
         RemoteSession session,
         bool joinedExisting)
@@ -1130,7 +1329,8 @@ public sealed class RemoteSessionsController
             session.Reason,
 
             status =
-                session.Status.ToString(),
+                session.Status
+                    .ToString(),
 
             session.AllowKeyboard,
             session.AllowMouse,
@@ -1146,78 +1346,95 @@ public sealed class RemoteSessionsController
         };
     }
 
+    /*
+     * IMPORTANTE:
+     *
+     * RemoteControlLeaseService devuelve
+     * RemoteControlLeaseState.
+     *
+     * No volver a usar RemoteSessionControlLease aquí.
+     */
+
     private static object BuildLeaseResponse(
-        RemoteSessionControlLease lease,
+        RemoteControlLeaseState lease,
         bool ownedByCurrentUser)
     {
         return new
         {
             hasController =
-                true,
+                lease.HasController,
 
-            ownedByCurrentUser,
+            ownedByCurrentUser =
+                lease.HasController
+                &&
+                ownedByCurrentUser,
 
-            lease.UserId,
-            lease.DisplayName,
-            lease.AcquiredAtUtc,
-            lease.ExpiresAtUtc
+            userId =
+                lease.UserId,
+
+            displayName =
+                lease.DisplayName,
+
+            acquiredAtUtc =
+                lease.AcquiredAtUtc,
+
+            expiresAtUtc =
+                lease.ExpiresAtUtc
         };
+    }
+
+    // ============================================================
+    // SECURITY
+    // ============================================================
+
+    private SecurityContext?
+        GetSecurityContext()
+    {
+        var organizationText =
+            User.FindFirstValue(
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
+
+        var userText =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub");
+
+        if (
+            !Guid.TryParse(
+                organizationText,
+                out var organizationId)
+            ||
+            !Guid.TryParse(
+                userText,
+                out var userId))
+        {
+            return null;
+        }
+
+        return new SecurityContext(
+            organizationId,
+            userId);
     }
 
     private bool HasPermission(
         string permission)
     {
-        return User.Claims.Any(
-            claim =>
-                claim.Type ==
-                    "permission"
-                &&
-                string.Equals(
-                    claim.Value,
-                    permission,
-                    StringComparison.OrdinalIgnoreCase));
-    }
-
-    private Guid GetOrganizationId()
-    {
-        var value =
-            User.FindFirstValue(
-                "organization_id");
-
-        if (
-            !Guid.TryParse(
-                value,
-                out var organizationId)
-            ||
-            organizationId ==
-                Guid.Empty)
-        {
-            throw new UnauthorizedAccessException(
-                "Organization claim is missing.");
-        }
-
-        return organizationId;
-    }
-
-    private Guid GetUserId()
-    {
-        var value =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
-
-        if (
-            !Guid.TryParse(
-                value,
-                out var userId)
-            ||
-            userId ==
-                Guid.Empty)
-        {
-            throw new UnauthorizedAccessException(
-                "User claim is missing.");
-        }
-
-        return userId;
+        return User
+            .Claims
+            .Any(
+                claim =>
+                    claim.Type ==
+                        "permission"
+                    &&
+                    string.Equals(
+                        claim.Value,
+                        permission,
+                        StringComparison.OrdinalIgnoreCase));
     }
 
     private string GetTechnicianName(
@@ -1232,7 +1449,16 @@ public sealed class RemoteSessionsController
             ??
             userId.ToString();
     }
+
+    private readonly record struct
+        SecurityContext(
+            Guid OrganizationId,
+            Guid UserId);
 }
+
+// ================================================================
+// CONTRACTS
+// ================================================================
 
 public sealed record CreateRemoteSessionRequest(
     Guid DeviceId,

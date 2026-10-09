@@ -4,6 +4,7 @@ public interface IDeviceQueryService
 {
     Task<DeviceListResultDto> GetDevicesAsync(
         Guid organizationId,
+        IReadOnlyCollection<Guid>? accessibleSiteIds,
         string? search,
         string? platform,
         string? status,
@@ -20,15 +21,13 @@ public interface IDeviceQueryService
         Guid deviceId,
         CancellationToken cancellationToken = default);
 
-    Task<AndroidDeviceDetailsDto?>
-        GetAndroidDeviceDetailsAsync(
-            Guid organizationId,
-            Guid deviceId,
-            CancellationToken cancellationToken = default);
+    Task<AndroidDeviceDetailsDto?> GetAndroidDeviceDetailsAsync(
+        Guid organizationId,
+        Guid deviceId,
+        CancellationToken cancellationToken = default);
 
-    Task<DeviceOperationalSnapshotDto?>
-        GetOperationalSnapshotAsync(
-            Guid organizationId,
-            Guid deviceId,
-            CancellationToken cancellationToken = default);
+    Task<DeviceOperationalSnapshotDto?> GetOperationalSnapshotAsync(
+        Guid organizationId,
+        Guid deviceId,
+        CancellationToken cancellationToken = default);
 }

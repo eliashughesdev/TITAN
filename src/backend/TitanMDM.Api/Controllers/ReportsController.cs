@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using TitanMDM.Api.Security;
-
 using TitanMDM.Application.Reports;
 using TitanMDM.Application.Security;
 
@@ -48,20 +47,16 @@ public sealed class ReportsController
             return Unauthorized();
         }
 
-        if (
-            !await _scopeAccessService
-                .HasOrganizationScopeAsync(
-                    context.Value.OrganizationId,
-                    context.Value.UserId,
-                    cancellationToken))
-        {
-            return Forbid();
-        }
+        var sites =
+            await GetAccessibleSitesAsync(
+                context.Value,
+                cancellationToken);
 
         return Ok(
             await _reportsService
                 .GetOverviewAsync(
                     context.Value.OrganizationId,
+                    sites,
                     cancellationToken));
     }
 
@@ -80,20 +75,16 @@ public sealed class ReportsController
             return Unauthorized();
         }
 
-        if (
-            !await _scopeAccessService
-                .HasOrganizationScopeAsync(
-                    context.Value.OrganizationId,
-                    context.Value.UserId,
-                    cancellationToken))
-        {
-            return Forbid();
-        }
+        var sites =
+            await GetAccessibleSitesAsync(
+                context.Value,
+                cancellationToken);
 
         var bytes =
             await _reportsService
                 .ExportDevicesCsvAsync(
                     context.Value.OrganizationId,
+                    sites,
                     cancellationToken);
 
         return File(
@@ -102,12 +93,99 @@ public sealed class ReportsController
             $"titanmdm-devices-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
     }
 
+    [HttpGet("devices/export/excel")]
+    [RequirePermission(
+        PermissionCodes.Reports.Export)]
+    public async Task<IActionResult>
+        ExportDevicesExcel(
+            CancellationToken cancellationToken)
+    {
+        var context =
+            GetSecurityContext();
+
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        var sites =
+            await GetAccessibleSitesAsync(
+                context.Value,
+                cancellationToken);
+
+        var bytes =
+            await _reportsService
+                .ExportDevicesExcelAsync(
+                    context.Value.OrganizationId,
+                    sites,
+                    cancellationToken);
+
+        return File(
+            bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"titanmdm-devices-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xlsx");
+    }
+
+    [HttpGet("devices/export/pdf")]
+    [RequirePermission(
+        PermissionCodes.Reports.Export)]
+    public async Task<IActionResult>
+        ExportDevicesPdf(
+            CancellationToken cancellationToken)
+    {
+        var context =
+            GetSecurityContext();
+
+        if (context is null)
+        {
+            return Unauthorized();
+        }
+
+        var sites =
+            await GetAccessibleSitesAsync(
+                context.Value,
+                cancellationToken);
+
+        var bytes =
+            await _reportsService
+                .ExportDevicesPdfAsync(
+                    context.Value.OrganizationId,
+                    sites,
+                    cancellationToken);
+
+        return File(
+            bytes,
+            "application/pdf",
+            $"titanmdm-devices-{DateTime.UtcNow:yyyyMMdd-HHmmss}.pdf");
+    }
+
+    private async Task<
+        IReadOnlyCollection<Guid>?>
+        GetAccessibleSitesAsync(
+            SecurityContext context,
+            CancellationToken cancellationToken)
+    {
+        var scope =
+            await _scopeAccessService
+                .GetScopeSnapshotAsync(
+                    context.OrganizationId,
+                    context.UserId,
+                    cancellationToken);
+
+        return scope.OrganizationWide
+            ? null
+            : scope.SiteIds;
+    }
+
     private SecurityContext?
         GetSecurityContext()
     {
         var organization =
             User.FindFirstValue(
-                "organization_id");
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
 
         var user =
             User.FindFirstValue(

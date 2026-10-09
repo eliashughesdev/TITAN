@@ -15,11 +15,13 @@ public interface ISecurityPostureService
     Task<SecurityDashboardDto>
         GetDashboardAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<DeviceSecurityDto>>
         GetDevicesAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default);
 }
 

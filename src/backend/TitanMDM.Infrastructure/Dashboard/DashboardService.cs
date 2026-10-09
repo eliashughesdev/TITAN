@@ -6,6 +6,7 @@ using TitanMDM.Application.Dashboard;
 using TitanMDM.Application.Dashboard.DTOs;
 using TitanMDM.Application.Dashboard.Interfaces;
 
+using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 
 using TitanMDM.Infrastructure.Persistence;
@@ -22,29 +23,43 @@ public sealed class DashboardService
         TitanMdmDbContext dbContext)
     {
         _dbContext =
-            dbContext;
+            dbContext
+            ??
+            throw new ArgumentNullException(
+                nameof(
+                    dbContext));
     }
 
-    public async Task<DashboardSummaryDto> GetSummaryAsync(
-        Guid organizationId,
-        DashboardWorkspace workspace,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // SUMMARY
+    // ============================================================
+
+    public async Task<DashboardSummaryDto>
+        GetSummaryAsync(
+            Guid organizationId,
+            DashboardWorkspace workspace,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
+            CancellationToken cancellationToken = default)
     {
-        if (organizationId == Guid.Empty)
+        if (
+            organizationId ==
+            Guid.Empty)
         {
             throw new ArgumentException(
                 "OrganizationId is required.",
-                nameof(organizationId));
+                nameof(
+                    organizationId));
         }
 
         /*
          * ========================================================
-         * DEVICES
+         * VISIBLE DEVICES
          * ========================================================
          */
 
         var devices =
-            _dbContext.Devices
+            _dbContext
+                .Devices
                 .AsNoTracking()
                 .Where(
                     device =>
@@ -54,102 +69,124 @@ public sealed class DashboardService
                         !device.IsDeleted);
 
         devices =
+            ApplyScope(
+                devices,
+                accessibleSiteIds);
+
+        devices =
             workspace switch
             {
                 DashboardWorkspace.Windows =>
                     devices.Where(
                         device =>
                             device.Platform ==
-                            DevicePlatform.Windows),
+                                DevicePlatform.Windows),
 
                 DashboardWorkspace.Android =>
                     devices.Where(
                         device =>
                             device.Platform ==
-                            DevicePlatform.Android),
+                                DevicePlatform.Android),
 
                 _ =>
                     devices
             };
 
+        /*
+         * ========================================================
+         * DEVICE COUNTERS
+         * ========================================================
+         */
+
         var total =
-            await devices.CountAsync(
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    cancellationToken);
 
         var online =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Online,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Online,
+                    cancellationToken);
 
         var offline =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Offline,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Offline,
+                    cancellationToken);
 
         var pending =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Pending,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Pending,
+                    cancellationToken);
 
         var enrolling =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Enrolling,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Enrolling,
+                    cancellationToken);
 
         var quarantined =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Quarantined,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Quarantined,
+                    cancellationToken);
 
         var retired =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Retired,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Retired,
+                    cancellationToken);
 
         var managed =
-            await devices.CountAsync(
-                x =>
-                    x.IsManaged,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.IsManaged,
+                    cancellationToken);
 
         /*
          * ========================================================
-         * PLATFORMS
+         * PLATFORM COUNTERS
          * ========================================================
          */
 
         var windows =
-            await devices.CountAsync(
-                x =>
-                    x.Platform ==
-                    DevicePlatform.Windows,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Platform ==
+                            DevicePlatform.Windows,
+                    cancellationToken);
 
         var android =
-            await devices.CountAsync(
-                x =>
-                    x.Platform ==
-                    DevicePlatform.Android,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Platform ==
+                            DevicePlatform.Android,
+                    cancellationToken);
 
         var unknownPlatform =
-            await devices.CountAsync(
-                x =>
-                    x.Platform ==
-                    DevicePlatform.Unknown,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Platform ==
+                            DevicePlatform.Unknown,
+                    cancellationToken);
 
         /*
          * ========================================================
@@ -158,48 +195,57 @@ public sealed class DashboardService
          */
 
         var compliant =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.Compliant,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Compliant,
+                    cancellationToken);
 
         var nonCompliant =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.NonCompliant,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.NonCompliant,
+                    cancellationToken);
 
         var evaluating =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.Evaluating,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Evaluating,
+                    cancellationToken);
 
         var complianceQuarantined =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.Quarantined,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Quarantined,
+                    cancellationToken);
 
         var unknownCompliance =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.Unknown,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Unknown,
+                    cancellationToken);
 
         var evaluatedDevices =
-            compliant +
+            compliant
+            +
             nonCompliant;
 
-        decimal? compliancePercentage =
-            null;
+        decimal?
+            compliancePercentage =
+                null;
 
-        if (evaluatedDevices > 0)
+        if (
+            evaluatedDevices >
+            0)
         {
             compliancePercentage =
                 Math.Round(
@@ -215,103 +261,119 @@ public sealed class DashboardService
          * ========================================================
          * COMMANDS
          * ========================================================
+         *
+         * IMPORTANTE:
+         *
+         * Incluso para workspace Global, los comandos se filtran
+         * por los DeviceIds visibles.
+         *
+         * Así un usuario Site-scoped nunca obtiene contadores
+         * corporativos indirectamente.
+         * ========================================================
          */
 
+        var visibleDeviceIds =
+            devices
+                .Select(
+                    device =>
+                        device.Id);
+
         var commands =
-            _dbContext.DeviceCommands
+            _dbContext
+                .DeviceCommands
                 .AsNoTracking()
                 .Where(
                     command =>
                         command.OrganizationId ==
-                        organizationId);
-
-        if (workspace != DashboardWorkspace.Global)
-        {
-            var visibleDeviceIds =
-                devices.Select(
-                    x =>
-                        x.Id);
-
-            commands =
-                commands.Where(
-                    command =>
+                            organizationId
+                        &&
                         visibleDeviceIds.Contains(
                             command.DeviceId));
-        }
 
         var totalCommands =
-            await commands.CountAsync(
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    cancellationToken);
 
         var pendingCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Pending,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Pending,
+                    cancellationToken);
 
         var queuedCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Queued,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Queued,
+                    cancellationToken);
 
         var dispatchingCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Dispatching,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Dispatching,
+                    cancellationToken);
 
         var sentCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Sent,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Sent,
+                    cancellationToken);
 
         var deliveredCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Delivered,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Delivered,
+                    cancellationToken);
 
         var executingCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Executing,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Executing,
+                    cancellationToken);
 
         var successfulCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Success,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Success,
+                    cancellationToken);
 
         var failedCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Failed,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Failed,
+                    cancellationToken);
 
         var timeoutCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Timeout,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Timeout,
+                    cancellationToken);
 
         var cancelledCommands =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Cancelled,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Cancelled,
+                    cancellationToken);
 
         var activeCommands =
             pendingCommands
@@ -351,6 +413,7 @@ public sealed class DashboardService
             windowsSummary =
                 await BuildWindowsSummaryAsync(
                     organizationId,
+                    accessibleSiteIds,
                     cancellationToken);
         }
 
@@ -374,6 +437,7 @@ public sealed class DashboardService
             androidSummary =
                 await BuildAndroidSummaryAsync(
                     organizationId,
+                    accessibleSiteIds,
                     cancellationToken);
         }
 
@@ -384,7 +448,8 @@ public sealed class DashboardService
          */
 
         var databaseConnected =
-            await _dbContext.Database
+            await _dbContext
+                .Database
                 .CanConnectAsync(
                     cancellationToken);
 
@@ -525,15 +590,14 @@ public sealed class DashboardService
         };
     }
 
-    /*
-     * ============================================================
-     * WINDOWS SUMMARY
-     * ============================================================
-     */
+    // ============================================================
+    // WINDOWS SUMMARY
+    // ============================================================
 
     private async Task<WindowsDashboardSummaryDto>
         BuildWindowsSummaryAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken)
     {
         var now =
@@ -543,26 +607,41 @@ public sealed class DashboardService
             now.AddHours(
                 -24);
 
-        var windowsDevices =
-            await _dbContext.Devices
+        /*
+         * ========================================================
+         * VISIBLE WINDOWS DEVICES
+         * ========================================================
+         */
+
+        var windowsQuery =
+            _dbContext
+                .Devices
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    device =>
+                        device.OrganizationId ==
                             organizationId
                         &&
-                        !x.IsDeleted
+                        !device.IsDeleted
                         &&
-                        x.Platform ==
-                            DevicePlatform.Windows)
+                        device.Platform ==
+                            DevicePlatform.Windows);
+
+        windowsQuery =
+            ApplyScope(
+                windowsQuery,
+                accessibleSiteIds);
+
+        var windowsDevices =
+            await windowsQuery
                 .Select(
-                    x =>
+                    device =>
                         new
                         {
-                            x.Id,
-                            x.Status,
-                            x.IsManaged,
-                            x.LastSeenAtUtc
+                            device.Id,
+                            device.Status,
+                            device.IsManaged,
+                            device.LastSeenAtUtc
                         })
                 .ToListAsync(
                     cancellationToken);
@@ -570,116 +649,123 @@ public sealed class DashboardService
         var windowsDeviceIds =
             windowsDevices
                 .Select(
-                    x =>
-                        x.Id)
+                    device =>
+                        device.Id)
                 .ToArray();
 
+        /*
+         * ========================================================
+         * WINDOWS COMMANDS
+         * ========================================================
+         */
+
         var windowsCommands =
-            await _dbContext.DeviceCommands
+            await _dbContext
+                .DeviceCommands
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    command =>
+                        command.OrganizationId ==
                             organizationId
                         &&
                         windowsDeviceIds.Contains(
-                            x.DeviceId)
+                            command.DeviceId)
                         &&
                         (
-                            x.CommandType ==
+                            command.CommandType ==
                                 "SECURITY_STATUS"
                             ||
-                            x.CommandType ==
+                            command.CommandType ==
                                 "WINDOWS_UPDATE_STATUS"
                             ||
-                            x.CommandType ==
+                            command.CommandType ==
                                 "WINDOWS_UPDATE_SCAN"
                         ))
                 .Select(
-                    x =>
+                    command =>
                         new
                         {
-                            x.DeviceId,
-                            x.CommandType,
-                            x.Status,
-                            x.ResultJson,
-                            x.CreatedAtUtc,
-                            x.CompletedAtUtc
+                            command.DeviceId,
+                            command.CommandType,
+                            command.Status,
+                            command.ResultJson,
+                            command.CreatedAtUtc,
+                            command.CompletedAtUtc
                         })
                 .ToListAsync(
                     cancellationToken);
 
         /*
-         * Latest security snapshot per Windows device.
+         * Latest security snapshot per device.
          */
 
         var securityCommands =
             windowsCommands
                 .Where(
-                    x =>
-                        x.CommandType ==
+                    command =>
+                        command.CommandType ==
                             "SECURITY_STATUS"
                         &&
-                        x.Status ==
+                        command.Status ==
                             DeviceCommandStatus.Success
                         &&
                         !string.IsNullOrWhiteSpace(
-                            x.ResultJson))
+                            command.ResultJson))
                 .GroupBy(
-                    x =>
-                        x.DeviceId)
+                    command =>
+                        command.DeviceId)
                 .Select(
                     group =>
                         group
                             .OrderByDescending(
-                                x =>
-                                    x.CompletedAtUtc
+                                command =>
+                                    command.CompletedAtUtc
                                     ??
-                                    x.CreatedAtUtc)
+                                    command.CreatedAtUtc)
                             .First())
                 .ToList();
 
         /*
-         * Latest Windows Update snapshot per device.
+         * Latest Windows Update snapshot.
          */
 
         var updateStatusCommands =
             windowsCommands
                 .Where(
-                    x =>
-                        x.CommandType ==
+                    command =>
+                        command.CommandType ==
                             "WINDOWS_UPDATE_STATUS"
                         &&
-                        x.Status ==
+                        command.Status ==
                             DeviceCommandStatus.Success
                         &&
                         !string.IsNullOrWhiteSpace(
-                            x.ResultJson))
+                            command.ResultJson))
                 .GroupBy(
-                    x =>
-                        x.DeviceId)
+                    command =>
+                        command.DeviceId)
                 .Select(
                     group =>
                         group
                             .OrderByDescending(
-                                x =>
-                                    x.CompletedAtUtc
+                                command =>
+                                    command.CompletedAtUtc
                                     ??
-                                    x.CreatedAtUtc)
+                                    command.CreatedAtUtc)
                             .First())
                 .ToList();
 
         var updateStatusChecks =
             windowsCommands.Count(
-                x =>
-                    x.CommandType ==
-                    "WINDOWS_UPDATE_STATUS");
+                command =>
+                    command.CommandType ==
+                        "WINDOWS_UPDATE_STATUS");
 
         var updateScanRequests =
             windowsCommands.Count(
-                x =>
-                    x.CommandType ==
-                    "WINDOWS_UPDATE_SCAN");
+                command =>
+                    command.CommandType ==
+                        "WINDOWS_UPDATE_SCAN");
 
         /*
          * ========================================================
@@ -717,8 +803,9 @@ public sealed class DashboardService
                 &&
                 pendingReboot)
             {
-                pendingRebootDeviceIds.Add(
-                    command.DeviceId);
+                pendingRebootDeviceIds
+                    .Add(
+                        command.DeviceId);
             }
 
             if (
@@ -783,7 +870,7 @@ public sealed class DashboardService
 
         /*
          * ========================================================
-         * WINDOWS UPDATE TELEMETRY
+         * WINDOWS UPDATE
          * ========================================================
          */
 
@@ -817,8 +904,9 @@ public sealed class DashboardService
                 &&
                 pendingReboot)
             {
-                pendingRebootDeviceIds.Add(
-                    command.DeviceId);
+                pendingRebootDeviceIds
+                    .Add(
+                        command.DeviceId);
             }
         }
 
@@ -829,38 +917,39 @@ public sealed class DashboardService
          */
 
         var remoteSessions =
-            await _dbContext.RemoteSessions
+            await _dbContext
+                .RemoteSessions
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    session =>
+                        session.OrganizationId ==
                             organizationId
                         &&
                         windowsDeviceIds.Contains(
-                            x.DeviceId))
+                            session.DeviceId))
                 .Select(
-                    x =>
+                    session =>
                         new
                         {
-                            x.Status,
-                            x.RequestedAtUtc
+                            session.Status,
+                            session.RequestedAtUtc
                         })
                 .ToListAsync(
                     cancellationToken);
 
         var activeRemoteSessions =
             remoteSessions.Count(
-                x =>
-                    x.Status ==
+                session =>
+                    session.Status ==
                         RemoteSessionStatus.Requested
                     ||
-                    x.Status ==
+                    session.Status ==
                         RemoteSessionStatus.Connecting
                     ||
-                    x.Status ==
+                    session.Status ==
                         RemoteSessionStatus.Connected
                     ||
-                    x.Status ==
+                    session.Status ==
                         RemoteSessionStatus.Disconnecting);
 
         return new WindowsDashboardSummaryDto
@@ -870,27 +959,27 @@ public sealed class DashboardService
 
             Online =
                 windowsDevices.Count(
-                    x =>
-                        x.Status ==
-                        DeviceStatus.Online),
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Online),
 
             Offline =
                 windowsDevices.Count(
-                    x =>
-                        x.Status ==
-                        DeviceStatus.Offline),
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Offline),
 
             Managed =
                 windowsDevices.Count(
-                    x =>
-                        x.IsManaged),
+                    device =>
+                        device.IsManaged),
 
             CheckInsLast24Hours =
                 windowsDevices.Count(
-                    x =>
-                        x.LastSeenAtUtc.HasValue
+                    device =>
+                        device.LastSeenAtUtc.HasValue
                         &&
-                        x.LastSeenAtUtc.Value >=
+                        device.LastSeenAtUtc.Value >=
                             last24Hours),
 
             UpdateStatusChecks =
@@ -934,90 +1023,158 @@ public sealed class DashboardService
 
             RemoteSessionsCompleted =
                 remoteSessions.Count(
-                    x =>
-                        x.Status ==
-                        RemoteSessionStatus.Completed),
+                    session =>
+                        session.Status ==
+                            RemoteSessionStatus.Completed),
 
             RemoteSessionsFailed =
                 remoteSessions.Count(
-                    x =>
-                        x.Status ==
-                        RemoteSessionStatus.Failed),
+                    session =>
+                        session.Status ==
+                            RemoteSessionStatus.Failed),
 
             RemoteSessionsLast24Hours =
                 remoteSessions.Count(
-                    x =>
-                        x.RequestedAtUtc >=
+                    session =>
+                        session.RequestedAtUtc >=
                             last24Hours)
         };
     }
 
-    /*
-     * ============================================================
-     * ANDROID SUMMARY
-     * ============================================================
-     */
+    // ============================================================
+    // ANDROID SUMMARY
+    // ============================================================
 
     private async Task<AndroidDashboardSummaryDto>
         BuildAndroidSummaryAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken)
     {
         var now =
             DateTime.UtcNow;
 
-        var androidDevices =
-            await _dbContext.AndroidDevices
+        /*
+         * ========================================================
+         * VISIBLE ANDROID DEVICE IDS
+         * ========================================================
+         *
+         * AndroidDevice no posee SiteId.
+         *
+         * El Scope se determina mediante la entidad Device,
+         * que es la autoridad transversal para Windows/Android.
+         * ========================================================
+         */
+
+        var visibleAndroidDevices =
+            _dbContext
+                .Devices
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId)
+                    device =>
+                        device.OrganizationId ==
+                            organizationId
+                        &&
+                        !device.IsDeleted
+                        &&
+                        device.Platform ==
+                            DevicePlatform.Android);
+
+        visibleAndroidDevices =
+            ApplyScope(
+                visibleAndroidDevices,
+                accessibleSiteIds);
+
+        var visibleAndroidDeviceIds =
+            await visibleAndroidDevices
+                .Select(
+                    device =>
+                        device.Id)
+                .ToArrayAsync(
+                    cancellationToken);
+
+        var androidDevices =
+            await _dbContext
+                .AndroidDevices
+                .AsNoTracking()
+                .Where(
+                    android =>
+                        android.OrganizationId ==
+                            organizationId
+                        &&
+                        visibleAndroidDeviceIds.Contains(
+                            android.DeviceId))
                 .ToListAsync(
                     cancellationToken);
 
         var androidDeviceIds =
             androidDevices
                 .Select(
-                    x =>
-                        x.DeviceId)
+                    device =>
+                        device.DeviceId)
                 .ToArray();
 
+        /*
+         * ========================================================
+         * ENROLLMENTS
+         * ========================================================
+         *
+         * AndroidEnrollment actualmente no posee SiteId.
+         *
+         * Por seguridad:
+         *
+         * Organization scope:
+         * puede ver métricas globales de enrollment.
+         *
+         * Site scope:
+         * NO mostramos métricas globales que revelarían
+         * información de otras localidades.
+         *
+         * En RBAC-G/Android agregaremos Scope explícito
+         * al enrollment.
+         * ========================================================
+         */
+
         var enrollments =
-            await _dbContext.AndroidEnrollments
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId)
-                .ToListAsync(
-                    cancellationToken);
+            accessibleSiteIds is null
+                ? await _dbContext
+                    .AndroidEnrollments
+                    .AsNoTracking()
+                    .Where(
+                        enrollment =>
+                            enrollment.OrganizationId ==
+                                organizationId)
+                    .ToListAsync(
+                        cancellationToken)
+                : [];
 
         var applicationsPresent =
-            await _dbContext.DeviceApplications
+            await _dbContext
+                .DeviceApplications
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    application =>
+                        application.OrganizationId ==
                             organizationId
                         &&
                         androidDeviceIds.Contains(
-                            x.DeviceId)
+                            application.DeviceId)
                         &&
-                        x.IsPresent)
+                        application.IsPresent)
                 .CountAsync(
                     cancellationToken);
 
         var securityPostures =
-            await _dbContext.DeviceSecurityPostures
+            await _dbContext
+                .DeviceSecurityPostures
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    posture =>
+                        posture.OrganizationId ==
                             organizationId
                         &&
                         androidDeviceIds.Contains(
-                            x.DeviceId))
+                            posture.DeviceId))
                 .ToListAsync(
                     cancellationToken);
 
@@ -1029,26 +1186,26 @@ public sealed class DashboardService
 
         var fullyManaged =
             androidDevices.Count(
-                x =>
+                device =>
                     ContainsAny(
-                        x.ManagementMode,
+                        device.ManagementMode,
                         "FULLY_MANAGED",
                         "DEVICE_OWNER",
                         "FULLYMANAGED"));
 
         var dedicated =
             androidDevices.Count(
-                x =>
+                device =>
                     ContainsAny(
-                        x.ManagementMode,
+                        device.ManagementMode,
                         "DEDICATED",
                         "KIOSK"));
 
         var workProfile =
             androidDevices.Count(
-                x =>
+                device =>
                     ContainsAny(
-                        x.ManagementMode,
+                        device.ManagementMode,
                         "PROFILE_OWNER",
                         "WORK_PROFILE",
                         "WORKPROFILE"));
@@ -1061,12 +1218,12 @@ public sealed class DashboardService
 
         var policyApplied =
             androidDevices.Count(
-                x =>
+                device =>
                     !string.IsNullOrWhiteSpace(
-                        x.AppliedPolicyName)
+                        device.AppliedPolicyName)
                     &&
                     ContainsAny(
-                        x.AppliedPolicyState,
+                        device.AppliedPolicyState,
                         "APPLIED",
                         "SUCCESS"));
 
@@ -1083,23 +1240,21 @@ public sealed class DashboardService
 
         var encrypted =
             androidDevices.Count(
-                x =>
+                device =>
                     ContainsAny(
-                        x.EncryptionStatus,
+                        device.EncryptionStatus,
                         "ENCRYPTED",
                         "ENCRYPTION_STATUS_ACTIVE"));
 
         var postureReported =
             androidDevices.Count(
-                x =>
+                device =>
                     !string.IsNullOrWhiteSpace(
-                        x.SecurityPosture));
+                        device.SecurityPosture));
 
         /*
          * ========================================================
          * LAST SYNC
-         *
-         * Explicit nullable declaration prevents CS0173.
          * ========================================================
          */
 
@@ -1113,8 +1268,8 @@ public sealed class DashboardService
         {
             lastSynchronizationUtc =
                 androidDevices.Max(
-                    x =>
-                        x.LastSynchronizedAtUtc);
+                    device =>
+                        device.LastSynchronizedAtUtc);
         }
 
         /*
@@ -1130,13 +1285,13 @@ public sealed class DashboardService
 
             Managed =
                 androidDevices.Count(
-                    x =>
-                        !x.IsDeletedInGoogle),
+                    device =>
+                        !device.IsDeletedInGoogle),
 
             MissingInGoogle =
                 androidDevices.Count(
-                    x =>
-                        x.IsDeletedInGoogle),
+                    device =>
+                        device.IsDeletedInGoogle),
 
             FullyManaged =
                 fullyManaged,
@@ -1149,24 +1304,24 @@ public sealed class DashboardService
 
             ActiveEnrollments =
                 enrollments.Count(
-                    x =>
-                        !x.IsRevoked
+                    enrollment =>
+                        !enrollment.IsRevoked
                         &&
-                        x.ExpiresAtUtc >
+                        enrollment.ExpiresAtUtc >
                             now),
 
             ExpiredEnrollments =
                 enrollments.Count(
-                    x =>
-                        !x.IsRevoked
+                    enrollment =>
+                        !enrollment.IsRevoked
                         &&
-                        x.ExpiresAtUtc <=
+                        enrollment.ExpiresAtUtc <=
                             now),
 
             RevokedEnrollments =
                 enrollments.Count(
-                    x =>
-                        x.IsRevoked),
+                    enrollment =>
+                        enrollment.IsRevoked),
 
             PolicyApplied =
                 policyApplied,
@@ -1182,18 +1337,18 @@ public sealed class DashboardService
 
             RootDetected =
                 securityPostures.Count(
-                    x =>
-                        x.RootDetected),
+                    posture =>
+                        posture.RootDetected),
 
             AdbEnabled =
                 securityPostures.Count(
-                    x =>
-                        x.AdbEnabled),
+                    posture =>
+                        posture.AdbEnabled),
 
             DeviceSecure =
                 securityPostures.Count(
-                    x =>
-                        x.DeviceSecure),
+                    posture =>
+                        posture.DeviceSecure),
 
             Encrypted =
                 encrypted,
@@ -1206,11 +1361,61 @@ public sealed class DashboardService
         };
     }
 
-    /*
-     * ============================================================
-     * JSON
-     * ============================================================
-     */
+    // ============================================================
+    // SCOPE
+    // ============================================================
+
+    private static IQueryable<Device>
+        ApplyScope(
+            IQueryable<Device> query,
+            IReadOnlyCollection<Guid>?
+                accessibleSiteIds)
+    {
+        /*
+         * null significa Organization scope.
+         */
+
+        if (
+            accessibleSiteIds is null)
+        {
+            return query;
+        }
+
+        var siteIds =
+            accessibleSiteIds
+                .Where(
+                    id =>
+                        id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+        /*
+         * Usuario autenticado con permiso funcional,
+         * pero sin alcance:
+         *
+         * consulta válida sin resultados.
+         */
+
+        if (
+            siteIds.Length ==
+            0)
+        {
+            return query.Where(
+                _ =>
+                    false);
+        }
+
+        return query.Where(
+            device =>
+                device.SiteId.HasValue
+                &&
+                siteIds.Contains(
+                    device.SiteId.Value));
+    }
+
+    // ============================================================
+    // JSON
+    // ============================================================
 
     private static bool TryReadBoolean(
         string? json,
@@ -1244,7 +1449,7 @@ public sealed class DashboardService
 
             if (
                 element.ValueKind ==
-                JsonValueKind.True)
+                    JsonValueKind.True)
             {
                 value =
                     true;
@@ -1254,7 +1459,7 @@ public sealed class DashboardService
 
             if (
                 element.ValueKind ==
-                JsonValueKind.False)
+                    JsonValueKind.False)
             {
                 value =
                     false;
@@ -1312,7 +1517,7 @@ public sealed class DashboardService
 
             if (
                 child.ValueKind ==
-                JsonValueKind.True)
+                    JsonValueKind.True)
             {
                 value =
                     true;
@@ -1322,7 +1527,7 @@ public sealed class DashboardService
 
             if (
                 child.ValueKind ==
-                JsonValueKind.False)
+                    JsonValueKind.False)
             {
                 value =
                     false;
@@ -1380,7 +1585,7 @@ public sealed class DashboardService
 
             if (
                 child.ValueKind !=
-                JsonValueKind.String)
+                    JsonValueKind.String)
             {
                 return false;
             }
@@ -1406,7 +1611,7 @@ public sealed class DashboardService
 
         if (
             element.ValueKind !=
-            JsonValueKind.Object)
+                JsonValueKind.Object)
         {
             return false;
         }
@@ -1431,11 +1636,9 @@ public sealed class DashboardService
         return false;
     }
 
-    /*
-     * ============================================================
-     * TEXT
-     * ============================================================
-     */
+    // ============================================================
+    // TEXT
+    // ============================================================
 
     private static bool ContainsAny(
         string? value,

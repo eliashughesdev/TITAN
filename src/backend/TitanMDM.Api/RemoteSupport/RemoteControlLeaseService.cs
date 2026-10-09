@@ -32,126 +32,281 @@ public sealed class RemoteControlLeaseService
     }
 
     public async Task<RemoteControlLeaseState>
-        AcquireAsync(
-            Guid organizationId,
-            Guid sessionId,
-            Guid userId,
-            string displayName,
-            CancellationToken cancellationToken = default)
+    AcquireAsync(
+        Guid organizationId,
+        Guid sessionId,
+        Guid userId,
+        string displayName,
+        CancellationToken cancellationToken = default)
+{
+    /*
+     * ============================================================
+     * SESSION GATE
+     * ============================================================
+     *
+     * Primera defensa contra concurrencia dentro de esta instancia.
+     *
+     * SQL Server seguirá siendo la autoridad definitiva mediante
+     * transacción SERIALIZABLE.
+     * ============================================================
+     */
+
+    await using var sessionLock =
+        await _connections
+            .LockSessionAsync(
+                organizationId,
+                sessionId,
+                cancellationToken);
+
+    /*
+     * ============================================================
+     * SQL SERVER EXECUTION STRATEGY
+     * ============================================================
+     *
+     * TitanMDM usa EnableRetryOnFailure().
+     *
+     * Por tanto, una transacción iniciada manualmente DEBE formar
+     * parte completa de CreateExecutionStrategy().ExecuteAsync().
+     *
+     * Esto permite:
+     *
+     * - retry ante errores SQL transitorios;
+     * - atomicidad del lease;
+     * - SERIALIZABLE;
+     * - evitar dos controladores simultáneos;
+     * - conservar compatibilidad con SQL Server retry strategy.
+     * ============================================================
+     */
+
+    var executionStrategy =
+        _dbContext
+            .Database
+            .CreateExecutionStrategy();
+
+    try
     {
-        await using var sessionLock =
-            await _connections.LockSessionAsync(
+        var result =
+            await executionStrategy
+                .ExecuteAsync(
+                    async () =>
+                    {
+                        await using var transaction =
+                            await _dbContext
+                                .Database
+                                .BeginTransactionAsync(
+                                    IsolationLevel.Serializable,
+                                    cancellationToken);
+
+                        try
+                        {
+                            var nowUtc =
+                                DateTime.UtcNow;
+
+                            /*
+                             * ====================================================
+                             * LOAD EXISTING LEASE
+                             * ====================================================
+                             */
+
+                            var existing =
+                                await _dbContext
+                                    .RemoteSessionControlLeases
+                                    .FirstOrDefaultAsync(
+                                        x =>
+                                            x.OrganizationId ==
+                                                organizationId
+                                            &&
+                                            x.RemoteSessionId ==
+                                                sessionId,
+                                        cancellationToken);
+
+                            /*
+                             * ====================================================
+                             * EXPIRED LEASE
+                             * ====================================================
+                             */
+
+                            if (
+                                existing is not null
+                                &&
+                                existing.ExpiresAtUtc <=
+                                    nowUtc)
+                            {
+                                await RemoveLeaseInternalAsync(
+                                    existing,
+                                    cancellationToken);
+
+                                existing =
+                                    null;
+                            }
+
+                            /*
+                             * ====================================================
+                             * EXISTING ACTIVE LEASE
+                             * ====================================================
+                             */
+
+                            if (existing is not null)
+                            {
+                                /*
+                                 * Otro técnico controla la sesión.
+                                 */
+
+                                if (
+                                    existing.UserId !=
+                                    userId)
+                                {
+                                    throw new HubException(
+                                        $"El control está siendo utilizado por {existing.DisplayName}.");
+                                }
+
+                                /*
+                                 * El mismo técnico vuelve a solicitar control.
+                                 *
+                                 * No creamos otro lease:
+                                 * simplemente renovamos el actual.
+                                 */
+
+                                existing.Renew(
+                                    LeaseDuration);
+
+                                await _dbContext
+                                    .SaveChangesAsync(
+                                        cancellationToken);
+
+                                await transaction
+                                    .CommitAsync(
+                                        cancellationToken);
+
+                                return Map(
+                                    existing);
+                            }
+
+                            /*
+                             * ====================================================
+                             * PARTICIPANT
+                             * ====================================================
+                             */
+
+                            var participant =
+                                await _participants
+                                    .EnsureAsync(
+                                        organizationId,
+                                        sessionId,
+                                        userId,
+                                        displayName,
+                                        cancellationToken);
+
+                            /*
+                             * ====================================================
+                             * NEW LEASE
+                             * ====================================================
+                             */
+
+                            var lease =
+                                new RemoteSessionControlLease(
+                                    organizationId,
+                                    sessionId,
+                                    userId,
+                                    displayName,
+                                    LeaseDuration);
+
+                            participant
+                                .GrantControl();
+
+                            _dbContext
+                                .RemoteSessionControlLeases
+                                .Add(
+                                    lease);
+
+                            /*
+                             * ====================================================
+                             * AUDIT
+                             * ====================================================
+                             */
+
+                            _dbContext
+                                .RemoteSessionEvents
+                                .Add(
+                                    new RemoteSessionEvent(
+                                        organizationId,
+                                        sessionId,
+                                        "CONTROL_ACQUIRED",
+                                        $"{displayName} obtuvo control de teclado y mouse.",
+                                        userId));
+
+                            /*
+                             * ====================================================
+                             * COMMIT
+                             * ====================================================
+                             */
+
+                            await _dbContext
+                                .SaveChangesAsync(
+                                    cancellationToken);
+
+                            await transaction
+                                .CommitAsync(
+                                    cancellationToken);
+
+                            return Map(
+                                lease);
+                        }
+                        catch
+                        {
+                            /*
+                             * DisposeAsync de la transacción ya ejecutará
+                             * rollback si no se alcanzó CommitAsync().
+                             *
+                             * No hacemos RollbackAsync adicional porque una
+                             * conexión SQL rota durante un retry podría volver
+                             * a lanzar otra excepción durante rollback.
+                             */
+
+                            throw;
+                        }
+                    });
+
+        /*
+         * ============================================================
+         * MEMORY CACHE
+         * ============================================================
+         *
+         * Solamente actualizamos memoria DESPUÉS de confirmar SQL.
+         * ============================================================
+         */
+
+        _connections
+            .SetControlLease(
                 organizationId,
                 sessionId,
-                cancellationToken);
+                result);
 
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-
-        try
-        {
-            var existing =
-                await _dbContext
-                    .RemoteSessionControlLeases
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.OrganizationId == organizationId
-                            &&
-                            x.RemoteSessionId == sessionId,
-                        cancellationToken);
-
-            if (existing is not null &&
-                existing.ExpiresAtUtc <= DateTime.UtcNow)
-            {
-                await RemoveLeaseInternalAsync(
-                    existing,
-                    cancellationToken);
-
-                existing = null;
-            }
-
-            if (existing is not null)
-            {
-                if (existing.UserId != userId)
-                {
-                    await transaction.RollbackAsync(
-                        cancellationToken);
-
-                    throw new HubException(
-                        $"El control está siendo utilizado por {existing.DisplayName}.");
-                }
-
-                existing.Renew(
-                    LeaseDuration);
-
-                await _dbContext.SaveChangesAsync(
-                    cancellationToken);
-
-                await transaction.CommitAsync(
-                    cancellationToken);
-
-                var state = Map(existing);
-                _connections.SetControlLease(
-                    organizationId,
-                    sessionId,
-                    state);
-                return state;
-            }
-
-            var participant =
-                await _participants.EnsureAsync(
-                    organizationId,
-                    sessionId,
-                    userId,
-                    displayName,
-                    cancellationToken);
-
-            var lease =
-                new RemoteSessionControlLease(
-                    organizationId,
-                    sessionId,
-                    userId,
-                    displayName,
-                    LeaseDuration);
-
-            participant.GrantControl();
-
-            _dbContext
-                .RemoteSessionControlLeases
-                .Add(lease);
-
-            _dbContext.RemoteSessionEvents.Add(
-                new RemoteSessionEvent(
-                    organizationId,
-                    sessionId,
-                    "CONTROL_ACQUIRED",
-                    $"{displayName} obtuvo control de teclado y mouse.",
-                    userId));
-
-            await _dbContext.SaveChangesAsync(
-                cancellationToken);
-
-            await transaction.CommitAsync(
-                cancellationToken);
-
-            var acquiredState = Map(lease);
-            _connections.SetControlLease(
-                organizationId,
-                sessionId,
-                acquiredState);
-            return acquiredState;
-        }
-        catch (DbUpdateException)
-        {
-            await transaction.RollbackAsync(
-                cancellationToken);
-
-            throw new HubException(
-                "Otro técnico obtuvo el control de la sesión simultáneamente.");
-        }
+        return result;
     }
+    catch (HubException)
+    {
+        /*
+         * Errores funcionales:
+         *
+         * - otro técnico posee el control;
+         * - etc.
+         */
+
+        throw;
+    }
+    catch (DbUpdateException exception)
+    {
+        /*
+         * La restricción única de SQL constituye la segunda defensa
+         * contra dos adquisiciones concurrentes.
+         */
+
+        throw new HubException(
+            "Otro técnico obtuvo el control de la sesión simultáneamente.",
+            exception);
+    }
+}
 
     public async Task<RemoteControlLeaseState> RenewAsync(
         Guid organizationId,

@@ -63,6 +63,12 @@ const link = (
   permissions,
 })
 
+/*
+ * ================================================================
+ * WINDOWS
+ * ================================================================
+ */
+
 const windowsLinks:
   ModuleLink[] = [
     link(
@@ -129,6 +135,12 @@ const windowsLinks:
     ),
   ]
 
+/*
+ * ================================================================
+ * ANDROID
+ * ================================================================
+ */
+
 const androidLinks:
   ModuleLink[] = [
     link(
@@ -181,22 +193,36 @@ const androidLinks:
     ),
   ]
 
+/*
+ * ================================================================
+ * HELPDESK REQUESTER
+ * ================================================================
+ */
+
 const requesterLinks:
   ModuleLink[] = [
     link(
       'Mis solicitudes',
       '/my-support?workspace=helpdesk',
       Inbox,
-      helpdeskPermissions.requestOwnView,
+      helpdeskPermissions
+        .requestOwnView,
     ),
 
     link(
       'Crear solicitud',
       '/my-support/new?workspace=helpdesk',
       Plus,
-      helpdeskPermissions.requestCreate,
+      helpdeskPermissions
+        .requestCreate,
     ),
   ]
+
+/*
+ * ================================================================
+ * HELPDESK TIC
+ * ================================================================
+ */
 
 const helpdeskOperationLinks:
   ModuleLink[] = [
@@ -204,39 +230,42 @@ const helpdeskOperationLinks:
       'Mi trabajo',
       '/helpdesk?workspace=helpdesk',
       ClipboardList,
-      helpdeskPermissions.inboxMyWork,
+      helpdeskPermissions
+        .inboxMyWork,
     ),
 
     link(
       'Sin asignar',
       '/helpdesk?view=unassigned&workspace=helpdesk',
       Inbox,
-      helpdeskPermissions.inboxUnassigned,
+      helpdeskPermissions
+        .inboxUnassigned,
     ),
 
     link(
       'Todos',
       '/helpdesk?view=all&workspace=helpdesk',
       ClipboardList,
-      helpdeskPermissions.inboxAll,
+      helpdeskPermissions
+        .inboxAll,
     ),
 
     link(
       'Kanban',
       '/helpdesk?view=kanban&workspace=helpdesk',
       Workflow,
-      helpdeskPermissions.kanbanView,
+      helpdeskPermissions
+        .kanbanView,
     ),
 
     link(
       'Mis solicitudes',
       '/my-support?workspace=helpdesk',
       UserRound,
-      helpdeskPermissions.requestOwnView,
+      helpdeskPermissions
+        .requestOwnView,
     ),
   ]
-
-
 
 const helpdeskAdminEntry:
   ModuleLink[] = [
@@ -244,9 +273,16 @@ const helpdeskAdminEntry:
       'Administración',
       '/helpdesk/admin?workspace=helpdesk',
       Settings,
-      helpdeskPermissions.adminAccess,
+      helpdeskPermissions
+        .adminAccess,
     ),
   ]
+
+/*
+ * ================================================================
+ * ADMINISTRATION
+ * ================================================================
+ */
 
 const adminLinks:
   ModuleLink[] = [
@@ -300,6 +336,10 @@ export function ModuleNavigation() {
   const location =
     useLocation()
 
+  /*
+   * Ponches posee navegación independiente.
+   */
+
   if (
     location.pathname ===
       '/ponches'
@@ -322,10 +362,16 @@ export function ModuleNavigation() {
       hasPermission,
     )
 
-  const admin =
+  const helpdeskAdmin =
     canManageHelpdesk(
       hasPermission,
     )
+
+  /*
+   * ============================================================
+   * WORKSPACE
+   * ============================================================
+   */
 
   const workspace =
     location.pathname
@@ -338,10 +384,32 @@ export function ModuleNavigation() {
         '/helpdesk',
       )
       ? 'helpdesk'
-      : location.pathname
-          .startsWith(
-            '/sites',
-          )
+      : (
+          location.pathname
+            .startsWith(
+              '/sites',
+            )
+          ||
+          location.pathname
+            .startsWith(
+              '/users',
+            )
+          ||
+          location.pathname
+            .startsWith(
+              '/roles',
+            )
+          ||
+          location.pathname
+            .startsWith(
+              '/settings',
+            )
+          ||
+          location.pathname
+            .startsWith(
+              '/audit',
+            )
+        )
         ? 'administration'
         : activeWorkspaceId
 
@@ -351,44 +419,110 @@ export function ModuleNavigation() {
   let links:
     ModuleLink[] = []
 
+  /*
+   * ============================================================
+   * WINDOWS
+   * ============================================================
+   */
+
   if (
     workspace ===
-    'windows'
+      'windows'
   ) {
+    if (
+      !hasPermission(
+        'workspace.windows.view',
+      )
+    ) {
+      return null
+    }
+
     title =
       'Windows'
 
     links =
       windowsLinks
   }
+
+  /*
+   * ============================================================
+   * ANDROID
+   * ============================================================
+   */
+
   else if (
     workspace ===
-    'android'
+      'android'
   ) {
+    if (
+      !hasPermission(
+        'workspace.android.view',
+      )
+    ) {
+      return null
+    }
+
     title =
       'Android'
 
     links =
       androidLinks
   }
+
+  /*
+   * ============================================================
+   * ADMINISTRATION
+   * ============================================================
+   */
+
   else if (
     workspace ===
-    'administration'
+      'administration'
   ) {
+    if (
+      !hasPermission(
+        'workspace.administration.view',
+      )
+    ) {
+      return null
+    }
+
     title =
       'Configuración'
 
     links =
       adminLinks
   }
+
+  /*
+   * ============================================================
+   * HELPDESK
+   * ============================================================
+   */
+
   else if (
     workspace ===
-    'helpdesk'
+      'helpdesk'
   ) {
+    const canEnterHelpdesk =
+      hasPermission(
+        'workspace.helpdesk.view',
+      )
+      ||
+      staff
+      ||
+      canCreateHelpdeskRequest(
+        hasPermission,
+      )
+
+    if (
+      !canEnterHelpdesk
+    ) {
+      return null
+    }
+
     /*
-     * ==========================================================
      * COLABORADOR
-     * ==========================================================
      */
 
     if (
@@ -402,9 +536,7 @@ export function ModuleNavigation() {
     }
 
     /*
-     * ==========================================================
      * TIC
-     * ==========================================================
      */
 
     if (
@@ -429,13 +561,19 @@ export function ModuleNavigation() {
         ),
 
         ...(
-          admin
+          helpdeskAdmin
             ? helpdeskAdminEntry
             : []
         ),
       ]
     }
   }
+
+  /*
+   * ============================================================
+   * FUNCTIONAL PERMISSIONS
+   * ============================================================
+   */
 
   const visible =
     links.filter(
@@ -445,9 +583,17 @@ export function ModuleNavigation() {
         ||
         item.permissions
           .some(
-            hasPermission,
+            permission =>
+              hasPermission(
+                permission,
+              ),
           ),
     )
+
+  /*
+   * Requester puede tener Create
+   * aunque no tenga requestOwnView.
+   */
 
   if (
     workspace ===
@@ -472,10 +618,17 @@ export function ModuleNavigation() {
   }
 
   if (
-    !visible.length
+    visible.length ===
+    0
   ) {
     return null
   }
+
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
 
   return (
     <nav
@@ -498,92 +651,96 @@ export function ModuleNavigation() {
             const Icon =
               item.icon
 
-            const basePath =
-              item.path
-                .split('?')[0]
+            const [
+              basePath,
+              queryString,
+            ] =
+              item.path.split(
+                '?',
+              )
 
             const query =
-  new URLSearchParams(
-    item.path.split('?')[1]
-    ?? '',
-  )
+              new URLSearchParams(
+                queryString ??
+                '',
+              )
 
-const itemView =
-  query.get(
-    'view',
-  )
+            const itemView =
+              query.get(
+                'view',
+              )
 
-const currentView =
-  new URLSearchParams(
-    location.search,
-  ).get(
-    'view',
-  )
+            const currentView =
+              new URLSearchParams(
+                location.search,
+              ).get(
+                'view',
+              )
 
-const helpdeskInboxActive =
-  basePath ===
-    '/helpdesk'
-  &&
-  location.pathname ===
-    '/helpdesk'
-  &&
-  (
-    itemView
-      ? currentView ===
-          itemView
-      : !currentView
-        ||
-        currentView ===
-          'mine'
-  )
+            const helpdeskInboxActive =
+              basePath ===
+                '/helpdesk'
+              &&
+              location.pathname ===
+                '/helpdesk'
+              &&
+              (
+                itemView
+                  ? currentView ===
+                      itemView
+                  : !currentView
+                    ||
+                    currentView ===
+                      'mine'
+              )
 
-const active =
-  helpdeskInboxActive
-  ||
-  (
-    basePath !==
-      '/helpdesk'
-    &&
-    location.pathname ===
-      basePath
-  )
-  ||
-  (
-    basePath ===
-      '/helpdesk/admin'
-    &&
-    location.pathname
-      .startsWith(
-        '/helpdesk/admin',
-      )
-  )
-  ||
-  (
-    basePath ===
-      '/helpdesk/analytics'
-    &&
-    (
-      location.pathname
-        .startsWith(
-          '/helpdesk/analytics',
-        )
-      ||
-      location.pathname
-        .startsWith(
-          '/helpdesk/centro/kpis',
-        )
-      ||
-      location.pathname
-        .startsWith(
-          '/helpdesk/reportes',
-        )
-      ||
-      location.pathname
-        .startsWith(
-          '/helpdesk/seguimiento',
-        )
-    )
-  )
+            const active =
+              helpdeskInboxActive
+              ||
+              (
+                basePath !==
+                  '/helpdesk'
+                &&
+                location.pathname ===
+                  basePath
+              )
+              ||
+              (
+                basePath ===
+                  '/helpdesk/admin'
+                &&
+                location.pathname
+                  .startsWith(
+                    '/helpdesk/admin',
+                  )
+              )
+              ||
+              (
+                basePath ===
+                  '/helpdesk/analytics'
+                &&
+                (
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/analytics',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/centro/kpis',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/reportes',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/seguimiento',
+                    )
+                )
+              )
 
             return (
               <NavLink

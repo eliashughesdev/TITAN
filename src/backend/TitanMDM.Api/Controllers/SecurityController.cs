@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using TitanMDM.Api.Security;
-
 using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
@@ -47,20 +46,24 @@ public sealed class SecurityController
             return Unauthorized();
         }
 
-        if (
-            !await _scopeAccessService
-                .HasOrganizationScopeAsync(
+        var scope =
+            await _scopeAccessService
+                .GetScopeSnapshotAsync(
                     context.Value.OrganizationId,
                     context.Value.UserId,
-                    cancellationToken))
-        {
-            return Forbid();
-        }
+                    cancellationToken);
+
+        IReadOnlyCollection<Guid>?
+            siteIds =
+                scope.OrganizationWide
+                    ? null
+                    : scope.SiteIds;
 
         return Ok(
             await _securityPostureService
                 .GetDashboardAsync(
                     context.Value.OrganizationId,
+                    siteIds,
                     cancellationToken));
     }
 
@@ -77,31 +80,38 @@ public sealed class SecurityController
             return Unauthorized();
         }
 
-        if (
-            !await _scopeAccessService
-                .HasOrganizationScopeAsync(
+        var scope =
+            await _scopeAccessService
+                .GetScopeSnapshotAsync(
                     context.Value.OrganizationId,
                     context.Value.UserId,
-                    cancellationToken))
-        {
-            return Forbid();
-        }
+                    cancellationToken);
+
+        IReadOnlyCollection<Guid>?
+            siteIds =
+                scope.OrganizationWide
+                    ? null
+                    : scope.SiteIds;
 
         return Ok(
             await _securityPostureService
                 .GetDevicesAsync(
                     context.Value.OrganizationId,
+                    siteIds,
                     cancellationToken));
     }
 
     private SecurityContext?
         GetSecurityContext()
     {
-        var organization =
+        var organizationText =
             User.FindFirstValue(
-                "organization_id");
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
 
-        var user =
+        var userText =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)
             ??
@@ -110,11 +120,11 @@ public sealed class SecurityController
 
         if (
             !Guid.TryParse(
-                organization,
+                organizationText,
                 out var organizationId)
             ||
             !Guid.TryParse(
-                user,
+                userText,
                 out var userId))
         {
             return null;

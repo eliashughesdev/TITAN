@@ -1,177 +1,296 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Commands;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
 [ApiController]
 [Route("api/device-commands")]
 [Authorize]
-public sealed class DeviceCommandsController : ControllerBase
+public sealed class DeviceCommandsController
+    : ControllerBase
 {
-    private readonly IDeviceCommandService _deviceCommandService;
+    private readonly IDeviceCommandService
+        _deviceCommandService;
+
+    private readonly IScopeAccessService
+        _scopeAccessService;
 
     public DeviceCommandsController(
-        IDeviceCommandService deviceCommandService)
+        IDeviceCommandService deviceCommandService,
+        IScopeAccessService scopeAccessService)
     {
-        _deviceCommandService = deviceCommandService;
+        _deviceCommandService =
+            deviceCommandService;
+
+        _scopeAccessService =
+            scopeAccessService;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateDeviceCommandRequest request,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.Commands)]
+    public async Task<IActionResult>
+        Create(
+            [FromBody]
+            CreateDeviceCommandRequest request,
+            CancellationToken cancellationToken)
     {
-        var organizationId = GetOrganizationId();
-        var userId = GetUserId();
+        var context =
+            GetSecurityContext();
 
-        if (organizationId is null)
+        if (context is null)
         {
-            return Unauthorized(new
-            {
-                code = "INVALID_ORGANIZATION",
-                message =
-                    "El token no contiene una organización válida."
-            });
+            return Unauthorized(
+                new
+                {
+                    code =
+                        "INVALID_IDENTITY",
+
+                    message =
+                        "El token no contiene una identidad válida."
+                });
         }
 
-        if (userId is null)
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    request.DeviceId,
+                    cancellationToken))
         {
-            return Unauthorized(new
-            {
-                code = "INVALID_USER",
-                message =
-                    "El token no contiene un usuario válido."
-            });
+            return Forbid();
         }
 
         try
         {
             var command =
-                await _deviceCommandService.CreateAsync(
-                    organizationId.Value,
-                    userId.Value,
-                    request,
-                    cancellationToken);
+                await _deviceCommandService
+                    .CreateAsync(
+                        context.Value.OrganizationId,
+                        context.Value.UserId,
+                        request,
+                        cancellationToken);
 
             return CreatedAtAction(
-                nameof(GetById),
+                nameof(
+                    GetById),
                 new
                 {
-                    commandId = command.Id
+                    commandId =
+                        command.Id
                 },
                 command);
         }
-        catch (DeviceCommandException ex)
+        catch (
+            DeviceCommandException exception)
         {
-            return MapException(ex);
+            return MapException(
+                exception);
         }
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetCommands(
-        [FromQuery] Guid? deviceId,
-        [FromQuery] string? status,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 25,
-        CancellationToken cancellationToken = default)
+    [RequirePermission(
+        PermissionCodes.Devices.View)]
+    public async Task<IActionResult>
+        GetCommands(
+            [FromQuery] Guid? deviceId,
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25,
+            CancellationToken cancellationToken = default)
     {
-        var organizationId = GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (organizationId is null)
+        if (context is null)
         {
-            return Unauthorized(new
-            {
-                code = "INVALID_ORGANIZATION",
-                message =
-                    "El token no contiene una organización válida."
-            });
+            return Unauthorized();
+        }
+
+        /*
+         * Consultar historial de un dispositivo concreto
+         * requiere acceso al dispositivo.
+         */
+
+        if (
+            deviceId.HasValue
+            &&
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    deviceId.Value,
+                    cancellationToken))
+        {
+            return Forbid();
+        }
+
+        /*
+         * La consulta global de comandos solamente permanece
+         * habilitada para Organization scope hasta convertir
+         * IDeviceCommandService en query scoped en WIN-R9.
+         *
+         * Esto evita una fuga silenciosa de historial.
+         */
+
+        if (
+            !deviceId.HasValue
+            &&
+            !await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken))
+        {
+            return BadRequest(
+                new
+                {
+                    code =
+                        "DEVICE_FILTER_REQUIRED",
+
+                    message =
+                        "Para cuentas limitadas por localidad debe especificarse DeviceId al consultar comandos."
+                });
         }
 
         try
         {
             var result =
-                await _deviceCommandService.GetCommandsAsync(
-                    organizationId.Value,
-                    deviceId,
-                    status,
-                    page,
-                    pageSize,
-                    cancellationToken);
+                await _deviceCommandService
+                    .GetCommandsAsync(
+                        context.Value.OrganizationId,
+                        deviceId,
+                        status,
+                        page,
+                        pageSize,
+                        cancellationToken);
 
-            return Ok(result);
+            return Ok(
+                result);
         }
-        catch (DeviceCommandException ex)
+        catch (
+            DeviceCommandException exception)
         {
-            return MapException(ex);
+            return MapException(
+                exception);
         }
     }
 
     [HttpGet("{commandId:guid}")]
-    public async Task<IActionResult> GetById(
-        Guid commandId,
-        CancellationToken cancellationToken = default)
+    [RequirePermission(
+        PermissionCodes.Devices.View)]
+    public async Task<IActionResult>
+        GetById(
+            Guid commandId,
+            CancellationToken cancellationToken = default)
     {
-        var organizationId = GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (organizationId is null)
+        if (context is null)
         {
-            return Unauthorized(new
-            {
-                code = "INVALID_ORGANIZATION",
-                message =
-                    "El token no contiene una organización válida."
-            });
+            return Unauthorized();
         }
 
         var command =
-            await _deviceCommandService.GetByIdAsync(
-                organizationId.Value,
-                commandId,
-                cancellationToken);
+            await _deviceCommandService
+                .GetByIdAsync(
+                    context.Value.OrganizationId,
+                    commandId,
+                    cancellationToken);
 
-        if (command is null)
+        if (
+            command is null)
         {
-            return NotFound(new
-            {
-                code = "COMMAND_NOT_FOUND",
-                message = "El comando no existe."
-            });
+            return NotFound(
+                new
+                {
+                    code =
+                        "COMMAND_NOT_FOUND",
+
+                    message =
+                        "El comando no existe."
+                });
         }
 
-        return Ok(command);
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    command.DeviceId,
+                    cancellationToken))
+        {
+            return Forbid();
+        }
+
+        return Ok(
+            command);
     }
 
     [HttpPost("{commandId:guid}/cancel")]
-    public async Task<IActionResult> Cancel(
-        Guid commandId,
-        CancellationToken cancellationToken = default)
+    [RequirePermission(
+        PermissionCodes.Devices.Commands)]
+    public async Task<IActionResult>
+        Cancel(
+            Guid commandId,
+            CancellationToken cancellationToken = default)
     {
-        var organizationId = GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (organizationId is null)
+        if (context is null)
         {
-            return Unauthorized(new
-            {
-                code = "INVALID_ORGANIZATION",
-                message =
-                    "El token no contiene una organización válida."
-            });
+            return Unauthorized();
+        }
+
+        var command =
+            await _deviceCommandService
+                .GetByIdAsync(
+                    context.Value.OrganizationId,
+                    commandId,
+                    cancellationToken);
+
+        if (
+            command is null)
+        {
+            return NotFound();
+        }
+
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    command.DeviceId,
+                    cancellationToken))
+        {
+            return Forbid();
         }
 
         try
         {
-            await _deviceCommandService.CancelAsync(
-                organizationId.Value,
-                commandId,
-                cancellationToken);
+            await _deviceCommandService
+                .CancelAsync(
+                    context.Value.OrganizationId,
+                    commandId,
+                    cancellationToken);
 
             return NoContent();
         }
-        catch (DeviceCommandException ex)
+        catch (
+            DeviceCommandException exception)
         {
-            return MapException(ex);
+            return MapException(
+                exception);
         }
     }
 
@@ -182,69 +301,94 @@ public sealed class DeviceCommandsController : ControllerBase
             exception.Code switch
             {
                 "INVALID_ORGANIZATION" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "INVALID_USER" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "INVALID_DEVICE" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "INVALID_COMMAND_TYPE" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "INVALID_EXPIRATION" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "INVALID_STATUS" =>
-                    StatusCodes.Status400BadRequest,
+                    StatusCodes
+                        .Status400BadRequest,
 
                 "DEVICE_NOT_FOUND" =>
-                    StatusCodes.Status404NotFound,
+                    StatusCodes
+                        .Status404NotFound,
 
                 "COMMAND_NOT_FOUND" =>
-                    StatusCodes.Status404NotFound,
+                    StatusCodes
+                        .Status404NotFound,
 
                 "COMMAND_TERMINAL" =>
-                    StatusCodes.Status409Conflict,
+                    StatusCodes
+                        .Status409Conflict,
 
                 _ =>
-                    StatusCodes.Status400BadRequest
+                    StatusCodes
+                        .Status400BadRequest
             };
 
         return StatusCode(
             statusCode,
             new
             {
-                code = exception.Code,
-                message = exception.Message
+                code =
+                    exception.Code,
+
+                message =
+                    exception.Message
             });
     }
 
-    private Guid? GetOrganizationId()
+    private SecurityContext?
+        GetSecurityContext()
     {
-        var value =
+        var organizationText =
             User.FindFirstValue(
-                "organization_id");
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
 
-        return Guid.TryParse(
-            value,
-            out var organizationId)
-            ? organizationId
-            : null;
-    }
-
-    private Guid? GetUserId()
-    {
-        var value =
+        var userText =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+            ??
+            User.FindFirstValue(
+                "sub");
 
-        return Guid.TryParse(
-            value,
-            out var userId)
-            ? userId
-            : null;
+        if (
+            !Guid.TryParse(
+                organizationText,
+                out var organizationId)
+            ||
+            !Guid.TryParse(
+                userText,
+                out var userId))
+        {
+            return null;
+        }
+
+        return new SecurityContext(
+            organizationId,
+            userId);
     }
+
+    private readonly record struct
+        SecurityContext(
+            Guid OrganizationId,
+            Guid UserId);
 }

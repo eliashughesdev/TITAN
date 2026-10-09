@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using TitanMDM.Application.Dashboard;
 using TitanMDM.Application.Dashboard.DTOs;
 using TitanMDM.Application.Dashboard.Interfaces;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -18,25 +19,23 @@ public sealed class DashboardController
     private readonly IDashboardService
         _dashboardService;
 
+    private readonly IScopeAccessService
+        _scopeAccessService;
+
     public DashboardController(
-        IDashboardService dashboardService)
+        IDashboardService dashboardService,
+        IScopeAccessService scopeAccessService)
     {
         _dashboardService =
             dashboardService;
+
+        _scopeAccessService =
+            scopeAccessService;
     }
 
-    /*
-     * ============================================================
-     * DASHBOARD SUMMARY
-     * ============================================================
-     *
-     * Examples:
-     *
-     * /api/dashboard/summary?workspace=global
-     * /api/dashboard/summary?workspace=windows
-     * /api/dashboard/summary?workspace=android
-     * ============================================================
-     */
+    // ============================================================
+    // SUMMARY
+    // ============================================================
 
     [HttpGet("summary")]
     [ProducesResponseType(
@@ -52,10 +51,6 @@ public sealed class DashboardController
             string? workspace,
             CancellationToken cancellationToken)
     {
-        /*
-         * Dashboard itself is optional.
-         */
-
         if (
             !HasPermission(
                 "dashboard.view"))
@@ -63,29 +58,22 @@ public sealed class DashboardController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (
-            organizationId is null)
+        if (context is null)
         {
-            return Forbid();
+            return Unauthorized(
+                new
+                {
+                    message =
+                        "El token no contiene una organización o usuario válido."
+                });
         }
-
-        /*
-         * ========================================================
-         * WORKSPACE
-         * ========================================================
-         */
 
         var requestedWorkspace =
             ParseWorkspace(
                 workspace);
-
-        /*
-         * No permitimos que el usuario cambie manualmente
-         * ?workspace=global para obtener más información.
-         */
 
         if (
             !CanAccessWorkspace(
@@ -94,25 +82,66 @@ public sealed class DashboardController
             return Forbid();
         }
 
+        /*
+         * ========================================================
+         * AUTHORIZATION SCOPE
+         * ========================================================
+         *
+         * Organization:
+         * accessibleSiteIds = null
+         *
+         * Site:
+         * accessibleSiteIds = SiteIds
+         *
+         * Sin scope:
+         * accessibleSiteIds = []
+         *
+         * El servicio jamás debe convertir un Site scope en 403
+         * solamente por no ser Organization.
+         * ========================================================
+         */
+
+        var scope =
+            await _scopeAccessService
+                .GetScopeSnapshotAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken);
+
+        IReadOnlyCollection<Guid>?
+            accessibleSiteIds;
+
+        if (
+            scope.OrganizationWide)
+        {
+            accessibleSiteIds =
+                null;
+        }
+        else
+        {
+            accessibleSiteIds =
+                scope.SiteIds;
+        }
+
         var summary =
             await _dashboardService
                 .GetSummaryAsync(
-                    organizationId.Value,
+                    context.Value.OrganizationId,
                     requestedWorkspace,
+                    accessibleSiteIds,
                     cancellationToken);
 
         return Ok(
             summary);
     }
 
-    /*
-     * ============================================================
-     * WORKSPACE PARSER
-     * ============================================================
-     */
+    // ============================================================
+    // WORKSPACE
+    // ============================================================
 
-    private static DashboardWorkspace ParseWorkspace(
-        string? workspace)
+    private static DashboardWorkspace
+        ParseWorkspace(
+            string? workspace)
     {
         if (
             string.IsNullOrWhiteSpace(
@@ -140,12 +169,6 @@ public sealed class DashboardController
         };
     }
 
-    /*
-     * ============================================================
-     * WORKSPACE AUTHORIZATION
-     * ============================================================
-     */
-
     private bool CanAccessWorkspace(
         DashboardWorkspace workspace)
     {
@@ -168,45 +191,60 @@ public sealed class DashboardController
         };
     }
 
-    /*
-     * ============================================================
-     * CLAIMS
-     * ============================================================
-     */
+    // ============================================================
+    // SECURITY CONTEXT
+    // ============================================================
 
-    private Guid? GetOrganizationId()
+    private SecurityContext?
+        GetSecurityContext()
     {
-        var organizationIdValue =
+        var organizationText =
             User.FindFirstValue(
-                "organizationId")
+                "organization_id")
             ??
             User.FindFirstValue(
-                "organization_id");
+                "organizationId");
+
+        var userText =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub");
 
         if (
-            Guid.TryParse(
-                organizationIdValue,
-                out var organizationId))
+            !Guid.TryParse(
+                organizationText,
+                out var organizationId)
+            ||
+            !Guid.TryParse(
+                userText,
+                out var userId))
         {
-            return organizationId;
+            return null;
         }
 
-        return null;
+        return new SecurityContext(
+            organizationId,
+            userId);
     }
 
     private bool HasPermission(
         string permission)
     {
-        return User.Claims
-            .Any(
-                claim =>
-                    claim.Type ==
-                        "permission"
-                    &&
-                    string.Equals(
-                        claim.Value,
-                        permission,
-                        StringComparison
-                            .OrdinalIgnoreCase));
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                string.Equals(
+                    claim.Value,
+                    permission,
+                    StringComparison.OrdinalIgnoreCase));
     }
+
+    private readonly record struct
+        SecurityContext(
+            Guid OrganizationId,
+            Guid UserId);
 }

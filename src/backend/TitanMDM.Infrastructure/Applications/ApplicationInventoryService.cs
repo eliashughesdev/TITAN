@@ -154,69 +154,156 @@ public sealed class ApplicationInventoryService
     }
 
     public async Task<IReadOnlyCollection<ApplicationSummaryDto>>
-        GetApplicationsAsync(
-            Guid organizationId,
-            string? search,
-            bool? systemApp,
-            CancellationToken cancellationToken = default)
-    {
-        var query = _dbContext.DeviceApplications
+    GetApplicationsAsync(
+        Guid organizationId,
+        IReadOnlyCollection<Guid>? accessibleSiteIds,
+        string? search,
+        bool? systemApp,
+        CancellationToken cancellationToken = default)
+{
+    var visibleDevices =
+        _dbContext
+            .Devices
             .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsPresent);
+            .Where(
+                device =>
+                    device.OrganizationId ==
+                        organizationId
+                    &&
+                    !device.IsDeleted);
 
-        if (systemApp.HasValue)
-        {
-            query = query.Where(
-                x => x.IsSystemApp == systemApp.Value);
-        }
+    if (
+        accessibleSiteIds is not null)
+    {
+        var siteIds =
+            accessibleSiteIds
+                .Where(
+                    id =>
+                        id != Guid.Empty)
+                .Distinct()
+                .ToArray();
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var value = search.Trim();
-
-            query = query.Where(x =>
-                x.ApplicationName.Contains(value) ||
-                x.PackageName.Contains(value));
-        }
-
-        var rows = await query
-            .GroupBy(x => new
-            {
-                x.PackageName,
-                x.ApplicationName,
-                x.VersionName,
-                x.VersionCode,
-                x.IsSystemApp
-            })
-            .Select(group => new
-            {
-                group.Key.PackageName,
-                group.Key.ApplicationName,
-                group.Key.VersionName,
-                group.Key.VersionCode,
-                group.Key.IsSystemApp,
-                DeviceCount = group
-                    .Select(x => x.DeviceId)
-                    .Distinct()
-                    .Count(),
-                EnabledCount = group.Count(x => x.IsEnabled),
-                LastSeenAtUtc = group.Max(x => x.LastSeenAtUtc)
-            })
-            .OrderBy(x => x.ApplicationName)
-            .ToListAsync(cancellationToken);
-
-        return rows.Select(x => new ApplicationSummaryDto(
-            x.PackageName,
-            x.ApplicationName,
-            x.VersionName,
-            x.VersionCode,
-            x.IsSystemApp,
-            x.DeviceCount,
-            x.EnabledCount,
-            x.LastSeenAtUtc)).ToArray();
+        visibleDevices =
+            siteIds.Length == 0
+                ? visibleDevices.Where(
+                    _ =>
+                        false)
+                : visibleDevices.Where(
+                    device =>
+                        device.SiteId.HasValue
+                        &&
+                        siteIds.Contains(
+                            device.SiteId.Value));
     }
+
+    var visibleDeviceIds =
+        visibleDevices.Select(
+            device =>
+                device.Id);
+
+    var query =
+        _dbContext
+            .DeviceApplications
+            .AsNoTracking()
+            .Where(
+                application =>
+                    application.OrganizationId ==
+                        organizationId
+                    &&
+                    application.IsPresent
+                    &&
+                    visibleDeviceIds.Contains(
+                        application.DeviceId));
+
+    if (
+        systemApp.HasValue)
+    {
+        query =
+            query.Where(
+                application =>
+                    application.IsSystemApp ==
+                        systemApp.Value);
+    }
+
+    if (
+        !string.IsNullOrWhiteSpace(
+            search))
+    {
+        var value =
+            search.Trim();
+
+        query =
+            query.Where(
+                application =>
+                    application.ApplicationName
+                        .Contains(
+                            value)
+                    ||
+                    application.PackageName
+                        .Contains(
+                            value));
+    }
+
+    var rows =
+        await query
+            .GroupBy(
+                application =>
+                    new
+                    {
+                        application.PackageName,
+                        application.ApplicationName,
+                        application.VersionName,
+                        application.VersionCode,
+                        application.IsSystemApp
+                    })
+            .Select(
+                group =>
+                    new
+                    {
+                        group.Key.PackageName,
+                        group.Key.ApplicationName,
+                        group.Key.VersionName,
+                        group.Key.VersionCode,
+                        group.Key.IsSystemApp,
+
+                        DeviceCount =
+                            group
+                                .Select(
+                                    item =>
+                                        item.DeviceId)
+                                .Distinct()
+                                .Count(),
+
+                        EnabledCount =
+                            group.Count(
+                                item =>
+                                    item.IsEnabled),
+
+                        LastSeenAtUtc =
+                            group.Max(
+                                item =>
+                                    item.LastSeenAtUtc)
+                    })
+            .OrderBy(
+                item =>
+                    item.ApplicationName)
+            .ToListAsync(
+                cancellationToken);
+
+    return rows
+        .Select(
+            item =>
+                new ApplicationSummaryDto(
+                    item.PackageName,
+                    item.ApplicationName,
+                    item.VersionName,
+                    item.VersionCode,
+                    item.IsSystemApp,
+                    item.DeviceCount,
+                    item.EnabledCount,
+                    item.LastSeenAtUtc))
+        .ToArray();
+}
 
     private static AppInventoryPayload DeserializePayload(
         string resultJson)

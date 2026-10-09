@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Security;
-
 using TitanMDM.Domain.Enums;
-
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Security;
@@ -18,7 +16,11 @@ public sealed class ScopeAccessService
         TitanMdmDbContext dbContext)
     {
         _dbContext =
-            dbContext;
+            dbContext
+            ??
+            throw new ArgumentNullException(
+                nameof(
+                    dbContext));
     }
 
     // ============================================================
@@ -32,9 +34,11 @@ public sealed class ScopeAccessService
             CancellationToken cancellationToken = default)
     {
         if (
-            organizationId == Guid.Empty
+            organizationId ==
+                Guid.Empty
             ||
-            userId == Guid.Empty)
+            userId ==
+                Guid.Empty)
         {
             return Task.FromResult(
                 false);
@@ -44,17 +48,17 @@ public sealed class ScopeAccessService
             .UserScopeGrants
             .AsNoTracking()
             .AnyAsync(
-                x =>
-                    x.OrganizationId ==
+                grant =>
+                    grant.OrganizationId ==
                         organizationId
                     &&
-                    x.UserId ==
+                    grant.UserId ==
                         userId
                     &&
-                    x.ScopeType ==
+                    grant.ScopeType ==
                         AuthorizationScopeType.Organization
                     &&
-                    x.ScopeId ==
+                    grant.ScopeId ==
                         organizationId,
                 cancellationToken);
     }
@@ -71,71 +75,144 @@ public sealed class ScopeAccessService
             CancellationToken cancellationToken = default)
     {
         if (
-            organizationId == Guid.Empty
+            organizationId ==
+                Guid.Empty
             ||
-            userId == Guid.Empty)
+            userId ==
+                Guid.Empty)
         {
             return Array.Empty<Guid>();
         }
 
-        var organizationAccess =
+        var organizationWide =
             await HasOrganizationScopeAsync(
                 organizationId,
                 userId,
                 cancellationToken);
 
-        if (organizationAccess)
+        if (organizationWide)
         {
             return await _dbContext
                 .Sites
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    site =>
+                        site.OrganizationId ==
                             organizationId
                         &&
-                        x.IsActive)
+                        site.IsActive)
+                .OrderBy(
+                    site =>
+                        site.Name)
                 .Select(
-                    x =>
-                        x.Id)
+                    site =>
+                        site.Id)
                 .ToArrayAsync(
                     cancellationToken);
         }
 
-        return await (
-            from grant
-                in _dbContext
-                    .UserScopeGrants
-                    .AsNoTracking()
+        /*
+         * IMPORTANTE
+         *
+         * Solamente devolvemos Sites:
+         *
+         * - que pertenezcan a la organización;
+         * - que estén activos;
+         * - para los cuales exista un grant explícito.
+         *
+         * Department y Group NO se convierten implícitamente
+         * en Site access.
+         */
 
-            join site
-                in _dbContext
-                    .Sites
-                    .AsNoTracking()
+        var siteIds =
+            await (
+                from grant
+                    in _dbContext
+                        .UserScopeGrants
+                        .AsNoTracking()
 
-                on grant.ScopeId
-                equals site.Id
+                join site
+                    in _dbContext
+                        .Sites
+                        .AsNoTracking()
 
-            where
-                grant.OrganizationId ==
-                    organizationId
-                &&
-                grant.UserId ==
-                    userId
-                &&
-                grant.ScopeType ==
-                    AuthorizationScopeType.Site
-                &&
-                site.OrganizationId ==
-                    organizationId
-                &&
-                site.IsActive
+                    on grant.ScopeId
+                    equals site.Id
 
-            select site.Id
-        )
-        .Distinct()
-        .ToArrayAsync(
-            cancellationToken);
+                where
+                    grant.OrganizationId ==
+                        organizationId
+                    &&
+                    grant.UserId ==
+                        userId
+                    &&
+                    grant.ScopeType ==
+                        AuthorizationScopeType.Site
+                    &&
+                    site.OrganizationId ==
+                        organizationId
+                    &&
+                    site.IsActive
+
+                select site.Id
+            )
+            .Distinct()
+            .ToArrayAsync(
+                cancellationToken);
+
+        return siteIds;
+    }
+
+    // ============================================================
+    // SNAPSHOT
+    // ============================================================
+
+    public async Task<AuthorizationScopeSnapshot>
+        GetScopeSnapshotAsync(
+            Guid organizationId,
+            Guid userId,
+            CancellationToken cancellationToken = default)
+    {
+        if (
+            organizationId ==
+                Guid.Empty
+            ||
+            userId ==
+                Guid.Empty)
+        {
+            return AuthorizationScopeSnapshot
+                .Empty();
+        }
+
+        var organizationWide =
+            await HasOrganizationScopeAsync(
+                organizationId,
+                userId,
+                cancellationToken);
+
+        if (organizationWide)
+        {
+            return AuthorizationScopeSnapshot
+                .Organization();
+        }
+
+        var siteIds =
+            await GetAccessibleSiteIdsAsync(
+                organizationId,
+                userId,
+                cancellationToken);
+
+        if (
+            siteIds.Count ==
+            0)
+        {
+            return AuthorizationScopeSnapshot
+                .Empty();
+        }
+
+        return AuthorizationScopeSnapshot
+            .Sites(
+                siteIds);
     }
 
     // ============================================================
@@ -150,28 +227,36 @@ public sealed class ScopeAccessService
             CancellationToken cancellationToken = default)
     {
         if (
-            organizationId == Guid.Empty
+            organizationId ==
+                Guid.Empty
             ||
-            userId == Guid.Empty
+            userId ==
+                Guid.Empty
             ||
-            siteId == Guid.Empty)
+            siteId ==
+                Guid.Empty)
         {
             return false;
         }
+
+        /*
+         * Nunca autorizamos un Site inexistente
+         * o perteneciente a otra organización.
+         */
 
         var siteExists =
             await _dbContext
                 .Sites
                 .AsNoTracking()
                 .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        x.Id ==
+                    site =>
+                        site.Id ==
                             siteId
                         &&
-                        x.IsActive,
+                        site.OrganizationId ==
+                            organizationId
+                        &&
+                        site.IsActive,
                     cancellationToken);
 
         if (!siteExists)
@@ -192,17 +277,17 @@ public sealed class ScopeAccessService
             .UserScopeGrants
             .AsNoTracking()
             .AnyAsync(
-                x =>
-                    x.OrganizationId ==
+                grant =>
+                    grant.OrganizationId ==
                         organizationId
                     &&
-                    x.UserId ==
+                    grant.UserId ==
                         userId
                     &&
-                    x.ScopeType ==
+                    grant.ScopeType ==
                         AuthorizationScopeType.Site
                     &&
-                    x.ScopeId ==
+                    grant.ScopeId ==
                         siteId,
                 cancellationToken);
     }
@@ -218,60 +303,79 @@ public sealed class ScopeAccessService
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
-        if (deviceId == Guid.Empty)
+        if (
+            organizationId ==
+                Guid.Empty
+            ||
+            userId ==
+                Guid.Empty
+            ||
+            deviceId ==
+                Guid.Empty)
         {
             return false;
         }
 
-        var resource =
+        var device =
             await _dbContext
                 .Devices
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    item =>
+                        item.OrganizationId ==
                             organizationId
                         &&
-                        x.Id ==
+                        item.Id ==
                             deviceId
                         &&
-                        !x.IsDeleted)
+                        !item.IsDeleted)
                 .Select(
-                    x =>
+                    item =>
                         new
                         {
-                            x.SiteId
+                            item.SiteId
                         })
                 .SingleOrDefaultAsync(
                     cancellationToken);
 
-        if (resource is null)
+        if (device is null)
         {
             return false;
         }
 
-        var organizationScope =
-            await HasOrganizationScopeAsync(
+        var snapshot =
+            await GetScopeSnapshotAsync(
                 organizationId,
                 userId,
                 cancellationToken);
 
-        if (organizationScope)
+        if (
+            snapshot.OrganizationWide)
         {
             return true;
         }
 
-        var sites =
-            await GetAccessibleSiteIdsAsync(
-                organizationId,
-                userId,
-                cancellationToken);
+        /*
+         * Un recurso sin Site solamente es visible
+         * desde Organization scope.
+         *
+         * Esto evita que dispositivos sin clasificar
+         * se filtren accidentalmente hacia técnicos regionales.
+         */
 
-        return ResourceScopeRules
-            .CanAccessResource(
-                false,
-                sites,
-                resource.SiteId);
+        if (
+            !device.SiteId.HasValue
+            ||
+            device.SiteId.Value ==
+                Guid.Empty)
+        {
+            return false;
+        }
+
+        return snapshot
+            .SiteIds
+            .Contains(
+                device.SiteId.Value);
     }
 
     // ============================================================
@@ -285,57 +389,80 @@ public sealed class ScopeAccessService
             Guid ticketId,
             CancellationToken cancellationToken = default)
     {
-        if (ticketId == Guid.Empty)
+        if (
+            organizationId ==
+                Guid.Empty
+            ||
+            userId ==
+                Guid.Empty
+            ||
+            ticketId ==
+                Guid.Empty)
         {
             return false;
         }
 
-        var resource =
+        var ticket =
             await _dbContext
                 .HelpdeskTickets
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    item =>
+                        item.OrganizationId ==
                             organizationId
                         &&
-                        x.Id ==
+                        item.Id ==
                             ticketId)
                 .Select(
-                    x =>
+                    item =>
                         new
                         {
-                            x.SiteId
+                            item.SiteId
                         })
                 .SingleOrDefaultAsync(
                     cancellationToken);
 
-        if (resource is null)
+        if (ticket is null)
         {
             return false;
         }
 
-        var organizationScope =
-            await HasOrganizationScopeAsync(
+        var snapshot =
+            await GetScopeSnapshotAsync(
                 organizationId,
                 userId,
                 cancellationToken);
 
-        if (organizationScope)
+        if (
+            snapshot.OrganizationWide)
         {
             return true;
         }
 
-        var sites =
-            await GetAccessibleSiteIdsAsync(
-                organizationId,
-                userId,
-                cancellationToken);
+        /*
+         * Ticket sin Site:
+         *
+         * no concedemos acceso por accidente a usuarios
+         * regionales solamente porque el Ticket todavía
+         * no haya sido clasificado.
+         *
+         * Helpdesk tendrá su propia lógica operacional
+         * para My Work / requester / unassigned cuando
+         * entremos al bloque HD-E.
+         */
 
-        return ResourceScopeRules
-            .CanAccessResource(
-                false,
-                sites,
-                resource.SiteId);
+        if (
+            !ticket.SiteId.HasValue
+            ||
+            ticket.SiteId.Value ==
+                Guid.Empty)
+        {
+            return false;
+        }
+
+        return snapshot
+            .SiteIds
+            .Contains(
+                ticket.SiteId.Value);
     }
 }

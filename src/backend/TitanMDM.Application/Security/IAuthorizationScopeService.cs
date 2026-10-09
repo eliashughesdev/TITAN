@@ -19,6 +19,15 @@ public interface IAuthorizationScopeService
         Guid scopeId,
         CancellationToken cancellationToken = default);
 
+    Task ReplaceAsync(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid userId,
+        IReadOnlyCollection<
+            AuthorizationScopeAssignment>
+            scopes,
+        CancellationToken cancellationToken = default);
+
     Task RevokeAsync(
         Guid organizationId,
         Guid userId,
@@ -32,3 +41,7 @@ public interface IAuthorizationScopeService
         Guid scopeId,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record AuthorizationScopeAssignment(
+    AuthorizationScopeType ScopeType,
+    Guid ScopeId);

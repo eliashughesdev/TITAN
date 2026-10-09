@@ -34,83 +34,114 @@ public sealed class ReportsService
     public async Task<ReportsOverviewDto>
         GetOverviewAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default)
     {
         ValidateOrganization(
             organizationId);
 
+        /*
+         * ========================================================
+         * VISIBLE DEVICES
+         * ========================================================
+         *
+         * null:
+         * Organization scope.
+         *
+         * []:
+         * usuario sin Sites.
+         *
+         * [ids]:
+         * únicamente dispositivos pertenecientes a esos Sites.
+         * ========================================================
+         */
+
         var devices =
-            _dbContext
-                .Devices
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId
-                        &&
-                        !x.IsDeleted);
+            GetVisibleDevices(
+                organizationId,
+                accessibleSiteIds);
+
+        var visibleDeviceIds =
+            devices.Select(
+                device =>
+                    device.Id);
+
+        /*
+         * ========================================================
+         * FLEET
+         * ========================================================
+         */
 
         var totalDevices =
-            await devices.CountAsync(
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    cancellationToken);
 
         var online =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Online,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Online,
+                    cancellationToken);
 
         var offline =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceStatus.Offline,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Offline,
+                    cancellationToken);
 
         var managed =
-            await devices.CountAsync(
-                x =>
-                    x.IsManaged,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.IsManaged,
+                    cancellationToken);
 
         var windows =
-            await devices.CountAsync(
-                x =>
-                    x.Platform ==
-                    DevicePlatform.Windows,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Platform ==
+                            DevicePlatform.Windows,
+                    cancellationToken);
 
         var android =
-            await devices.CountAsync(
-                x =>
-                    x.Platform ==
-                    DevicePlatform.Android,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Platform ==
+                            DevicePlatform.Android,
+                    cancellationToken);
 
         var compliant =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.Compliant,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Compliant,
+                    cancellationToken);
 
         var nonCompliant =
-            await devices.CountAsync(
-                x =>
-                    x.ComplianceStatus ==
-                    ComplianceStatus.NonCompliant,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.ComplianceStatus ==
+                            ComplianceStatus.NonCompliant,
+                    cancellationToken);
 
         var quarantined =
-            await devices.CountAsync(
-                x =>
-                    x.Status ==
-                        DeviceStatus.Quarantined
-                    ||
-                    x.ComplianceStatus ==
-                        ComplianceStatus.Quarantined,
-                cancellationToken);
+            await devices
+                .CountAsync(
+                    device =>
+                        device.Status ==
+                            DeviceStatus.Quarantined
+                        ||
+                        device.ComplianceStatus ==
+                            ComplianceStatus.Quarantined,
+                    cancellationToken);
 
         var fleet =
             new FleetOverviewDto(
@@ -127,53 +158,68 @@ public sealed class ReportsService
                 nonCompliant,
                 quarantined);
 
+        /*
+         * ========================================================
+         * COMMANDS LAST 30 DAYS
+         * ========================================================
+         */
+
         var fromUtc =
             DateTime.UtcNow
-                .AddDays(-30);
+                .AddDays(
+                    -30);
 
         var commands =
             _dbContext
                 .DeviceCommands
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
+                    command =>
+                        command.OrganizationId ==
                             organizationId
                         &&
-                        x.CreatedAtUtc >=
+                        visibleDeviceIds.Contains(
+                            command.DeviceId)
+                        &&
+                        command.CreatedAtUtc >=
                             fromUtc);
 
         var totalCommands =
-            await commands.CountAsync(
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    cancellationToken);
 
         var success =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Success,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Success,
+                    cancellationToken);
 
         var failed =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Failed,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Failed,
+                    cancellationToken);
 
         var timeout =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Timeout,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Timeout,
+                    cancellationToken);
 
         var cancelled =
-            await commands.CountAsync(
-                x =>
-                    x.Status ==
-                    DeviceCommandStatus.Cancelled,
-                cancellationToken);
+            await commands
+                .CountAsync(
+                    command =>
+                        command.Status ==
+                            DeviceCommandStatus.Cancelled,
+                    cancellationToken);
 
         var active =
             Math.Max(
@@ -188,8 +234,10 @@ public sealed class ReportsService
             totalCommands == 0
                 ? 0M
                 : Math.Round(
-                    success /
-                    (decimal)totalCommands *
+                    success
+                    /
+                    (decimal)totalCommands
+                    *
                     100M,
                     1);
 
@@ -203,14 +251,23 @@ public sealed class ReportsService
                 active,
                 successRate);
 
+        /*
+         * ========================================================
+         * SECURITY
+         * ========================================================
+         */
+
         var securityQuery =
             _dbContext
                 .DeviceSecurityPostures
                 .AsNoTracking()
                 .Where(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId);
+                    posture =>
+                        posture.OrganizationId ==
+                            organizationId
+                        &&
+                        visibleDeviceIds.Contains(
+                            posture.DeviceId));
 
         var evaluatedDevices =
             await securityQuery
@@ -223,25 +280,27 @@ public sealed class ReportsService
                 : Math.Round(
                     await securityQuery
                         .AverageAsync(
-                            x =>
+                            posture =>
                                 (decimal)
-                                x.ComplianceScore,
+                                posture.ComplianceScore,
                             cancellationToken),
                     1);
 
         var critical =
-            await securityQuery.CountAsync(
-                x =>
-                    x.RiskLevel ==
-                    "Critical",
-                cancellationToken);
+            await securityQuery
+                .CountAsync(
+                    posture =>
+                        posture.RiskLevel ==
+                            "Critical",
+                    cancellationToken);
 
         var high =
-            await securityQuery.CountAsync(
-                x =>
-                    x.RiskLevel ==
-                    "High",
-                cancellationToken);
+            await securityQuery
+                .CountAsync(
+                    posture =>
+                        posture.RiskLevel ==
+                            "High",
+                    cancellationToken);
 
         var security =
             new SecurityOverviewDto(
@@ -250,12 +309,19 @@ public sealed class ReportsService
                 critical,
                 high);
 
+        /*
+         * ========================================================
+         * OPERATING SYSTEM BREAKDOWN
+         * ========================================================
+         */
+
         var operatingSystemsRows =
             await devices
                 .GroupBy(
-                    x =>
-                        x.OperatingSystem
-                        ?? "N/D")
+                    device =>
+                        device.OperatingSystem
+                        ??
+                        "N/D")
                 .Select(
                     group =>
                         new
@@ -267,27 +333,35 @@ public sealed class ReportsService
                                 group.Count()
                         })
                 .OrderByDescending(
-                    x =>
-                        x.Value)
-                .Take(8)
+                    item =>
+                        item.Value)
+                .Take(
+                    8)
                 .ToArrayAsync(
                     cancellationToken);
 
         var operatingSystems =
             operatingSystemsRows
                 .Select(
-                    x =>
+                    item =>
                         new ReportBreakdownDto(
-                            x.Label,
-                            x.Value))
+                            item.Label,
+                            item.Value))
                 .ToArray();
+
+        /*
+         * ========================================================
+         * DEPARTMENTS
+         * ========================================================
+         */
 
         var departmentsRows =
             await devices
                 .GroupBy(
-                    x =>
-                        x.Department
-                        ?? "Sin departamento")
+                    device =>
+                        device.Department
+                        ??
+                        "Sin departamento")
                 .Select(
                     group =>
                         new
@@ -299,26 +373,33 @@ public sealed class ReportsService
                                 group.Count()
                         })
                 .OrderByDescending(
-                    x =>
-                        x.Value)
-                .Take(8)
+                    item =>
+                        item.Value)
+                .Take(
+                    8)
                 .ToArrayAsync(
                     cancellationToken);
 
         var departments =
             departmentsRows
                 .Select(
-                    x =>
+                    item =>
                         new ReportBreakdownDto(
-                            x.Label,
-                            x.Value))
+                            item.Label,
+                            item.Value))
                 .ToArray();
+
+        /*
+         * ========================================================
+         * COMMAND TYPES
+         * ========================================================
+         */
 
         var commandTypesRows =
             await commands
                 .GroupBy(
-                    x =>
-                        x.CommandType)
+                    command =>
+                        command.CommandType)
                 .Select(
                     group =>
                         new
@@ -330,20 +411,27 @@ public sealed class ReportsService
                                 group.Count()
                         })
                 .OrderByDescending(
-                    x =>
-                        x.Value)
-                .Take(10)
+                    item =>
+                        item.Value)
+                .Take(
+                    10)
                 .ToArrayAsync(
                     cancellationToken);
 
         var commandTypes =
             commandTypesRows
                 .Select(
-                    x =>
+                    item =>
                         new ReportBreakdownDto(
-                            x.Label,
-                            x.Value))
+                            item.Label,
+                            item.Value))
                 .ToArray();
+
+        /*
+         * ========================================================
+         * RESULT
+         * ========================================================
+         */
 
         return new ReportsOverviewDto(
             DateTime.UtcNow,
@@ -362,20 +450,23 @@ public sealed class ReportsService
     public async Task<byte[]>
         ExportDevicesCsvAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default)
     {
         var devices =
             await GetDevicesForExportAsync(
                 organizationId,
+                accessibleSiteIds,
                 cancellationToken);
 
         var builder =
             new StringBuilder();
 
         /*
-         * UTF-8 BOM mejora compatibilidad con Excel en Windows
-         * para caracteres en español.
+         * UTF-8 BOM mejora compatibilidad con Excel
+         * en equipos Windows y conserva acentos.
          */
+
         builder.Append(
             '\uFEFF');
 
@@ -384,11 +475,14 @@ public sealed class ReportsService
             "Fabricante,Modelo,SistemaOperativo,Version,Usuario," +
             "Departamento,IP,Administrado,UltimoContactoUTC");
 
-        foreach (var device in devices)
+        foreach (
+            var device
+            in devices)
         {
             builder.AppendLine(
                 string.Join(
                     ",",
+
                     Csv(
                         device.DeviceName),
 
@@ -409,31 +503,38 @@ public sealed class ReportsService
 
                     Csv(
                         device.Manufacturer
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.Model
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.OperatingSystem
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.OperatingSystemVersion
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.AssignedUser
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.Department
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.IpAddress
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     Csv(
                         device.IsManaged
@@ -445,10 +546,12 @@ public sealed class ReportsService
                             ?.ToString(
                                 "O",
                                 CultureInfo.InvariantCulture)
-                        ?? string.Empty)));
+                        ??
+                        string.Empty)));
         }
 
-        return Encoding.UTF8
+        return Encoding
+            .UTF8
             .GetBytes(
                 builder.ToString());
     }
@@ -460,11 +563,13 @@ public sealed class ReportsService
     public async Task<byte[]>
         ExportDevicesExcelAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default)
     {
         var devices =
             await GetDevicesForExportAsync(
                 organizationId,
+                accessibleSiteIds,
                 cancellationToken);
 
         using var stream =
@@ -577,7 +682,9 @@ public sealed class ReportsService
             var headerRow =
                 new Row();
 
-            foreach (var value in header)
+            foreach (
+                var value
+                in header)
             {
                 headerRow.Append(
                     CreateTextCell(
@@ -589,7 +696,9 @@ public sealed class ReportsService
             sheetData.Append(
                 headerRow);
 
-            foreach (var device in devices)
+            foreach (
+                var device
+                in devices)
             {
                 var row =
                     new Row();
@@ -615,31 +724,38 @@ public sealed class ReportsService
 
                     CreateTextCell(
                         device.Manufacturer
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.Model
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.OperatingSystem
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.OperatingSystemVersion
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.AssignedUser
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.Department
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.IpAddress
-                        ?? string.Empty),
+                        ??
+                        string.Empty),
 
                     CreateTextCell(
                         device.IsManaged
@@ -651,7 +767,8 @@ public sealed class ReportsService
                             ?.ToString(
                                 "yyyy-MM-dd HH:mm:ss 'UTC'",
                                 CultureInfo.InvariantCulture)
-                        ?? string.Empty));
+                        ??
+                        string.Empty));
 
                 sheetData.Append(
                     row);
@@ -687,7 +804,8 @@ public sealed class ReportsService
                 .Save();
         }
 
-        return stream.ToArray();
+        return stream
+            .ToArray();
     }
 
     // ============================================================
@@ -697,37 +815,56 @@ public sealed class ReportsService
     public async Task<byte[]>
         ExportDevicesPdfAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken = default)
     {
         var devices =
             await GetDevicesForExportAsync(
                 organizationId,
+                accessibleSiteIds,
                 cancellationToken);
 
         var lines =
             new List<string>
             {
                 "TitanMDM Enterprise - Reporte de dispositivos",
+
                 $"Generado UTC: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
+
                 $"Total de dispositivos: {devices.Count}",
+
                 string.Empty,
+
                 "Nombre | Plataforma | Estado | Cumplimiento | SO | Usuario | IP"
             };
 
-        foreach (var device in devices)
+        foreach (
+            var device
+            in devices)
         {
             lines.Add(
                 JoinPdfColumns(
                     device.DeviceName,
-                    device.Platform.ToString(),
-                    device.Status.ToString(),
-                    device.ComplianceStatus.ToString(),
+
+                    device.Platform
+                        .ToString(),
+
+                    device.Status
+                        .ToString(),
+
+                    device.ComplianceStatus
+                        .ToString(),
+
                     BuildOperatingSystem(
                         device),
+
                     device.AssignedUser
-                    ?? string.Empty,
+                    ??
+                    string.Empty,
+
                     device.IpAddress
-                    ?? string.Empty));
+                    ??
+                    string.Empty));
         }
 
         return BuildPdf(
@@ -735,32 +872,99 @@ public sealed class ReportsService
     }
 
     // ============================================================
-    // DATA
+    // VISIBLE DEVICES
+    // ============================================================
+
+    private IQueryable<Device>
+        GetVisibleDevices(
+            Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds)
+    {
+        ValidateOrganization(
+            organizationId);
+
+        var query =
+            _dbContext
+                .Devices
+                .AsNoTracking()
+                .Where(
+                    device =>
+                        device.OrganizationId ==
+                            organizationId
+                        &&
+                        !device.IsDeleted);
+
+        /*
+         * null significa Organization Scope.
+         */
+
+        if (
+            accessibleSiteIds is null)
+        {
+            return query;
+        }
+
+        var siteIds =
+            accessibleSiteIds
+                .Where(
+                    id =>
+                        id != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+        /*
+         * El usuario posee permiso funcional,
+         * pero no tiene Site asignado.
+         *
+         * Devolvemos consulta vacía.
+         *
+         * No devolvemos datos corporativos por accidente.
+         */
+
+        if (
+            siteIds.Length ==
+            0)
+        {
+            return query.Where(
+                _ =>
+                    false);
+        }
+
+        /*
+         * Un usuario regional solamente obtiene
+         * equipos con Site explícito dentro de su Scope.
+         *
+         * Dispositivos sin Site quedan reservados para
+         * Organization Scope.
+         */
+
+        return query.Where(
+            device =>
+                device.SiteId.HasValue
+                &&
+                siteIds.Contains(
+                    device.SiteId.Value));
+    }
+
+    // ============================================================
+    // EXPORT DATA
     // ============================================================
 
     private async Task<List<Device>>
         GetDevicesForExportAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds,
             CancellationToken cancellationToken)
     {
-        ValidateOrganization(
-            organizationId);
-
-        return await _dbContext
-            .Devices
-            .AsNoTracking()
-            .Where(
-                x =>
-                    x.OrganizationId ==
-                        organizationId
-                    &&
-                    !x.IsDeleted)
+        return await GetVisibleDevices(
+                organizationId,
+                accessibleSiteIds)
             .OrderBy(
-                x =>
-                    x.DeviceName)
+                device =>
+                    device.DeviceName)
             .ThenBy(
-                x =>
-                    x.Id)
+                device =>
+                    device.Id)
             .ToListAsync(
                 cancellationToken);
     }
@@ -775,6 +979,7 @@ public sealed class ReportsService
         var fonts =
             new Fonts(
                 new Font(),
+
                 new Font(
                     new Bold()));
 
@@ -862,7 +1067,8 @@ public sealed class ReportsService
                 new InlineString(
                     new Text(
                         value
-                        ?? string.Empty)
+                        ??
+                        string.Empty)
                     {
                         Space =
                             SpaceProcessingModeValues
@@ -872,7 +1078,7 @@ public sealed class ReportsService
     }
 
     // ============================================================
-    // PDF HELPERS
+    // PDF
     // ============================================================
 
     private static byte[]
@@ -888,7 +1094,9 @@ public sealed class ReportsService
                     rowsPerPage)
                 .ToArray();
 
-        if (pages.Length == 0)
+        if (
+            pages.Length ==
+            0)
         {
             pages =
             [
@@ -897,7 +1105,8 @@ public sealed class ReportsService
         }
 
         /*
-         * Objetos:
+         * Objetos PDF:
+         *
          * 1 = Catalog
          * 2 = Pages
          * 3 = Font
@@ -905,6 +1114,7 @@ public sealed class ReportsService
          * Por cada página:
          * Page + Content
          */
+
         var objectBodies =
             new Dictionary<int, string>();
 
@@ -914,7 +1124,9 @@ public sealed class ReportsService
         var nextObjectNumber =
             4;
 
-        foreach (var pageLines in pages)
+        foreach (
+            var pageLines
+            in pages)
         {
             var pageObjectNumber =
                 nextObjectNumber++;
@@ -937,20 +1149,30 @@ public sealed class ReportsService
 
             objectBodies[
                 contentObjectNumber] =
-                $"<< /Length {contentBytes.Length} >>\n" +
-                "stream\n" +
-                content +
+                $"<< /Length {contentBytes.Length} >>\n"
+                +
+                "stream\n"
+                +
+                content
+                +
                 "\nendstream";
 
             objectBodies[
                 pageObjectNumber] =
-                "<< /Type /Page " +
-                "/Parent 2 0 R " +
-                "/MediaBox [0 0 842 595] " +
-                "/Resources << " +
-                "/Font << /F1 3 0 R >> " +
-                ">> " +
-                $"/Contents {contentObjectNumber} 0 R " +
+                "<< /Type /Page "
+                +
+                "/Parent 2 0 R "
+                +
+                "/MediaBox [0 0 842 595] "
+                +
+                "/Resources << "
+                +
+                "/Font << /F1 3 0 R >> "
+                +
+                ">> "
+                +
+                $"/Contents {contentObjectNumber} 0 R "
+                +
                 ">>";
         }
 
@@ -958,21 +1180,28 @@ public sealed class ReportsService
             "<< /Type /Catalog /Pages 2 0 R >>";
 
         objectBodies[2] =
-            "<< /Type /Pages " +
-            $"/Count {pageObjectNumbers.Count} " +
-            "/Kids [" +
+            "<< /Type /Pages "
+            +
+            $"/Count {pageObjectNumbers.Count} "
+            +
+            "/Kids ["
+            +
             string.Join(
                 " ",
                 pageObjectNumbers
                     .Select(
-                        x =>
-                            $"{x} 0 R")) +
+                        objectNumber =>
+                            $"{objectNumber} 0 R"))
+            +
             "] >>";
 
         objectBodies[3] =
-            "<< /Type /Font " +
-            "/Subtype /Type1 " +
-            "/BaseFont /Helvetica " +
+            "<< /Type /Font "
+            +
+            "/Subtype /Type1 "
+            +
+            "/BaseFont /Helvetica "
+            +
             "/Encoding /WinAnsiEncoding >>";
 
         using var stream =
@@ -986,11 +1215,14 @@ public sealed class ReportsService
             new Dictionary<int, long>();
 
         var highestObject =
-            objectBodies.Keys.Max();
+            objectBodies
+                .Keys
+                .Max();
 
-        for (var objectNumber = 1;
-             objectNumber <= highestObject;
-             objectNumber++)
+        for (
+            var objectNumber = 1;
+            objectNumber <= highestObject;
+            objectNumber++)
         {
             offsets[
                 objectNumber] =
@@ -1021,9 +1253,10 @@ public sealed class ReportsService
             stream,
             "0000000000 65535 f \n");
 
-        for (var objectNumber = 1;
-             objectNumber <= highestObject;
-             objectNumber++)
+        for (
+            var objectNumber = 1;
+            objectNumber <= highestObject;
+            objectNumber++)
         {
             WritePdf(
                 stream,
@@ -1032,14 +1265,20 @@ public sealed class ReportsService
 
         WritePdf(
             stream,
-            "trailer\n" +
-            $"<< /Size {highestObject + 1} " +
-            "/Root 1 0 R >>\n" +
-            "startxref\n" +
-            $"{xrefOffset}\n" +
+            "trailer\n"
+            +
+            $"<< /Size {highestObject + 1} "
+            +
+            "/Root 1 0 R >>\n"
+            +
+            "startxref\n"
+            +
+            $"{xrefOffset}\n"
+            +
             "%%EOF");
 
-        return stream.ToArray();
+        return stream
+            .ToArray();
     }
 
     private static string
@@ -1061,7 +1300,9 @@ public sealed class ReportsService
         var first =
             true;
 
-        foreach (var rawLine in lines)
+        foreach (
+            var rawLine
+            in lines)
         {
             var line =
                 EscapePdfText(
@@ -1075,8 +1316,12 @@ public sealed class ReportsService
                     "0 -12 Td");
             }
 
-            builder.Append('(');
-            builder.Append(line);
+            builder.Append(
+                '(');
+
+            builder.Append(
+                line);
+
             builder.AppendLine(
                 ") Tj");
 
@@ -1087,7 +1332,8 @@ public sealed class ReportsService
         builder.Append(
             "ET");
 
-        return builder.ToString();
+        return builder
+            .ToString();
     }
 
     private static void
@@ -1133,9 +1379,9 @@ public sealed class ReportsService
         return string.Join(
             " | ",
             values.Select(
-                x =>
+                value =>
                     NormalizePdfValue(
-                        x)));
+                        value)));
     }
 
     private static string
@@ -1159,20 +1405,24 @@ public sealed class ReportsService
             string value,
             int maximumLength)
     {
-        if (value.Length <=
+        if (
+            value.Length <=
             maximumLength)
         {
             return value;
         }
 
-        if (maximumLength <= 3)
+        if (
+            maximumLength <=
+            3)
         {
             return value[
                 ..maximumLength];
         }
 
         return value[
-            ..(maximumLength - 3)] +
+            ..(maximumLength - 3)]
+            +
             "...";
     }
 
@@ -1186,25 +1436,30 @@ public sealed class ReportsService
     {
         var name =
             device.OperatingSystem
-            ?? string.Empty;
+            ??
+            string.Empty;
 
         var version =
             device.OperatingSystemVersion
-            ?? string.Empty;
+            ??
+            string.Empty;
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 version))
         {
             return name;
         }
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 name))
         {
             return version;
         }
 
-        return $"{name} {version}";
+        return
+            $"{name} {version}";
     }
 
     private static string
@@ -1213,19 +1468,22 @@ public sealed class ReportsService
     {
         var safe =
             value
-            ?? string.Empty;
+            ??
+            string.Empty;
 
-        return $"\"{safe.Replace(
-            "\"",
-            "\"\"",
-            StringComparison.Ordinal)}\"";
+        return
+            $"\"{safe.Replace(
+                "\"",
+                "\"\"",
+                StringComparison.Ordinal)}\"";
     }
 
     private static void
         ValidateOrganization(
             Guid organizationId)
     {
-        if (organizationId ==
+        if (
+            organizationId ==
             Guid.Empty)
         {
             throw new InvalidOperationException(

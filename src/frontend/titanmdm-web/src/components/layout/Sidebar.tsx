@@ -50,7 +50,27 @@ export function Sidebar({
   const location =
     useLocation()
 
+  /*
+   * ============================================================
+   * WORKSPACE ACCESS
+   * ============================================================
+   */
+
+  const canWindows =
+    hasPermission(
+      'workspace.windows.view',
+    )
+
+  const canAndroid =
+    hasPermission(
+      'workspace.android.view',
+    )
+
   const canHelpdesk =
+    hasPermission(
+      'workspace.helpdesk.view',
+    )
+    ||
     canUseHelpdeskPortal(
       hasPermission,
     )
@@ -62,16 +82,8 @@ export function Sidebar({
     hasPermission(
       'helpdesk.admin.access',
     )
-    ||
-    hasPermission(
-      'helpdesk.view',
-    )
-    ||
-    hasPermission(
-      'tickets.view',
-    )
 
-  const canAdmin =
+  const hasAdministrationFeature =
     hasPermission(
       'settings.view',
     )
@@ -85,8 +97,35 @@ export function Sidebar({
     )
     ||
     hasPermission(
+      'users.manage',
+    )
+    ||
+    hasPermission(
       'roles.view',
     )
+    ||
+    hasPermission(
+      'roles.manage',
+    )
+    ||
+    hasPermission(
+      'sites.view',
+    )
+    ||
+    hasPermission(
+      'sites.manage',
+    )
+    ||
+    hasPermission(
+      'audit.view',
+    )
+
+  const canAdmin =
+    hasPermission(
+      'workspace.administration.view',
+    )
+    &&
+    hasAdministrationFeature
 
   const canPonches =
     hasPermission(
@@ -96,6 +135,12 @@ export function Sidebar({
     hasPermission(
       'ponches.manage',
     )
+
+  /*
+   * ============================================================
+   * MODULES
+   * ============================================================
+   */
 
   const modules = [
     {
@@ -113,7 +158,7 @@ export function Sidebar({
 
       active:
         location.pathname ===
-        '/',
+          '/',
     },
 
     {
@@ -127,13 +172,11 @@ export function Sidebar({
         MonitorCog,
 
       enabled:
-        hasPermission(
-          'workspace.windows.view',
-        ),
+        canWindows,
 
       active:
         activeWorkspaceId ===
-        'windows',
+          'windows',
     },
 
     {
@@ -147,13 +190,11 @@ export function Sidebar({
         Smartphone,
 
       enabled:
-        hasPermission(
-          'workspace.android.view',
-        ),
+        canAndroid,
 
       active:
         activeWorkspaceId ===
-        'android',
+          'android',
     },
 
     {
@@ -201,7 +242,7 @@ export function Sidebar({
 
       active:
         activeWorkspaceId ===
-        'administration',
+          'administration',
     },
   ]
     .filter(
@@ -369,7 +410,7 @@ export function Sidebar({
               </strong>
 
               <span>
-                TitanMDM Security
+                RBAC + Scope activo
               </span>
             </div>
           )}
