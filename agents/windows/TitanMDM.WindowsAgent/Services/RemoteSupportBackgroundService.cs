@@ -1,3 +1,4 @@
+
 using TitanMDM.WindowsAgent.Contracts;
 using TitanMDM.WindowsAgent.Storage;
 
@@ -6,51 +7,32 @@ namespace TitanMDM.WindowsAgent.Services;
 public sealed class RemoteSupportBackgroundService
     : BackgroundService
 {
-    private const int MaxRestartAttempts =
-        3;
+    private const int MaxRestartAttempts = 3;
 
     private static readonly TimeSpan PollInterval =
-        TimeSpan.FromSeconds(
-            5);
+        TimeSpan.FromSeconds(5);
 
     private static readonly TimeSpan IdentityWaitInterval =
-        TimeSpan.FromSeconds(
-            15);
+        TimeSpan.FromSeconds(15);
+
+    private static readonly TimeSpan BackendRetryInterval =
+        TimeSpan.FromSeconds(15);
 
     private static readonly TimeSpan RestartInterval =
-        TimeSpan.FromSeconds(
-            10);
+        TimeSpan.FromSeconds(10);
 
-    private readonly RemoteSupportApiClient
-        _apiClient;
+    private readonly RemoteSupportApiClient _apiClient;
+    private readonly RemoteSupportSessionManager _sessionManager;
+    private readonly RemoteDesktopHostLauncher _hostLauncher;
+    private readonly DeviceIdentityStore _identityStore;
+    private readonly AgentLifecycleCoordinator _lifecycle;
+    private readonly ILogger<RemoteSupportBackgroundService> _logger;
 
-    private readonly RemoteSupportSessionManager
-        _sessionManager;
+    private RemoteDesktopStartRequest? _activeLaunchRequest;
 
-    private readonly RemoteDesktopHostLauncher
-        _hostLauncher;
-
-    private readonly DeviceIdentityStore
-        _identityStore;
-
-    private readonly AgentLifecycleCoordinator
-        _lifecycle;
-
-    private readonly ILogger<
-        RemoteSupportBackgroundService>
-        _logger;
-
-    private RemoteDesktopStartRequest?
-        _activeLaunchRequest;
-
-    private int
-        _restartAttempts;
-
-    private DateTime
-        _nextRestartAtUtc;
-
-    private bool
-        _identityWaitingLogged;
+    private int _restartAttempts;
+    private DateTime _nextRestartAtUtc = DateTime.MinValue;
+    private bool _identityWaitingLogged;
 
     public RemoteSupportBackgroundService(
         RemoteSupportApiClient apiClient,
@@ -60,160 +42,200 @@ public sealed class RemoteSupportBackgroundService
         AgentLifecycleCoordinator lifecycle,
         ILogger<RemoteSupportBackgroundService> logger)
     {
-        _apiClient =
-            apiClient;
-
-        _sessionManager =
-            sessionManager;
-
-        _hostLauncher =
-            hostLauncher;
-
-        _identityStore =
-            identityStore;
-
-        _lifecycle =
-            lifecycle;
-
-        _logger =
-            logger;
+        _apiClient = apiClient;
+        _sessionManager = sessionManager;
+        _hostLauncher = hostLauncher;
+        _identityStore = identityStore;
+        _lifecycle = lifecycle;
+        _logger = logger;
     }
+
+    // ============================================================
+    // MAIN SUPERVISOR
+    // ============================================================
 
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
         _logger.LogInformation(
-            "TitanMDM Remote Support service iniciado.");
+            "TitanMDM Remote Support supervisor iniciado.");
 
-        while (
-            !stoppingToken
-                .IsCancellationRequested)
+        try
         {
-            try
+            while (!stoppingToken.IsCancellationRequested)
             {
-                var identity =
-                    await _identityStore
-                        .LoadAsync(
-                            stoppingToken);
-
-                /*
-                 * =================================================
-                 * IDENTITY GATE
-                 * =================================================
-                 *
-                 * Remote Support jamás consulta el backend antes
-                 * de que el agente tenga identidad persistente.
-                 * =================================================
-                 */
-
-                if (identity is null)
+                try
                 {
-                    if (!_identityWaitingLogged)
-                    {
-                        _logger.LogInformation(
-                            "Remote Support en espera: el agente aún no posee identidad TitanMDM.");
-
-                        _identityWaitingLogged =
-                            true;
-                    }
-
-                    await DelayAsync(
-                        IdentityWaitInterval,
+                    // La expiración debe comprobarse incluso
+                    // cuando el backend está desconectado.
+                    await EnforceLocalSessionExpiryAsync(
                         stoppingToken);
 
-                    continue;
+                    var identity = await _identityStore.LoadAsync(
+                        stoppingToken);
+
+                    if (identity is null)
+                    {
+                        if (!_identityWaitingLogged)
+                        {
+                            _logger.LogInformation(
+                                "Remote Support espera la identidad persistente del agente.");
+
+                            _identityWaitingLogged = true;
+                        }
+
+                        await StopSessionIfIdentityUnavailableAsync(
+                            stoppingToken);
+
+                        await DelayAsync(
+                            IdentityWaitInterval,
+                            stoppingToken);
+
+                        continue;
+                    }
+
+                    _identityWaitingLogged = false;
+
+                    await PollAsync(stoppingToken);
+
+                    await DelayAsync(
+                        PollInterval,
+                        stoppingToken);
                 }
+                catch (OperationCanceledException)
+                    when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (HttpRequestException ex)
+                {
+                    _logger.LogWarning(
+                        "Remote Support: comunicación HTTP no disponible. Error={Message}",
+                        ex.Message);
 
-                _identityWaitingLogged =
-                    false;
+                    await DelayAsync(
+                        BackendRetryInterval,
+                        stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Remote Support supervisor detectó una excepción recuperable.");
 
-                await PollAsync(
-                    stoppingToken);
-
-                await DelayAsync(
-                    PollInterval,
-                    stoppingToken);
-            }
-            catch (OperationCanceledException)
-                when (
-                    stoppingToken
-                        .IsCancellationRequested)
-            {
-                break;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogWarning(
-                    "Remote Support no pudo comunicarse con TitanMDM: {Message}",
-                    ex.Message);
-
-                await DelayAsync(
-                    TimeSpan.FromSeconds(
-                        15),
-                    stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Remote Support polling failed.");
-
-                await DelayAsync(
-                    TimeSpan.FromSeconds(
-                        15),
-                    stoppingToken);
+                    await DelayAsync(
+                        BackendRetryInterval,
+                        stoppingToken);
+                }
             }
         }
-
-        var current =
-            _sessionManager
-                .CurrentSession;
-
-        if (current is not null)
+        finally
         {
-            try
-            {
-                await StopCurrentSessionAsync(
-                    current.SessionId,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "RemoteHost cleanup falló al detener el servicio.");
-            }
+            await CleanupOnShutdownAsync();
+        }
+    }
+
+    // ============================================================
+    // LOCAL SESSION EXPIRY
+    // ============================================================
+
+    private async Task EnforceLocalSessionExpiryAsync(
+        CancellationToken cancellationToken)
+    {
+        var current = _sessionManager.CurrentSession;
+
+        if (current is null)
+        {
+            return;
+        }
+
+        var launchRequest = _activeLaunchRequest;
+
+        if (launchRequest is null)
+        {
+            // Una sesión aceptada puede encontrarse todavía
+            // esperando el bootstrap. No la terminamos aquí.
+            return;
+        }
+
+        if (launchRequest.SessionId != current.SessionId)
+        {
+            _logger.LogError(
+                "Inconsistencia de sesión remota. Current={CurrentSessionId}, Bootstrap={BootstrapSessionId}.",
+                current.SessionId,
+                launchRequest.SessionId);
+
+            await StopCurrentSessionAsync(
+                current.SessionId,
+                cancellationToken);
+
+            return;
+        }
+
+        if (launchRequest.ExpiresAtUtc > DateTime.UtcNow)
+        {
+            return;
         }
 
         _logger.LogInformation(
-            "TitanMDM Remote Support service detenido.");
+            "Expiración local RemoteSession={SessionId}. Deteniendo RemoteHost.",
+            current.SessionId);
+
+        await StopCurrentSessionAsync(
+            current.SessionId,
+            cancellationToken);
     }
+
+    private async Task StopSessionIfIdentityUnavailableAsync(
+        CancellationToken cancellationToken)
+    {
+        var current = _sessionManager.CurrentSession;
+
+        if (current is null)
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "La identidad del agente no está disponible. Cerrando RemoteSession={SessionId}.",
+            current.SessionId);
+
+        await StopCurrentSessionAsync(
+            current.SessionId,
+            cancellationToken);
+    }
+
+    // ============================================================
+    // BACKEND POLLING
+    // ============================================================
 
     private async Task PollAsync(
         CancellationToken cancellationToken)
     {
-        var pending =
-            await _apiClient
-                .GetPendingAsync(
-                    cancellationToken);
+        var pending = await _apiClient.GetPendingAsync(
+            cancellationToken);
 
-        var current =
-            _sessionManager
-                .CurrentSession;
+        var current = _sessionManager.CurrentSession;
 
         if (current is not null)
         {
-            var serverSession =
-                pending.FirstOrDefault(
-                    x =>
-                        x.SessionId ==
-                        current.SessionId);
+            var serverSession = pending.FirstOrDefault(
+                item => item.SessionId == current.SessionId);
 
-            if (
-                serverSession is null
-                ||
-                serverSession.ExpiresAtUtc <=
-                    DateTime.UtcNow)
+            if (serverSession is null)
+            {
+                _logger.LogInformation(
+                    "RemoteSession={SessionId} ya no está activa en el backend.",
+                    current.SessionId);
+
+                await StopCurrentSessionAsync(
+                    current.SessionId,
+                    cancellationToken);
+
+                return;
+            }
+
+            if (serverSession.ExpiresAtUtc <= DateTime.UtcNow)
             {
                 await StopCurrentSessionAsync(
                     current.SessionId,
@@ -229,16 +251,11 @@ public sealed class RemoteSupportBackgroundService
             return;
         }
 
-        var request =
-            pending
-                .Where(
-                    x =>
-                        x.ExpiresAtUtc >
-                        DateTime.UtcNow)
-                .OrderBy(
-                    x =>
-                        x.RequestedAtUtc)
-                .FirstOrDefault();
+        var request = pending
+            .Where(item =>
+                item.ExpiresAtUtc > DateTime.UtcNow)
+            .OrderBy(item => item.RequestedAtUtc)
+            .FirstOrDefault();
 
         if (request is null)
         {
@@ -250,88 +267,74 @@ public sealed class RemoteSupportBackgroundService
             cancellationToken);
     }
 
+    // ============================================================
+    // START SESSION
+    // ============================================================
+
     private async Task StartSessionAsync(
         RemoteSupportRequest request,
         CancellationToken cancellationToken)
     {
-        if (
-            !_sessionManager
-                .TryBegin(
-                    request,
-                    out _))
+        if (!_sessionManager.TryBegin(
+                request,
+                out _))
         {
             return;
         }
 
         try
         {
-            await _apiClient
-                .MarkConnectingAsync(
+            await _apiClient.MarkConnectingAsync(
+                request.SessionId,
+                cancellationToken);
+
+            var bootstrap =
+                await _apiClient.CreateHostBootstrapAsync(
                     request.SessionId,
                     cancellationToken);
 
-            var bootstrap =
-                await _apiClient
-                    .CreateHostBootstrapAsync(
-                        request.SessionId,
-                        cancellationToken);
+            var launchRequest = new RemoteDesktopStartRequest(
+                SessionId: request.SessionId,
+                TechnicianName: request.TechnicianDisplayName,
+                Reason: request.Reason,
+                AllowKeyboard: request.AllowKeyboard,
+                AllowMouse: request.AllowMouse,
+                AllowClipboard: request.AllowClipboard,
+                AllowFileTransfer: request.AllowFileTransfer,
+                ExpiresAtUtc: request.ExpiresAtUtc,
+                ServerUrl: bootstrap.ServerUrl,
+                AccessToken: bootstrap.AccessToken);
 
-            var launchRequest =
-                new RemoteDesktopStartRequest(
-                    SessionId:
-                        request.SessionId,
+            if (launchRequest.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                throw new InvalidOperationException(
+                    "La sesión expiró antes de iniciar RemoteHost.");
+            }
 
-                    TechnicianName:
-                        request
-                            .TechnicianDisplayName,
+            await _hostLauncher.StartAsync(
+                launchRequest,
+                cancellationToken);
 
-                    Reason:
-                        request.Reason,
-
-                    AllowKeyboard:
-                        request.AllowKeyboard,
-
-                    AllowMouse:
-                        request.AllowMouse,
-
-                    AllowClipboard:
-                        request.AllowClipboard,
-
-                    AllowFileTransfer:
-                        request.AllowFileTransfer,
-
-                    ExpiresAtUtc:
-                        request.ExpiresAtUtc,
-
-                    ServerUrl:
-                        bootstrap.ServerUrl,
-
-                    AccessToken:
-                        bootstrap.AccessToken);
-
-            await _hostLauncher
-                .StartAsync(
-                    launchRequest,
-                    cancellationToken);
-
-            _activeLaunchRequest =
-                launchRequest;
-
-            _restartAttempts =
-                0;
-
-            _nextRestartAtUtc =
-                DateTime.MinValue;
+            _activeLaunchRequest = launchRequest;
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
 
             _logger.LogInformation(
-                "RemoteHost iniciado para RemoteSession={SessionId}. " +
-                "Esperando registro SignalR.",
+                "RemoteHost iniciado. RemoteSession={SessionId}. Esperando SignalR.",
                 request.SessionId);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            await CleanupSessionBestEffortAsync(
+                request.SessionId);
+
+            throw;
         }
         catch (RemoteHostLaunchException ex)
         {
             _logger.LogError(
-                "RemoteHost no pudo iniciar. Code={Code}, Message={Message}",
+                "RemoteHost launch failed. Code={Code}, Message={Message}",
                 ex.Code,
                 ex.Message);
 
@@ -349,77 +352,66 @@ public sealed class RemoteSupportBackgroundService
         }
     }
 
+    // ============================================================
+    // HOST HEALTH AND RESTART
+    // ============================================================
+
     private async Task EnsureHostRunningAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
         var activeWindowsSessionId =
-            _hostLauncher
-                .ActiveConsoleSessionId;
+            _hostLauncher.ActiveConsoleSessionId;
 
         if (!activeWindowsSessionId.HasValue)
         {
+            // No hay sesión interactiva activa.
+            // No intentamos lanzar el host en Session 0.
             return;
         }
 
         var runningWindowsSessionId =
-            _hostLauncher
-                .RunningWindowsSessionId;
+            _hostLauncher.RunningWindowsSessionId;
 
-        if (
-            _hostLauncher.IsRunning
-            &&
-            runningWindowsSessionId !=
-                activeWindowsSessionId)
+        if (_hostLauncher.IsRunning &&
+            runningWindowsSessionId != activeWindowsSessionId)
         {
             _logger.LogInformation(
-                "Windows session cambió de {PreviousSessionId} a {CurrentSessionId}. " +
-                "Reiniciando RemoteHost RemoteSession={RemoteSessionId}.",
+                "Cambio de sesión Windows: {OldSession} -> {NewSession}. RemoteSession={RemoteSessionId}.",
                 runningWindowsSessionId,
                 activeWindowsSessionId,
                 sessionId);
 
-            await _hostLauncher
-                .StopAsync(
-                    sessionId,
-                    cancellationToken);
+            await _hostLauncher.StopAsync(
+                sessionId,
+                cancellationToken);
 
-            _restartAttempts =
-                0;
-
-            _nextRestartAtUtc =
-                DateTime.MinValue;
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
         }
 
         if (_hostLauncher.IsRunning)
         {
-            _restartAttempts =
-                0;
-
-            _nextRestartAtUtc =
-                DateTime.MinValue;
-
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
             return;
         }
 
-        if (
-            _activeLaunchRequest is null
-            ||
-            _activeLaunchRequest.SessionId !=
-                sessionId)
+        var launchRequest = _activeLaunchRequest;
+
+        if (launchRequest is null ||
+            launchRequest.SessionId != sessionId)
         {
             await FailSessionAsync(
                 sessionId,
                 new InvalidOperationException(
-                    "RemoteHost terminó y no existe configuración válida para reiniciarlo."),
+                    "RemoteHost terminó sin configuración de recuperación válida."),
                 cancellationToken);
 
             return;
         }
 
-        if (
-            _activeLaunchRequest.ExpiresAtUtc <=
-                DateTime.UtcNow)
+        if (launchRequest.ExpiresAtUtc <= DateTime.UtcNow)
         {
             await StopCurrentSessionAsync(
                 sessionId,
@@ -428,21 +420,17 @@ public sealed class RemoteSupportBackgroundService
             return;
         }
 
-        if (
-            DateTime.UtcNow <
-            _nextRestartAtUtc)
+        if (DateTime.UtcNow < _nextRestartAtUtc)
         {
             return;
         }
 
-        if (
-            _restartAttempts >=
-            MaxRestartAttempts)
+        if (_restartAttempts >= MaxRestartAttempts)
         {
             await FailSessionAsync(
                 sessionId,
                 new InvalidOperationException(
-                    "RemoteHost no pudo recuperarse después de tres intentos."),
+                    "RemoteHost agotó sus intentos de recuperación."),
                 cancellationToken);
 
             return;
@@ -451,36 +439,37 @@ public sealed class RemoteSupportBackgroundService
         _restartAttempts++;
 
         _nextRestartAtUtc =
-            DateTime.UtcNow
-                .Add(
-                    RestartInterval);
+            DateTime.UtcNow.Add(RestartInterval);
 
         try
         {
             _logger.LogWarning(
-                "RemoteHost terminó inesperadamente. " +
-                "RemoteSession={SessionId}, intento {Attempt}/{Maximum}.",
+                "Reiniciando RemoteHost. Session={SessionId}, Attempt={Attempt}/{Max}.",
                 sessionId,
                 _restartAttempts,
                 MaxRestartAttempts);
 
-            await _hostLauncher
-                .StartAsync(
-                    _activeLaunchRequest,
-                    cancellationToken);
+            await _hostLauncher.StartAsync(
+                launchRequest,
+                cancellationToken);
+
+            // La misma sesión remota se conserva.
+            // No se solicita una nueva RemoteSession.
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (RemoteHostLaunchException ex)
         {
             _logger.LogWarning(
-                "Reinicio RemoteHost falló. Code={Code}, Message={Message}",
+                "RemoteHost restart failed. Code={Code}, Message={Message}",
                 ex.Code,
                 ex.Message);
 
-            if (
-                ex.Code ==
-                "REMOTE_HOST_BLOCKED_OR_TERMINATED"
-                ||
-                ex.Code ==
+            if (ex.Code is
+                "REMOTE_HOST_BLOCKED_OR_TERMINATED" or
                 "REMOTE_HOST_EXITED_IMMEDIATELY")
             {
                 await FailSessionAsync(
@@ -489,21 +478,18 @@ public sealed class RemoteSupportBackgroundService
                     cancellationToken);
             }
         }
-        catch (OperationCanceledException)
-            when (
-                cancellationToken
-                    .IsCancellationRequested)
-        {
-            throw;
-        }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
-                "Reinicio RemoteHost falló para RemoteSession={SessionId}.",
+                "Error durante recuperación RemoteSession={SessionId}.",
                 sessionId);
         }
     }
+
+    // ============================================================
+    // FAILED SESSION
+    // ============================================================
 
     private async Task FailSessionAsync(
         Guid sessionId,
@@ -512,11 +498,10 @@ public sealed class RemoteSupportBackgroundService
     {
         try
         {
-            await _apiClient
-                .MarkFailedAsync(
-                    sessionId,
-                    error.Message,
-                    cancellationToken);
+            await _apiClient.MarkFailedAsync(
+                sessionId,
+                error.Message,
+                cancellationToken);
         }
         catch (Exception reportError)
         {
@@ -526,17 +511,27 @@ public sealed class RemoteSupportBackgroundService
                 sessionId);
         }
 
+        await CleanupSessionBestEffortAsync(sessionId);
+    }
+
+    // ============================================================
+    // CLEANUP
+    // ============================================================
+
+    private async Task CleanupSessionBestEffortAsync(
+        Guid sessionId)
+    {
         try
         {
             await StopCurrentSessionAsync(
                 sessionId,
                 CancellationToken.None);
         }
-        catch (Exception stopError)
+        catch (Exception ex)
         {
             _logger.LogWarning(
-                stopError,
-                "No fue posible limpiar RemoteSession={SessionId}.",
+                ex,
+                "Limpieza falló para RemoteSession={SessionId}.",
                 sessionId);
         }
     }
@@ -545,41 +540,55 @@ public sealed class RemoteSupportBackgroundService
         Guid sessionId,
         CancellationToken cancellationToken)
     {
-        await _hostLauncher
-            .StopAsync(
+        try
+        {
+            await _hostLauncher.StopAsync(
                 sessionId,
                 cancellationToken);
+        }
+        finally
+        {
+            _sessionManager.End(sessionId);
 
-        _sessionManager
-            .End(
-                sessionId);
+            if (_activeLaunchRequest?.SessionId == sessionId)
+            {
+                // Liberar la referencia al bootstrap y token.
+                _activeLaunchRequest = null;
+            }
 
-        _activeLaunchRequest =
-            null;
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
+        }
+    }
 
-        _restartAttempts =
-            0;
+    private async Task CleanupOnShutdownAsync()
+    {
+        var current = _sessionManager.CurrentSession;
 
-        _nextRestartAtUtc =
-            DateTime.MinValue;
+        if (current is not null)
+        {
+            await CleanupSessionBestEffortAsync(
+                current.SessionId);
+        }
+
+        _activeLaunchRequest = null;
+
+        _logger.LogInformation(
+            "TitanMDM Remote Support supervisor detenido.");
     }
 
     private static async Task DelayAsync(
-        TimeSpan delay,
+        TimeSpan interval,
         CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(
-                delay,
-                cancellationToken);
+            await Task.Delay(interval, cancellationToken);
         }
         catch (OperationCanceledException)
-            when (
-                cancellationToken
-                    .IsCancellationRequested)
+            when (cancellationToken.IsCancellationRequested)
         {
-            // apagado normal
+            // Cancelación normal del servicio.
         }
     }
 }

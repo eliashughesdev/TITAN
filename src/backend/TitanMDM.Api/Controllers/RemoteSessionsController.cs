@@ -10,6 +10,7 @@ using TitanMDM.Application.Security;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
+using TitanMDM.Api.Hubs;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -21,6 +22,9 @@ public sealed class RemoteSessionsController
 {
     private readonly TitanMdmDbContext
         _dbContext;
+    
+    private readonly IHubContext<RemoteSupportHub>
+    _remoteHub;
 
     private readonly RemoteControlLeaseService
         _controlLeases;
@@ -36,27 +40,20 @@ public sealed class RemoteSessionsController
         _logger;
 
     public RemoteSessionsController(
-        TitanMdmDbContext dbContext,
-        RemoteControlLeaseService controlLeases,
-        RemoteSupportConnectionRegistry connections,
-        IScopeAccessService scopeAccessService,
-        ILogger<RemoteSessionsController> logger)
-    {
-        _dbContext =
-            dbContext;
-
-        _controlLeases =
-            controlLeases;
-
-        _connections =
-            connections;
-
-        _scopeAccessService =
-            scopeAccessService;
-
-        _logger =
-            logger;
-    }
+    TitanMdmDbContext dbContext,
+    RemoteControlLeaseService controlLeases,
+    RemoteSupportConnectionRegistry connections,
+    IScopeAccessService scopeAccessService,
+    IHubContext<RemoteSupportHub> remoteHub,
+    ILogger<RemoteSessionsController> logger)
+{
+    _dbContext = dbContext;
+    _controlLeases = controlLeases;
+    _connections = connections;
+    _scopeAccessService = scopeAccessService;
+    _remoteHub = remoteHub;
+    _logger = logger;
+}
 
     // ============================================================
     // LIST
@@ -1001,107 +998,81 @@ public sealed class RemoteSessionsController
     // TERMINATE
     // ============================================================
 
-    [HttpPost("{sessionId:guid}/terminate")]
-    public async Task<ActionResult>
-        TerminateSession(
-            Guid sessionId,
-            [FromBody]
-            TerminateRemoteSessionRequest? request,
-            CancellationToken cancellationToken = default)
+   
+[HttpPost("{sessionId:guid}/terminate")]
+public async Task<ActionResult> TerminateSession(
+    Guid sessionId,
+    [FromBody] TerminateRemoteSessionRequest? request,
+    CancellationToken cancellationToken = default)
+{
+    if (!HasPermission("remote.manage"))
     {
-        if (!HasPermission(
-                "remote.manage"))
-        {
-            return Forbid();
-        }
+        return Forbid();
+    }
 
-        var context =
-            GetSecurityContext();
+    var context = GetSecurityContext();
 
-        if (context is null)
-        {
-            return Unauthorized();
-        }
+    if (context is null)
+    {
+        return Unauthorized();
+    }
 
-        var session =
-            await _dbContext
-                .RemoteSessions
-                .FirstOrDefaultAsync(
-                    item =>
-                        item.Id ==
-                            sessionId
-                        &&
-                        item.OrganizationId ==
-                            context.Value.OrganizationId,
-                    cancellationToken);
+    var session = await _dbContext.RemoteSessions
+        .FirstOrDefaultAsync(
+            item =>
+                item.Id == sessionId &&
+                item.OrganizationId == context.Value.OrganizationId,
+            cancellationToken);
 
-        if (session is null)
-        {
-            return NotFound();
-        }
+    if (session is null)
+    {
+        return NotFound();
+    }
 
-        if (
-            !await CanAccessSessionDeviceAsync(
-                context.Value,
-                session.DeviceId,
-                cancellationToken))
-        {
-            return Forbid();
-        }
+    if (!await CanAccessSessionDeviceAsync(
+            context.Value,
+            session.DeviceId,
+            cancellationToken))
+    {
+        return Forbid();
+    }
 
-        var technicianName =
-            GetTechnicianName(
-                context.Value.UserId);
+    var technicianName =
+        GetTechnicianName(context.Value.UserId);
 
+    if (session.Status != RemoteSessionStatus.Completed &&
+        session.Status != RemoteSessionStatus.Failed &&
+        session.Status != RemoteSessionStatus.Expired &&
+        session.Status != RemoteSessionStatus.Cancelled)
+    {
         session.Complete(
             technicianName,
-            request?.Reason
-            ??
+            request?.Reason ??
             "Sesión finalizada desde TitanMDM.");
 
-        var leases =
-            await _dbContext
-                .RemoteSessionControlLeases
-                .Where(
-                    item =>
-                        item.OrganizationId ==
-                            context.Value.OrganizationId
-                        &&
-                        item.RemoteSessionId ==
-                            sessionId)
-                .ToListAsync(
-                    cancellationToken);
-
-        _dbContext
+        var leases = await _dbContext
             .RemoteSessionControlLeases
-            .RemoveRange(
-                leases);
+            .Where(item =>
+                item.OrganizationId == context.Value.OrganizationId &&
+                item.RemoteSessionId == sessionId)
+            .ToListAsync(cancellationToken);
 
-        var participants =
-            await _dbContext
-                .RemoteSessionParticipants
-                .Where(
-                    item =>
-                        item.OrganizationId ==
-                            context.Value.OrganizationId
-                        &&
-                        item.RemoteSessionId ==
-                            sessionId)
-                .ToListAsync(
-                    cancellationToken);
+        _dbContext.RemoteSessionControlLeases.RemoveRange(leases);
 
-        foreach (
-            var participant
-            in participants)
+        var participants = await _dbContext
+            .RemoteSessionParticipants
+            .Where(item =>
+                item.OrganizationId == context.Value.OrganizationId &&
+                item.RemoteSessionId == sessionId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var participant in participants)
         {
-            participant
-                .RevokeControl();
+            participant.RevokeControl();
 
-            if (
-                participant.IsConnected)
+            if (participant.IsConnected)
             {
-                participant
-                    .MarkDisconnected();
+                participant.MarkDisconnected();
             }
         }
 
@@ -1112,29 +1083,72 @@ public sealed class RemoteSessionsController
             $"Sesión finalizada por {technicianName}.",
             context.Value.UserId);
 
-        await _dbContext
-            .SaveChangesAsync(
-                cancellationToken);
-
-        _connections
-            .RemoveControlLease(
-                context.Value.OrganizationId,
-                sessionId);
-
-        return Ok(
-            new
-            {
-                session.Id,
-
-                status =
-                    session.Status
-                        .ToString(),
-
-                session.DisconnectedAtUtc,
-                session.TerminatedBy,
-                session.TerminationReason
-            });
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    _connections.RemoveControlLease(
+        context.Value.OrganizationId,
+        sessionId);
+
+    var technicianGroup = RemoteSupportHub.TechnicianGroup(
+        context.Value.OrganizationId,
+        sessionId);
+
+    var hostGroup = RemoteSupportHub.HostGroup(
+        context.Value.OrganizationId,
+        sessionId);
+
+    // La transacción lógica ya terminó.
+    // Un fallo de notificación no revierte la sesión en SQL.
+    try
+    {
+        await _remoteHub.Clients
+            .Group(technicianGroup)
+            .SendAsync(
+                "RemoteSessionUpdated",
+                new
+                {
+                    sessionId,
+                    status = session.Status.ToString(),
+                    connectedAtUtc = session.ConnectedAtUtc
+                },
+                CancellationToken.None);
+
+        await _remoteHub.Clients
+            .Group(technicianGroup)
+            .SendAsync(
+                "RemoteHostStateChanged",
+                new
+                {
+                    sessionId,
+                    connected = false
+                },
+                CancellationToken.None);
+
+        await _remoteHub.Clients
+            .Group(hostGroup)
+            .SendAsync(
+                "TerminateRemoteSession",
+                CancellationToken.None);
+    }
+    catch (Exception ex)
+    {
+        _logger.LogWarning(
+            ex,
+            "RemoteSession={SessionId} finalizó, " +
+            "pero falló su notificación SignalR.",
+            sessionId);
+    }
+
+    return Ok(new
+    {
+        session.Id,
+        status = session.Status.ToString(),
+        session.DisconnectedAtUtc,
+        session.TerminatedBy,
+        session.TerminationReason
+    });
+}
 
     // ============================================================
     // HELPERS - SESSION

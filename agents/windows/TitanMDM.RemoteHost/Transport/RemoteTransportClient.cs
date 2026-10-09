@@ -1,3 +1,4 @@
+
 using System.Diagnostics;
 
 using Microsoft.AspNetCore.SignalR.Client;
@@ -13,17 +14,27 @@ namespace TitanMDM.RemoteHost.Transport;
 public sealed class RemoteTransportClient : IAsyncDisposable
 {
     private const int TargetFrameIntervalMilliseconds = 60;
+    private const int DisconnectedRetryMilliseconds = 250;
+    private const int ProtectedDesktopRetryMilliseconds = 500;
+    private const int CaptureFailureRetryMilliseconds = 1000;
+
+    private static readonly TimeSpan FrameSendTimeout =
+        TimeSpan.FromSeconds(5);
 
     private readonly RemoteHostSession _session;
     private readonly DesktopCaptureService _captureService;
     private readonly RemoteInputController _inputController;
     private readonly WindowsDesktopStateProbe _desktopProbe = new();
 
+    private readonly SemaphoreSlim _connectionGate = new(1, 1);
+    private readonly object _streamSync = new();
+
     private HubConnection? _connection;
     private CancellationTokenSource? _streamCancellation;
     private Task? _streamTask;
+
     private long _framesPublished;
-    private bool _disposing;
+    private int _disposing;
     private int _connectionLostRaised;
 
     public event Action<string>? StatusChanged;
@@ -31,85 +42,172 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
     public RemoteTransportClient(RemoteHostSession session)
     {
-        _session = session;
+        _session = session ??
+            throw new ArgumentNullException(nameof(session));
+
         _captureService = new DesktopCaptureService();
         _inputController = new RemoteInputController();
     }
 
     public bool IsConnected =>
+        Volatile.Read(ref _disposing) == 0 &&
         _connection?.State == HubConnectionState.Connected;
+
+    private bool IsDisposing =>
+        Volatile.Read(ref _disposing) != 0;
 
     private bool CanUseDefaultDesktop =>
         _desktopProbe.GetAvailability() ==
         DesktopAvailability.Default;
 
+    private bool SessionExpired =>
+        DateTime.UtcNow >= _session.ExpiresAtUtc;
+
+    // ============================================================
+    // CONNECT
+    // ============================================================
+
     public async Task ConnectAsync(
         CancellationToken cancellationToken = default)
     {
-        if (_connection is not null)
+        await _connectionGate.WaitAsync(cancellationToken);
+
+        try
         {
-            return;
+            if (IsDisposing)
+            {
+                throw new ObjectDisposedException(
+                    nameof(RemoteTransportClient));
+            }
+
+            if (_connection is not null)
+            {
+                return;
+            }
+
+            if (SessionExpired)
+            {
+                throw new InvalidOperationException(
+                    "La sesión remota ya expiró.");
+            }
+
+            var hubUrl =
+                $"{_session.ServerUrl.TrimEnd('/')}/hubs/remote-support";
+
+            var connection = new HubConnectionBuilder()
+                .AddMessagePackProtocol()
+                .WithUrl(
+                    hubUrl,
+                    options =>
+                    {
+                        options.Headers["X-Titan-Remote-Session"] =
+                            _session.SessionId.ToString();
+
+                        options.Headers["X-Titan-Remote-Token"] =
+                            _session.AccessToken;
+                    })
+                .WithAutomaticReconnect(
+                    new[]
+                    {
+                        TimeSpan.Zero,
+                        TimeSpan.FromSeconds(2),
+                        TimeSpan.FromSeconds(5),
+                        TimeSpan.FromSeconds(10),
+                        TimeSpan.FromSeconds(20),
+                        TimeSpan.FromSeconds(30)
+                    })
+                .Build();
+
+            _connection = connection;
+
+            RegisterHandlers(connection);
+            RegisterConnectionEvents(connection);
+
+            try
+            {
+                StatusChanged?.Invoke("Conectando");
+
+                await connection.StartAsync(cancellationToken);
+
+                await RegisterRemoteHostAsync(cancellationToken);
+
+                await PublishMonitorStateAsync(cancellationToken);
+
+                StatusChanged?.Invoke("Conectado");
+
+                StartStreaming();
+            }
+            catch
+            {
+                _connection = null;
+                await connection.DisposeAsync();
+                throw;
+            }
         }
+        finally
+        {
+            _connectionGate.Release();
+        }
+    }
 
-        var hubUrl =
-            $"{_session.ServerUrl.TrimEnd('/')}/hubs/remote-support";
+    // ============================================================
+    // CONNECTION EVENTS
+    // ============================================================
 
-        var connection = new HubConnectionBuilder()
-            .AddMessagePackProtocol()
-            .WithUrl(
-                hubUrl,
-                options =>
-                {
-                    options.Headers["X-Titan-Remote-Session"] =
-                        _session.SessionId.ToString();
-
-                    options.Headers["X-Titan-Remote-Token"] =
-                        _session.AccessToken;
-                })
-            .WithAutomaticReconnect(
-                new[]
-                {
-                    TimeSpan.Zero,
-                    TimeSpan.FromSeconds(2),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(10)
-                })
-            .Build();
-
-        _connection = connection;
-        RegisterHandlers(connection);
-
+    private void RegisterConnectionEvents(HubConnection connection)
+    {
         connection.Reconnecting += error =>
         {
-            var suffix = error is null
-                ? string.Empty
-                : $" - {error.Message}";
+            if (!IsDisposing)
+            {
+                StatusChanged?.Invoke(
+                    error is null
+                        ? "Reconectando SignalR"
+                        : $"Reconectando SignalR: {error.Message}");
+            }
 
-            StatusChanged?.Invoke($"Reconectando{suffix}");
             return Task.CompletedTask;
         };
 
         connection.Reconnected += async _ =>
         {
+            if (IsDisposing)
+            {
+                return;
+            }
+
+            if (SessionExpired)
+            {
+                StatusChanged?.Invoke("Sesión remota expirada");
+                RaiseConnectionLost();
+                return;
+            }
+
             try
             {
-                StatusChanged?.Invoke("Re-registrando");
+                StatusChanged?.Invoke(
+                    "Restaurando registro del RemoteHost");
 
-                // La conexión nueva debe volver a ingresar al HostGroup.
-                // El token original de ConnectAsync ya puede estar cancelado.
-                await RegisterRemoteHostAsync(
-                    CancellationToken.None);
+                // SignalR asigna un ConnectionId nuevo.
+                // El RemoteHost debe reincorporarse al grupo.
+                await RegisterRemoteHostAsync(CancellationToken.None);
 
-                await PublishMonitorStateAsync(
-                    CancellationToken.None);
+                await PublishMonitorStateAsync(CancellationToken.None);
+
+                if (IsDisposing)
+                {
+                    return;
+                }
 
                 StatusChanged?.Invoke("Conectado");
+
+                // No se reinicia un stream que continúa activo.
                 StartStreaming();
             }
             catch (Exception ex)
             {
                 StatusChanged?.Invoke(
-                    $"Error re-registro: {ex.Message}");
+                    $"No fue posible recuperar la sesión: {ex.Message}");
 
                 RaiseConnectionLost();
             }
@@ -117,72 +215,30 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
         connection.Closed += error =>
         {
-            if (!_disposing)
+            if (!IsDisposing)
             {
-                var suffix = error is null
-                    ? string.Empty
-                    : $" - {error.Message}";
-
                 StatusChanged?.Invoke(
-                    $"Desconectado{suffix}");
+                    error is null
+                        ? "Canal SignalR cerrado"
+                        : $"Canal SignalR cerrado: {error.Message}");
 
-                // SignalR agotó la reconexión. La UI cerrará el
-                // proceso y WindowsAgent podrá volver a iniciarlo.
                 RaiseConnectionLost();
             }
 
             return Task.CompletedTask;
         };
-
-        try
-        {
-            StatusChanged?.Invoke("Conectando");
-
-            await connection.StartAsync(
-                cancellationToken);
-
-            StatusChanged?.Invoke(
-                "Registrando RemoteHost");
-
-            await RegisterRemoteHostAsync(
-                cancellationToken);
-
-            await PublishMonitorStateAsync(
-                cancellationToken);
-
-            StatusChanged?.Invoke("Conectado");
-            StartStreaming();
-        }
-        catch
-        {
-            _disposing = true;
-            _connection = null;
-            await connection.DisposeAsync();
-            throw;
-        }
     }
 
-    private void RaiseConnectionLost()
-    {
-        if (_disposing ||
-            Interlocked.Exchange(
-                ref _connectionLostRaised,
-                1) != 0)
-        {
-            return;
-        }
-
-        _streamCancellation?.Cancel();
-        ConnectionLost?.Invoke();
-    }
+    // ============================================================
+    // HOST REGISTRATION
+    // ============================================================
 
     private async Task RegisterRemoteHostAsync(
         CancellationToken cancellationToken)
     {
         var connection = _connection;
 
-        if (connection is null ||
-            connection.State != HubConnectionState.Connected)
+        if (connection?.State != HubConnectionState.Connected)
         {
             throw new InvalidOperationException(
                 "SignalR no está conectado para registrar RemoteHost.");
@@ -194,26 +250,90 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             cancellationToken);
     }
 
-    private void RegisterHandlers(
-        HubConnection connection)
+    // ============================================================
+    // HOST EVENTS
+    // ============================================================
+
+    private void RegisterHandlers(HubConnection connection)
     {
         connection.On<double, double>(
             "PointerMove",
             (x, y) =>
             {
-                if (!_session.AllowMouse ||
-                    !CanUseDefaultDesktop)
+                if (!CanProcessMouse())
                 {
                     return;
                 }
 
-                var bounds =
-                    _captureService.GetSelectedBounds();
+                var bounds = _captureService.GetSelectedBounds();
 
-                _inputController.MovePointer(
-                    x,
-                    y,
-                    bounds);
+                _inputController.MovePointer(x, y, bounds);
+            });
+
+        connection.On<string>(
+            "PointerButton",
+            action =>
+            {
+                if (!CanProcessMouse())
+                {
+                    return;
+                }
+
+                switch (action)
+                {
+                    case "left-down":
+                        _inputController.LeftDown();
+                        break;
+
+                    case "left-up":
+                        _inputController.LeftUp();
+                        break;
+
+                    case "right-down":
+                        _inputController.RightDown();
+                        break;
+
+                    case "right-up":
+                        _inputController.RightUp();
+                        break;
+                }
+            });
+
+        connection.On<int>(
+            "PointerWheel",
+            delta =>
+            {
+                if (CanProcessMouse())
+                {
+                    _inputController.Wheel(delta);
+                }
+            });
+
+        connection.On<int, bool>(
+            "Keyboard",
+            (virtualKey, keyDown) =>
+            {
+                if (!CanProcessKeyboard())
+                {
+                    return;
+                }
+
+                if (virtualKey < ushort.MinValue ||
+                    virtualKey > ushort.MaxValue)
+                {
+                    return;
+                }
+
+                var key = (ushort)virtualKey;
+
+                if (keyDown)
+                {
+                    _inputController.KeyDown(key);
+                }
+                else
+                {
+                    _inputController.KeyUp(key);
+                }
             });
 
         connection.On<int>(
@@ -221,8 +341,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             async monitorIndex =>
             {
                 var selected =
-                    _captureService.SelectDisplay(
-                        monitorIndex);
+                    _captureService.SelectDisplay(monitorIndex);
 
                 StatusChanged?.Invoke(
                     $"Transmitiendo · {selected.Label}");
@@ -267,111 +386,62 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                     CancellationToken.None);
             });
 
-        connection.On<string>(
-            "PointerButton",
-            action =>
-            {
-                if (!_session.AllowMouse ||
-                    !CanUseDefaultDesktop)
-                {
-                    return;
-                }
-
-                switch (action)
-                {
-                    case "left-down":
-                        _inputController.LeftDown();
-                        break;
-
-                    case "left-up":
-                        _inputController.LeftUp();
-                        break;
-
-                    case "right-down":
-                        _inputController.RightDown();
-                        break;
-
-                    case "right-up":
-                        _inputController.RightUp();
-                        break;
-                }
-            });
-
-        connection.On<int>(
-            "PointerWheel",
-            delta =>
-            {
-                if (_session.AllowMouse &&
-                    CanUseDefaultDesktop)
-                {
-                    _inputController.Wheel(delta);
-                }
-            });
-
-        connection.On<int, bool>(
-            "Keyboard",
-            (virtualKey, keyDown) =>
-            {
-                if (!_session.AllowKeyboard ||
-                    !CanUseDefaultDesktop)
-                {
-                    return;
-                }
-
-                if (virtualKey < ushort.MinValue ||
-                    virtualKey > ushort.MaxValue)
-                {
-                    return;
-                }
-
-                var key = (ushort)virtualKey;
-
-                if (keyDown)
-                {
-                    _inputController.KeyDown(key);
-                }
-                else
-                {
-                    _inputController.KeyUp(key);
-                }
-            });
-
         connection.On(
             "TerminateRemoteSession",
             () =>
             {
-                _streamCancellation?.Cancel();
-                Application.Exit();
+                StatusChanged?.Invoke(
+                    "La sesión remota fue finalizada.");
+
+                RaiseConnectionLost();
             });
     }
+
+    private bool CanProcessMouse()
+    {
+        return !IsDisposing &&
+               !SessionExpired &&
+               _session.AllowMouse &&
+               IsConnected &&
+               CanUseDefaultDesktop;
+    }
+
+    private bool CanProcessKeyboard()
+    {
+        return !IsDisposing &&
+               !SessionExpired &&
+               _session.AllowKeyboard &&
+               IsConnected &&
+               CanUseDefaultDesktop;
+    }
+
+    // ============================================================
+    // MONITOR STATE
+    // ============================================================
 
     private async Task PublishMonitorStateAsync(
         CancellationToken cancellationToken)
     {
         var connection = _connection;
 
-        if (connection is null ||
-            connection.State != HubConnectionState.Connected)
+        if (IsDisposing ||
+            connection?.State != HubConnectionState.Connected)
         {
             return;
         }
 
-        var displays =
-            _captureService.GetDisplays();
-
-        var selected =
-            _captureService.GetSelectedDisplay();
+        var displays = _captureService.GetDisplays();
+        var selected = _captureService.GetSelectedDisplay();
 
         var payload = displays
-            .Select(
-                display =>
-                    new RemoteMonitorInfo(
-                        Index: display.Index,
-                        DeviceName: display.DeviceName,
-                        Width: display.Width,
-                        Height: display.Height,
-                        IsPrimary: display.IsPrimary,
-                        Label: display.Label))
+            .Select(display =>
+                new RemoteMonitorInfo(
+                    Index: display.Index,
+                    DeviceName: display.DeviceName,
+                    Width: display.Width,
+                    Height: display.Height,
+                    IsPrimary: display.IsPrimary,
+                    Label: display.Label))
             .ToArray();
 
         await connection.InvokeAsync(
@@ -382,21 +452,48 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             cancellationToken);
     }
 
+    // ============================================================
+    // SINGLE STREAM LIFECYCLE
+    // ============================================================
+
     private void StartStreaming()
     {
-        if (_streamTask is not null)
+        lock (_streamSync)
         {
-            return;
+            if (IsDisposing ||
+                Volatile.Read(ref _connectionLostRaised) != 0)
+            {
+                return;
+            }
+
+            if (_streamTask is { IsCompleted: false })
+            {
+                // Ya existe un único loop activo.
+                // Nunca lanzar otro en paralelo.
+                return;
+            }
+
+            if (_streamTask is not null)
+            {
+                // El loop anterior terminó: limpiar sus recursos.
+                _streamCancellation?.Dispose();
+                _streamCancellation = null;
+                _streamTask = null;
+            }
+
+            _streamCancellation = new CancellationTokenSource();
+
+            var token = _streamCancellation.Token;
+
+            _streamTask = Task.Run(
+                () => StreamLoopAsync(token),
+                token);
         }
-
-        _streamCancellation =
-            new CancellationTokenSource();
-
-        var token = _streamCancellation.Token;
-
-        _streamTask = Task.Run(
-            () => StreamLoopAsync(token));
     }
+
+    // ============================================================
+    // STREAM LOOP
+    // ============================================================
 
     private async Task StreamLoopAsync(
         CancellationToken cancellationToken)
@@ -404,20 +501,42 @@ public sealed class RemoteTransportClient : IAsyncDisposable
         StatusChanged?.Invoke("Iniciando captura");
 
         var desktopPaused = false;
+        var channelPaused = false;
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var cycleStarted = Stopwatch.GetTimestamp();
+            if (SessionExpired)
+            {
+                StatusChanged?.Invoke("Sesión remota expirada");
+                RaiseConnectionLost();
+                break;
+            }
+
             var connection = _connection;
 
-            if (connection?.State !=
-                HubConnectionState.Connected)
+            if (connection?.State != HubConnectionState.Connected)
             {
+                if (!channelPaused)
+                {
+                    StatusChanged?.Invoke(
+                        "Canal temporalmente desconectado");
+
+                    channelPaused = true;
+                }
+
                 await DelaySafeAsync(
-                    250,
+                    DisconnectedRetryMilliseconds,
                     cancellationToken);
 
                 continue;
+            }
+
+            if (channelPaused)
+            {
+                channelPaused = false;
+
+                StatusChanged?.Invoke(
+                    "Canal recuperado; reanudando transmisión");
             }
 
             if (!CanUseDefaultDesktop)
@@ -425,13 +544,13 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                 if (!desktopPaused)
                 {
                     StatusChanged?.Invoke(
-                        "Escritorio bloqueado o protegido; captura y entrada en pausa");
+                        "Escritorio protegido; captura y entrada en pausa");
 
                     desktopPaused = true;
                 }
 
                 await DelaySafeAsync(
-                    1000,
+                    ProtectedDesktopRetryMilliseconds,
                     cancellationToken);
 
                 continue;
@@ -440,9 +559,12 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             if (desktopPaused)
             {
                 desktopPaused = false;
+
                 StatusChanged?.Invoke(
                     "Escritorio disponible; reanudando captura");
             }
+
+            var cycleStarted = Stopwatch.GetTimestamp();
 
             try
             {
@@ -460,8 +582,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                     CancellationTokenSource.CreateLinkedTokenSource(
                         cancellationToken);
 
-                sendCancellation.CancelAfter(
-                    TimeSpan.FromSeconds(5));
+                sendCancellation.CancelAfter(FrameSendTimeout);
 
                 await connection.InvokeAsync(
                     "PublishFrame",
@@ -477,13 +598,14 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                     frame.DisplayLabel,
                     sendCancellation.Token);
 
-                _framesPublished++;
+                var published =
+                    Interlocked.Increment(ref _framesPublished);
 
-                if (_framesPublished == 1 ||
-                    _framesPublished % 30 == 0)
+                if (published == 1 || published % 30 == 0)
                 {
                     StatusChanged?.Invoke(
-                        $"Transmitiendo · {frame.DisplayLabel} · {_framesPublished} frames");
+                        $"Transmitiendo · {frame.DisplayLabel} · " +
+                        $"{published} frames");
                 }
             }
             catch (OperationCanceledException)
@@ -497,7 +619,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                     "Frame descartado por congestión del canal");
 
                 await DelaySafeAsync(
-                    250,
+                    DisconnectedRetryMilliseconds,
                     cancellationToken);
 
                 continue;
@@ -505,16 +627,17 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             catch (Exception ex)
             {
                 StatusChanged?.Invoke(
-                    $"Error video: {ex.Message}");
+                    $"Error de captura o transmisión: {ex.Message}");
 
                 await DelaySafeAsync(
-                    1000,
+                    CaptureFailureRetryMilliseconds,
                     cancellationToken);
 
                 continue;
             }
 
             var elapsed = Stopwatch.GetElapsedTime(cycleStarted);
+
             var delay = Math.Max(
                 0,
                 TargetFrameIntervalMilliseconds -
@@ -522,11 +645,11 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
             if (delay > 0)
             {
-                await DelaySafeAsync(
-                    delay,
-                    cancellationToken);
+                await DelaySafeAsync(delay, cancellationToken);
             }
         }
+
+        StatusChanged?.Invoke("Streaming detenido");
     }
 
     private static async Task DelaySafeAsync(
@@ -535,58 +658,102 @@ public sealed class RemoteTransportClient : IAsyncDisposable
     {
         try
         {
-            await Task.Delay(
-                milliseconds,
-                cancellationToken);
+            await Task.Delay(milliseconds, cancellationToken);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
+            // Cancelación normal.
         }
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        _disposing = true;
+    // ============================================================
+    // CONNECTION FAILURE
+    // ============================================================
 
-        if (_streamCancellation is not null)
+    private void RaiseConnectionLost()
+    {
+        if (IsDisposing ||
+            Interlocked.Exchange(ref _connectionLostRaised, 1) != 0)
         {
-            await _streamCancellation.CancelAsync();
+            return;
         }
 
-        if (_streamTask is not null)
+        lock (_streamSync)
+        {
+            _streamCancellation?.Cancel();
+        }
+
+        ConnectionLost?.Invoke();
+    }
+
+    // ============================================================
+    // DISPOSE
+    // ============================================================
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposing, 1) != 0)
+        {
+            return;
+        }
+
+        Task? streamingTask;
+
+        lock (_streamSync)
+        {
+            _streamCancellation?.Cancel();
+            streamingTask = _streamTask;
+        }
+
+        if (streamingTask is not null)
         {
             try
             {
-                await _streamTask;
+                await streamingTask;
             }
             catch (OperationCanceledException)
             {
+                // Terminación esperada.
             }
+        }
 
+        lock (_streamSync)
+        {
+            _streamCancellation?.Dispose();
+            _streamCancellation = null;
             _streamTask = null;
         }
 
-        _streamCancellation?.Dispose();
-        _streamCancellation = null;
+        await _connectionGate.WaitAsync();
 
-        if (_connection is not null)
+        try
         {
-            try
-            {
-                if (_connection.State !=
-                    HubConnectionState.Disconnected)
-                {
-                    await _connection.StopAsync();
-                }
-            }
-            catch
-            {
-                // El cierre local continúa aunque SignalR ya haya caído.
-            }
-
-            await _connection.DisposeAsync();
+            var connection = _connection;
             _connection = null;
+
+            if (connection is not null)
+            {
+                try
+                {
+                    if (connection.State !=
+                        HubConnectionState.Disconnected)
+                    {
+                        await connection.StopAsync();
+                    }
+                }
+                catch
+                {
+                    // Se continúa con DisposeAsync aunque
+                    // SignalR ya esté desconectado.
+                }
+
+                await connection.DisposeAsync();
+            }
+        }
+        finally
+        {
+            _connectionGate.Release();
         }
     }
 

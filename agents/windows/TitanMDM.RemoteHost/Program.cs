@@ -1,5 +1,5 @@
-using System.Text;
-using System.Text.Json;
+
+using TitanMDM.RemoteHost.Interop;
 using TitanMDM.RemoteHost.Models;
 using TitanMDM.RemoteHost.UI;
 
@@ -8,85 +8,49 @@ namespace TitanMDM.RemoteHost;
 internal static class Program
 {
     [STAThread]
-    private static void Main(
-        string[] args)
+    private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
 
         try
         {
-            var session =
-                ParseSession(
-                    args);
+            var session = ParseSessionAsync(args)
+                .GetAwaiter()
+                .GetResult();
 
             Application.Run(
-                new RemoteSessionIndicatorForm(
-                    session));
+                new RemoteSessionIndicatorForm(session));
         }
         catch (Exception ex)
         {
+            // No mostramos datos del bootstrap ni argumentos.
             MessageBox.Show(
-                ex.Message,
+                $"No fue posible iniciar RemoteHost: {ex.GetType().Name}",
                 "TitanMDM Remote Host",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
     }
 
-    private static RemoteHostSession
-        ParseSession(
-            string[] args)
+    private static async Task<RemoteHostSession>
+        ParseSessionAsync(string[] args)
     {
-        var index =
-            Array.FindIndex(
-                args,
-                argument =>
-                    string.Equals(
-                        argument,
-                        "--session",
-                        StringComparison.OrdinalIgnoreCase));
+        var index = Array.FindIndex(
+            args,
+            item => string.Equals(
+                item,
+                "--bootstrap-pipe",
+                StringComparison.OrdinalIgnoreCase));
 
-        if (index < 0 ||
-            index + 1 >= args.Length)
+        if (index < 0 || index + 1 >= args.Length)
         {
             throw new InvalidOperationException(
-                "No se recibió la configuración de la sesión remota.");
+                "RemoteHost requiere un canal bootstrap autorizado.");
         }
 
-        var encodedPayload =
-            args[index + 1];
+        var pipeName = args[index + 1];
 
-        byte[] payloadBytes;
-
-        try
-        {
-            payloadBytes =
-                Convert.FromBase64String(
-                    encodedPayload);
-        }
-        catch (FormatException ex)
-        {
-            throw new InvalidOperationException(
-                "La configuración de la sesión remota posee un formato inválido.",
-                ex);
-        }
-
-        var json =
-            Encoding.UTF8.GetString(
-                payloadBytes);
-
-        var session =
-            JsonSerializer.Deserialize<
-                RemoteHostSession>(
-                json,
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive =
-                        true
-                });
-
-        return session
-            ?? throw new InvalidOperationException(
-                "TitanMDM no pudo interpretar la configuración de Remote Support.");
+        return await RemoteHostBootstrapPipeClient.ReceiveAsync(
+            pipeName);
     }
 }

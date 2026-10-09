@@ -231,87 +231,190 @@ export function RemotePage() {
       }
     }
 
-    void client.connect({
-      onFrame: nextFrame => {
-        if (
-          nextFrame.sessionId !== selectedSessionIdRef.current
-        ) return
+   
+void client.connect({
+  onFrame: nextFrame => {
+    if (
+      disposed ||
+      nextFrame.sessionId !== selectedSessionIdRef.current
+    ) {
+      return
+    }
 
-        const metricWindow = metricWindowRef.current
-        const now = performance.now()
+    const metricWindow = metricWindowRef.current
+    const now = performance.now()
 
-        if (metricWindow.startedAt === 0) {
-          metricWindow.startedAt = now
-        }
+    if (metricWindow.startedAt === 0) {
+      metricWindow.startedAt = now
+    }
 
-        metricWindow.frames += 1
-        metricWindow.bytes += nextFrame.data.byteLength
+    metricWindow.frames += 1
+    metricWindow.bytes += nextFrame.data.byteLength
 
-        const elapsed = now - metricWindow.startedAt
-        if (elapsed >= 1000) {
-          setStreamMetrics({
-            fps: Math.round(metricWindow.frames * 1000 / elapsed),
-            latencyMs: Math.max(
-              0,
-              Date.now() - Date.parse(nextFrame.capturedAtUtc),
-            ),
-            kilobitsPerSecond: Math.round(
-              metricWindow.bytes * 8 / elapsed,
-            ),
-          })
+    const elapsed = now - metricWindow.startedAt
 
-          metricWindow.startedAt = now
-          metricWindow.frames = 0
-          metricWindow.bytes = 0
-        }
+    if (elapsed >= 1000) {
+      setStreamMetrics({
+        fps: Math.round(
+          metricWindow.frames * 1000 / elapsed,
+        ),
+        latencyMs: Math.max(
+          0,
+          Date.now() - Date.parse(nextFrame.capturedAtUtc),
+        ),
+        kilobitsPerSecond: Math.round(
+          metricWindow.bytes * 8 / elapsed,
+        ),
+      })
 
-        setFrame(current => {
-          if (
-            current &&
-            current.sessionId === nextFrame.sessionId &&
-            nextFrame.sequence <= current.sequence
-          ) return current
+      metricWindow.startedAt = now
+      metricWindow.frames = 0
+      metricWindow.bytes = 0
+    }
 
-          return nextFrame
-        })
-      },
-      onSessionChanged: (update: RemoteSessionChanged) => {
-        void refreshActiveSession(update.sessionId)
-      },
-      onControlStateChanged: nextControlState => {
-        if (
-          nextControlState.sessionId !== selectedSessionIdRef.current
-        ) return
+    setFrame(current => {
+      // Protección adicional contra frames retrasados.
+      if (
+        nextFrame.sessionId !== selectedSessionIdRef.current
+      ) {
+        return null
+      }
 
-        setControlState(nextControlState)
-      },
-      onReconnecting: () => {
-        if (!disposed) setChannelConnected(false)
-      },
-      onReconnected: () => {
-        if (disposed) return
-        setChannelConnected(true)
-        void joinCurrentSession()
-      },
-      onClosed: closeError => {
-        if (disposed) return
-        setChannelConnected(false)
-        if (closeError) {
-          console.error('Canal remoto cerrado.', closeError)
-        }
-      },
-    }).then(async () => {
-      if (disposed) return
-      setChannelConnected(true)
-      await joinCurrentSession()
-    }).catch(connectionError => {
-      if (disposed) return
-      console.error(connectionError)
-      setChannelConnected(false)
-      setError(
-        'No fue posible establecer el canal de soporte remoto.',
-      )
+      if (
+        current &&
+        current.sessionId === nextFrame.sessionId &&
+        nextFrame.sequence <= current.sequence
+      ) {
+        return current
+      }
+
+      return nextFrame
     })
+  },
+
+  onSessionChanged: (update: RemoteSessionChanged) => {
+    if (disposed) return
+
+    if (isTerminal(update.status)) {
+      if (
+        update.sessionId === selectedSessionIdRef.current
+      ) {
+        selectedSessionIdRef.current = ''
+
+        setSelectedSessionId('')
+        setSelectedDeviceId('')
+        setActiveSession(null)
+        setControlState(null)
+        setFrame(null)
+        setStreamMetrics(null)
+
+        metricWindowRef.current = {
+          startedAt: 0,
+          frames: 0,
+          bytes: 0,
+        }
+      }
+
+      void loadData()
+      return
+    }
+
+    void refreshActiveSession(update.sessionId)
+  },
+
+  onControlStateChanged: nextControlState => {
+    if (
+      disposed ||
+      nextControlState.sessionId !== selectedSessionIdRef.current
+    ) {
+      return
+    }
+
+    setControlState(nextControlState)
+  },
+
+  onRemoteHostStateChanged: hostState => {
+    if (
+      disposed ||
+      hostState.sessionId !== selectedSessionIdRef.current
+    ) {
+      return
+    }
+
+    if (!hostState.connected) {
+      // El host puede estar reconectando.
+      // No destruimos la sesión ni liberamos el lease.
+      setFrame(null)
+      setStreamMetrics(null)
+
+      metricWindowRef.current = {
+        startedAt: 0,
+        frames: 0,
+        bytes: 0,
+      }
+    }
+  },
+
+  onReconnecting: () => {
+    if (disposed) return
+
+    setChannelConnected(false)
+    setFrame(null)
+    setStreamMetrics(null)
+
+    metricWindowRef.current = {
+      startedAt: 0,
+      frames: 0,
+      bytes: 0,
+    }
+  },
+
+  onReconnected: () => {
+    if (disposed) return
+
+    setChannelConnected(true)
+    void joinCurrentSession()
+  },
+
+  onClosed: closeError => {
+    if (disposed) return
+
+    setChannelConnected(false)
+    setFrame(null)
+    setStreamMetrics(null)
+    setControlState(null)
+
+    metricWindowRef.current = {
+      startedAt: 0,
+      frames: 0,
+      bytes: 0,
+    }
+
+    if (closeError) {
+      console.error(
+        'Canal remoto cerrado.',
+        closeError,
+      )
+    }
+  },
+}).then(async () => {
+  if (disposed) return
+
+  setChannelConnected(true)
+  await joinCurrentSession()
+}).catch(connectionError => {
+  if (disposed) return
+
+  console.error(connectionError)
+  setChannelConnected(false)
+  setFrame(null)
+  setStreamMetrics(null)
+
+  setError(
+    'No fue posible establecer el canal de soporte remoto.',
+  )
+})
+
 
     return () => {
       disposed = true
@@ -320,7 +423,7 @@ export function RemotePage() {
       }
       void client.disconnect()
     }
-  }, [refreshActiveSession])
+}, [loadData, refreshActiveSession])
 
   const selectSession = async (sessionId: string) => {
     try {
@@ -382,6 +485,8 @@ export function RemotePage() {
       }
     }
   }
+
+  
 
   const startSession = async () => {
     if (
@@ -455,25 +560,81 @@ export function RemotePage() {
     }
   }
 
-  const endSession = async () => {
-    if (!canManage || !activeSession || terminating) return
+  
+const endSession = async () => {
+  if (
+    !canManage ||
+    !activeSession ||
+    terminating
+  ) {
+    return
+  }
 
-    const sessionId = activeSession.id
+  const sessionId = activeSession.id
 
-    try {
-      setTerminating(true)
-      setError(null)
-      await terminateRemoteSession(sessionId)
+  try {
+    setTerminating(true)
+    setError(null)
+
+    // El backend finaliza SQL, elimina el lease
+    // y publica los eventos de terminación.
+    await terminateRemoteSession(sessionId)
+
+    // Primero invalidar la sesión actual para
+    // descartar cualquier frame retrasado.
+    if (selectedSessionIdRef.current === sessionId) {
+      selectedSessionIdRef.current = ''
+
+      setSelectedSessionId('')
+      setSelectedDeviceId('')
+      setActiveSession(null)
+      setControlState(null)
       setFrame(null)
       setStreamMetrics(null)
-      await refreshActiveSession(sessionId)
-      await loadData()
-    } catch {
-      setError('No fue posible finalizar la sesión remota.')
-    } finally {
-      setTerminating(false)
+
+      metricWindowRef.current = {
+        startedAt: 0,
+        frames: 0,
+        bytes: 0,
+      }
     }
+
+    // Abandonar el grupo SignalR anterior.
+    // Un error de transporte no revierte el cierre HTTP.
+    if (signalRRef.current?.isConnected) {
+      try {
+        await signalRRef.current.leaveSession(sessionId)
+      } catch (leaveError) {
+        console.warn(
+          'La sesión finalizó, pero LeaveSession falló.',
+          leaveError,
+        )
+      }
+    }
+
+    setSessions(current =>
+      current.map(session =>
+        session.id === sessionId
+          ? { ...session, status: 'Completed' }
+          : session,
+      ),
+    )
+
+    await loadData()
+  } catch (requestError) {
+    console.error(
+      'No fue posible finalizar la sesión remota.',
+      requestError,
+    )
+
+    setError(
+      'No fue posible confirmar la finalización de la sesión.',
+    )
+  } finally {
+    setTerminating(false)
   }
+}
+
 
   const ownsControl = Boolean(
     controlState?.hasController &&
@@ -597,6 +758,8 @@ export function RemotePage() {
       activeSession.status !== 'Connected'
     ) return
 
+    
+
     void signalRRef.current
       .keyboard(activeSession.id, virtualKey, keyDown)
       .catch(console.error)
@@ -627,7 +790,10 @@ export function RemotePage() {
     `${x.deviceName} ${x.assignedUser ?? ''} ${x.ipAddress ?? ''}`
       .toLowerCase()
       .includes(deviceSearch.trim().toLowerCase()),
-  )
+    
+      
+    )
+  
 
   return (
     <main className="remote-page wr">
