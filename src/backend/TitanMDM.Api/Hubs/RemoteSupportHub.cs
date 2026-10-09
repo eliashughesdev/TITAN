@@ -768,6 +768,85 @@ public sealed class RemoteSupportHub
             Context.ConnectionId);
     }
 
+    
+    // ============================================================
+    // WINDOWS DESKTOP STATE — RS-H3.2
+    // ============================================================
+
+    public async Task PublishDesktopState(
+        Guid sessionId,
+        string kind,
+        bool canCapture,
+        long transitionSequence,
+        DateTime observedAtUtc)
+    {
+        // Solo un RemoteHost con token de sesión válido
+        // puede publicar cambios de escritorio.
+        var remoteHost = ValidateRemoteHost(sessionId);
+
+        if (transitionSequence < 0)
+        {
+            throw new HubException(
+                "Secuencia de escritorio inválida.");
+        }
+
+        var normalizedKind = kind?.Trim() ?? string.Empty;
+
+        var allowedKinds = new[]
+        {
+            "Default",
+            "Winlogon",
+            "ScreenSaver",
+            "Other",
+            "AccessDenied",
+            "Unavailable",
+            "Unknown"
+        };
+
+        if (!allowedKinds.Contains(
+                normalizedKind,
+                StringComparer.Ordinal))
+        {
+            throw new HubException(
+                "Estado de escritorio no reconocido.");
+        }
+
+        if (canCapture && normalizedKind != "Default")
+        {
+            throw new HubException(
+                "Un escritorio protegido no puede " +
+                "declararse capturable por RemoteHost.");
+        }
+
+        // El timestamp procede del host, pero no se utilizará
+        // como autoridad de seguridad.
+        var reportedAtUtc = observedAtUtc.Kind switch
+        {
+            DateTimeKind.Utc => observedAtUtc,
+            DateTimeKind.Local => observedAtUtc.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(
+                observedAtUtc, DateTimeKind.Utc)
+        };
+
+        await Clients
+            .Group(
+                TechnicianGroup(
+                    remoteHost.OrganizationId,
+                    sessionId))
+            .SendAsync(
+                "RemoteDesktopStateChanged",
+                new
+                {
+                    sessionId,
+                    kind = normalizedKind,
+                    canCapture,
+                    transitionSequence,
+                    observedAtUtc = reportedAtUtc.ToString("O")
+                },
+                Context.ConnectionAborted);
+    }
+
+
     // ============================================================
     // VIDEO
     // ============================================================

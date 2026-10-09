@@ -116,6 +116,25 @@ export interface RemoteHostState {
   connected: boolean
 }
 
+
+export type RemoteDesktopKind =
+  | 'Default'
+  | 'Winlogon'
+  | 'ScreenSaver'
+  | 'Other'
+  | 'AccessDenied'
+  | 'Unavailable'
+  | 'Unknown'
+
+export interface RemoteDesktopState {
+  sessionId: string
+  kind: RemoteDesktopKind
+  canCapture: boolean
+  transitionSequence: number
+  observedAtUtc: string
+}
+
+
 /*
  * ============================================================
  * HANDLERS
@@ -127,6 +146,12 @@ export interface RemoteSupportSignalRHandlers {
     frame:
       RemoteFrame,
   ) => void
+
+  
+  onDesktopStateChanged?: (
+    state: RemoteDesktopState,
+  ) => void
+
 
   onSessionChanged?: (
     update:
@@ -164,6 +189,8 @@ export interface RemoteSupportSignalRHandlers {
   onClosed?: (
     error?: Error,
   ) => void
+
+  
 }
 
 /*
@@ -393,6 +420,14 @@ export class RemoteSupportSignalRClient {
           )
       },
     )
+    
+    connection.on(
+      'RemoteDesktopStateChanged',
+      (state: RemoteDesktopState) => {
+        handlers.onDesktopStateChanged?.(state)
+      },
+    )
+
 
     /*
      * ========================================================

@@ -491,63 +491,155 @@ public sealed class RemoteTransportClient : IAsyncDisposable
         }
     }
 
+    
+    // ============================================================
+    // DESKTOP STATE PUBLISHING — RS-H3.2
+    // ============================================================
+
+    private async Task PublishDesktopStateAsync(
+        RemoteDesktopTransitionSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var connection = _connection;
+
+        if (IsDisposing ||
+            connection?.State != HubConnectionState.Connected)
+        {
+            return;
+        }
+
+        var desktop = snapshot.Current;
+
+        using var timeout =
+            CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+
+        await connection.InvokeAsync(
+            "PublishDesktopState",
+            _session.SessionId,
+            desktop.Kind.ToString(),
+            snapshot.CanCaptureDefaultDesktop,
+            snapshot.Sequence,
+            desktop.ObservedAtUtc,
+            timeout.Token);
+    }
+
+
     // ============================================================
     // STREAM LOOP
     // ============================================================
 
-    private async Task StreamLoopAsync(
-        CancellationToken cancellationToken)
+   
+private async Task StreamLoopAsync(
+    CancellationToken cancellationToken)
+{
+    StatusChanged?.Invoke("Iniciando captura");
+
+    var desktopMonitor =
+        new RemoteDesktopTransitionMonitor(_desktopProbe);
+
+    var channelPaused = false;
+    var channelStateNeedsSync = true;
+
+    while (!cancellationToken.IsCancellationRequested)
     {
-        StatusChanged?.Invoke("Iniciando captura");
-
-        var desktopPaused = false;
-        var channelPaused = false;
-
-        while (!cancellationToken.IsCancellationRequested)
+        if (SessionExpired)
         {
-            if (SessionExpired)
+            StatusChanged?.Invoke("Sesión remota expirada");
+            RaiseConnectionLost();
+            break;
+        }
+
+        var connection = _connection;
+
+        if (connection?.State != HubConnectionState.Connected)
+        {
+            if (!channelPaused)
             {
-                StatusChanged?.Invoke("Sesión remota expirada");
-                RaiseConnectionLost();
-                break;
-            }
-
-            var connection = _connection;
-
-            if (connection?.State != HubConnectionState.Connected)
-            {
-                if (!channelPaused)
-                {
-                    StatusChanged?.Invoke(
-                        "Canal temporalmente desconectado");
-
-                    channelPaused = true;
-                }
-
-                await DelaySafeAsync(
-                    DisconnectedRetryMilliseconds,
-                    cancellationToken);
-
-                continue;
-            }
-
-            if (channelPaused)
-            {
-                channelPaused = false;
+                channelPaused = true;
 
                 StatusChanged?.Invoke(
-                    "Canal recuperado; reanudando transmisión");
+                    "Canal SignalR temporalmente desconectado");
             }
 
-            if (!CanUseDefaultDesktop)
-            {
-                if (!desktopPaused)
-                {
-                    StatusChanged?.Invoke(
-                        "Escritorio protegido; captura y entrada en pausa");
+            await DelaySafeAsync(
+                DisconnectedRetryMilliseconds,
+                cancellationToken);
 
-                    desktopPaused = true;
-                }
+            continue;
+        }
+
+        if (channelPaused)
+        {
+            channelPaused = false;
+
+            StatusChanged?.Invoke(
+                "SignalR recuperado; verificando escritorio activo");
+        }
+
+        if (channelPaused)
+        {
+            channelPaused = false;
+            channelStateNeedsSync = true;
+
+            StatusChanged?.Invoke(
+                "SignalR recuperado; verificando escritorio activo");
+        }
+
+        // ========================================================
+        // WINDOWS DESKTOP STATE
+        // ========================================================
+
+        RemoteDesktopTransitionSnapshot desktop;
+
+        try
+        {
+            desktop = desktopMonitor.Check();
+        }
+        catch (Exception ex)
+        {
+            StatusChanged?.Invoke(
+                $"No fue posible verificar el escritorio: {ex.GetType().Name}");
+
+            await DelaySafeAsync(
+                ProtectedDesktopRetryMilliseconds,
+                cancellationToken);
+
+            continue;
+        }
+
+       
+        // Publicar al cambiar el estado del escritorio.
+        // También publicar tras restablecer SignalR para
+        // sincronizar el estado del visor del técnico.
+        if (desktop.Changed || channelStateNeedsSync)
+        {
+            StatusChanged?.Invoke(
+                RemoteDesktopTransitionMonitor.Describe(desktop));
+
+            try
+            {
+                await PublishDesktopStateAsync(
+                    desktop,
+                    cancellationToken);
+
+                channelStateNeedsSync = false;
+            }
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                StatusChanged?.Invoke(
+                    $"No fue posible publicar estado de escritorio: " +
+                    $"{ex.GetType().Name}");
+
+                // Se reintentará al siguiente ciclo.
+                channelStateNeedsSync = true;
 
                 await DelaySafeAsync(
                     ProtectedDesktopRetryMilliseconds,
@@ -555,102 +647,141 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
                 continue;
             }
-
-            if (desktopPaused)
-            {
-                desktopPaused = false;
-
-                StatusChanged?.Invoke(
-                    "Escritorio disponible; reanudando captura");
-            }
-
-            var cycleStarted = Stopwatch.GetTimestamp();
-
-            try
-            {
-                var frame = _captureService.Capture(
-                    jpegQuality: 40,
-                    maxWidth: 1440);
-
-                if (frame.Data.Length == 0)
-                {
-                    throw new InvalidOperationException(
-                        "DesktopCapture devolvió un frame vacío.");
-                }
-
-                using var sendCancellation =
-                    CancellationTokenSource.CreateLinkedTokenSource(
-                        cancellationToken);
-
-                sendCancellation.CancelAfter(FrameSendTimeout);
-
-                await connection.InvokeAsync(
-                    "PublishFrame",
-                    _session.SessionId,
-                    frame.Sequence,
-                    frame.Width,
-                    frame.Height,
-                    frame.MimeType,
-                    frame.Data,
-                    frame.CapturedAtUtc,
-                    frame.DisplayIndex,
-                    frame.DisplayCount,
-                    frame.DisplayLabel,
-                    sendCancellation.Token);
-
-                var published =
-                    Interlocked.Increment(ref _framesPublished);
-
-                if (published == 1 || published % 30 == 0)
-                {
-                    StatusChanged?.Invoke(
-                        $"Transmitiendo · {frame.DisplayLabel} · " +
-                        $"{published} frames");
-                }
-            }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (OperationCanceledException)
-            {
-                StatusChanged?.Invoke(
-                    "Frame descartado por congestión del canal");
-
-                await DelaySafeAsync(
-                    DisconnectedRetryMilliseconds,
-                    cancellationToken);
-
-                continue;
-            }
-            catch (Exception ex)
-            {
-                StatusChanged?.Invoke(
-                    $"Error de captura o transmisión: {ex.Message}");
-
-                await DelaySafeAsync(
-                    CaptureFailureRetryMilliseconds,
-                    cancellationToken);
-
-                continue;
-            }
-
-            var elapsed = Stopwatch.GetElapsedTime(cycleStarted);
-
-            var delay = Math.Max(
-                0,
-                TargetFrameIntervalMilliseconds -
-                (int)elapsed.TotalMilliseconds);
-
-            if (delay > 0)
-            {
-                await DelaySafeAsync(delay, cancellationToken);
-            }
         }
 
-        StatusChanged?.Invoke("Streaming detenido");
+
+        if (!desktop.CanCaptureDefaultDesktop)
+        {
+            // El escritorio actual no es accesible de manera
+            // segura por el RemoteHost interactivo.
+            //
+            // Conservamos:
+            // - HubConnection
+            // - SessionId
+            // - Control lease
+            // - tarea de streaming
+            //
+            // No intentamos capturar Winlogon con GDI.
+            // No inyectamos entrada al escritorio protegido.
+
+            await DelaySafeAsync(
+                ProtectedDesktopRetryMilliseconds,
+                cancellationToken);
+
+            continue;
+        }
+
+        // ========================================================
+        // NORMAL DESKTOP CAPTURE
+        // ========================================================
+
+        var cycleStarted = Stopwatch.GetTimestamp();
+
+        try
+        {
+            var frame = _captureService.Capture(
+                jpegQuality: 40,
+                maxWidth: 1440);
+
+            if (frame.Data.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "DesktopCapture devolvió un frame vacío.");
+            }
+
+            // Revalidar después de la captura.
+            // Windows puede cambiar de escritorio mientras
+            // CopyFromScreen está ejecutándose.
+            var afterCapture = desktopMonitor.Check();
+
+            if (!afterCapture.CanCaptureDefaultDesktop)
+            {
+                if (afterCapture.Changed)
+                {
+                    StatusChanged?.Invoke(
+                        RemoteDesktopTransitionMonitor.Describe(
+                            afterCapture));
+                }
+
+                continue;
+            }
+
+            using var sendCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken);
+
+            sendCancellation.CancelAfter(FrameSendTimeout);
+
+            await connection.InvokeAsync(
+                "PublishFrame",
+                _session.SessionId,
+                frame.Sequence,
+                frame.Width,
+                frame.Height,
+                frame.MimeType,
+                frame.Data,
+                frame.CapturedAtUtc,
+                frame.DisplayIndex,
+                frame.DisplayCount,
+                frame.DisplayLabel,
+                sendCancellation.Token);
+
+            var published =
+                Interlocked.Increment(ref _framesPublished);
+
+            if (published == 1 || published % 30 == 0)
+            {
+                StatusChanged?.Invoke(
+                    $"Transmitiendo · {frame.DisplayLabel} · " +
+                    $"{published} frames");
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            break;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusChanged?.Invoke(
+                "Frame descartado por congestión del canal");
+
+            await DelaySafeAsync(
+                DisconnectedRetryMilliseconds,
+                cancellationToken);
+
+            continue;
+        }
+        catch (Exception ex)
+        {
+            StatusChanged?.Invoke(
+                $"Error de captura o transmisión: {ex.Message}");
+
+            await DelaySafeAsync(
+                CaptureFailureRetryMilliseconds,
+                cancellationToken);
+
+            continue;
+        }
+
+        var elapsed = Stopwatch.GetElapsedTime(cycleStarted);
+
+        var delay = Math.Max(
+            0,
+            TargetFrameIntervalMilliseconds -
+            (int)elapsed.TotalMilliseconds);
+
+        if (delay > 0)
+        {
+            await DelaySafeAsync(
+                delay,
+                cancellationToken);
+        }
     }
+
+    StatusChanged?.Invoke("Streaming detenido");
+}
+
 
     private static async Task DelaySafeAsync(
         int milliseconds,
