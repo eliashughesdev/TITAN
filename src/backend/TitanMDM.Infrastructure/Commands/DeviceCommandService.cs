@@ -262,8 +262,8 @@ public sealed class DeviceCommandService
         var maximumMinutes = commandType.Trim().ToUpperInvariant() switch
         {
             "LOCK_DEVICE" => 2,
-            "RESTART_DEVICE" or "SHUTDOWN_DEVICE" => 5,
-            "PROCESS_KILL" or "SERVICE_START" or
+"RESTART_DEVICE" or "SHUTDOWN_DEVICE" => 5,
+            "PROCESS_TERMINATE" or "SERVICE_START" or
                 "SERVICE_STOP" or "SERVICE_RESTART" => 5,
             _ => requestedMinutes
         };

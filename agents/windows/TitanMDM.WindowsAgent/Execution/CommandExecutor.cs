@@ -41,6 +41,9 @@ public sealed class CommandExecutor
     private readonly WindowsPolicyExecutor
     _policyExecutor;
 
+    private readonly WindowsKioskExecutor
+        _kioskExecutor;
+
     public CommandExecutor(
     ILogger<CommandExecutor> logger,
     WindowsInventoryProvider inventoryProvider,
@@ -52,7 +55,8 @@ public sealed class CommandExecutor
     WindowsScriptExecutor scriptExecutor,
     WindowsSoftwareManager softwareManager,
     WindowsSoftwarePackageDownloader packageDownloader,
-    WindowsPolicyExecutor policyExecutor)
+    WindowsPolicyExecutor policyExecutor,
+    WindowsKioskExecutor kioskExecutor)
     {
         _logger =
             logger;
@@ -86,6 +90,9 @@ public sealed class CommandExecutor
 
         _policyExecutor =
         policyExecutor;
+
+        _kioskExecutor =
+            kioskExecutor;
     }
     public async Task<CommandExecutionResult>
         ExecuteAsync(
@@ -314,6 +321,46 @@ public sealed class CommandExecutor
 
                     /*
                      * ============================================
+                     * WINDOWS KIOSK
+                     * ============================================
+                     */
+
+                    "WINDOWS_KIOSK_STATUS" =>
+                        await _kioskExecutor
+                            .GetStatusAsync(
+                                cancellationToken),
+
+                    "WINDOWS_KIOSK_REMOVE" =>
+                        await _kioskExecutor
+                            .RemoveAsync(
+                                cancellationToken),
+
+                    /*
+                     * ============================================
+                     * LOST MODE
+                     * ============================================
+                     */
+
+                    "LOST_MODE_ENABLE" =>
+                        await ExecuteLostModeEnableAsync(
+                            command.PayloadJson,
+                            cancellationToken),
+
+                    "LOST_MODE_DISABLE" =>
+                        ExecuteLostModeDisable(),
+
+                    /*
+                     * ============================================
+                     * LOCATION
+                     * ============================================
+                     */
+
+                    "LOCATION_REQUEST" =>
+                        throw new
+                            DeviceLocationUnavailableException(),
+
+                    /*
+                     * ============================================
                      * UNKNOWN
                      * ============================================
                      */
@@ -331,6 +378,13 @@ public sealed class CommandExecutor
         {
             return Failure(
                 "UNSUPPORTED_COMMAND",
+                ex.Message);
+        }
+        catch (
+            DeviceLocationUnavailableException ex)
+        {
+            return Failure(
+                "LOCATION_UNAVAILABLE",
                 ex.Message);
         }
         catch (
@@ -607,6 +661,100 @@ public sealed class CommandExecutor
 
     /*
      * ============================================================
+     * LOST MODE
+     * ============================================================
+     */
+
+    private async Task<string>
+        ExecuteLostModeEnableAsync(
+            string payloadJson,
+            CancellationToken cancellationToken)
+    {
+        LostModeEnablePayload payload;
+
+        try
+        {
+            payload =
+                Deserialize<
+                    LostModeEnablePayload>(
+                        payloadJson);
+        }
+        catch (
+            JsonException)
+        {
+            payload =
+                new LostModeEnablePayload(
+                    string.Empty,
+                    string.Empty);
+        }
+
+        var lockResultJson =
+            await _actionExecutor
+                .LockDeviceAsync(
+                    cancellationToken);
+
+        using var lockResult =
+            JsonDocument.Parse(
+                lockResultJson);
+
+        return Serialize(
+            new
+            {
+                action =
+                    "LOST_MODE_ENABLE",
+
+                message =
+                    payload.Message,
+
+                phoneNumber =
+                    payload.PhoneNumber,
+
+                lockResult =
+                    lockResult.RootElement
+                });
+    }
+
+    private static string ExecuteLostModeDisable()
+    {
+        /*
+         * En Windows no existe un estado "lost mode" persistente:
+         * el bloqueo se libera al iniciar sesión. Este comando
+         * confirma que el dispositivo quedó restablecido.
+         */
+
+        return Serialize(
+            new
+            {
+                action =
+                    "LOST_MODE_DISABLE",
+
+                success =
+                    true,
+
+                executedAtUtc =
+                    DateTime.UtcNow
+            });
+    }
+
+    /*
+     * ============================================================
+     * LOCATION
+     * ============================================================
+     */
+
+    private sealed class
+        DeviceLocationUnavailableException
+        : Exception
+    {
+        public DeviceLocationUnavailableException()
+            : base(
+                "El agente TitanMDM Windows no proporciona geolocalización de dispositivo.")
+        {
+        }
+    }
+
+    /*
+     * ============================================================
      * JSON
      * ============================================================
      */
@@ -724,6 +872,11 @@ public sealed class CommandExecutor
             string? UninstallExecutable = null,
             string? Arguments = null,
             int TimeoutSeconds = 1800);
+
+    private sealed record
+        LostModeEnablePayload(
+            string Message = "",
+            string PhoneNumber = "");
 
     /*
      * ============================================================
