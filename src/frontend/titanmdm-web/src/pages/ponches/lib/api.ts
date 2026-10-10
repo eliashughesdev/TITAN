@@ -15,7 +15,7 @@ const PONCHES_PREFIX =
   '/api/ponches/'
 
 const LEGACY_PREFIX =
-  '/ponches/legacy/'
+  '/ponches/module/'
 
 const DEFAULT_TIMEOUT_MS =
   200_000
