@@ -27,6 +27,10 @@ import {
 } from 'react-router-dom'
 
 import {
+  useAuth,
+} from '../../auth/AuthContext'
+
+import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../api/deviceCommandsApi'
@@ -179,6 +183,16 @@ const commandDefinitions:
   ]
 
 export function WindowsControlCenterPage() {
+  const {
+    hasPermission,
+  } =
+    useAuth()
+
+  const canCommand =
+    hasPermission(
+      'devices.commands',
+    )
+
   const {
     deviceId,
   } =
@@ -566,6 +580,14 @@ export function WindowsControlCenterPage() {
           return
         }
 
+        if (!canCommand) {
+          setError(
+            'No tienes permiso devices.commands para ejecutar comandos en este endpoint.',
+          )
+
+          return
+        }
+
         try {
           setSendingCommand(
             commandType,
@@ -625,6 +647,7 @@ export function WindowsControlCenterPage() {
       [
         deviceId,
         sendingCommand,
+        canCommand,
       ],
     )
 
