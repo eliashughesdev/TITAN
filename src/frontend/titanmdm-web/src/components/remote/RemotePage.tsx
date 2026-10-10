@@ -52,7 +52,9 @@ import type {
 
 import { useAuth } from '../../auth/AuthContext'
 
+import { useSearchParams } from 'react-router-dom'
 import './RemotePage.css'
+import './RemoteViewerStandalone.css'
 
 // ============================================================
 // TYPES AND HELPERS
@@ -147,7 +149,14 @@ function emptyMetricWindow() {
 
 export function RemotePage() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
 
+  const viewerSessionId =
+    searchParams.get('sessionId') ?? ''
+
+  const dedicatedViewer = Boolean(viewerSessionId)
+
+  const autoJoinedSessionRef = useRef('')
   const canManage =
     user?.permissions?.includes('remote.manage') ?? false
 
@@ -929,6 +938,24 @@ export function RemotePage() {
     }
   }
 
+  // ============================================================
+// INDEPENDENT VIEWER — AUTO JOIN
+// ============================================================
+
+useEffect(() => {
+  if (!viewerSessionId || !channelConnected) {
+    return
+  }
+
+  if (autoJoinedSessionRef.current === viewerSessionId) {
+    return
+  }
+
+  autoJoinedSessionRef.current = viewerSessionId
+
+  void selectSession(viewerSessionId)
+}, [viewerSessionId, channelConnected])
+
   // ==========================================================
   // START SESSION
   // ==========================================================
@@ -1365,7 +1392,13 @@ export function RemotePage() {
   // ==========================================================
 
   return (
-    <main className="remote-page wr">
+  <main
+  className={
+    dedicatedViewer
+      ? 'remote-page wr wr--viewer'
+      : 'remote-page wr'
+  }
+>
       {/* ====================================================
           HEADER
           ==================================================== */}

@@ -46,6 +46,7 @@ import {
 } from './hooks/useDevicesInventory'
 
 import './DevicesPage.css'
+import './WindowsDevicesPremium.css'
 
 export function DevicesPage() {
   const navigate =

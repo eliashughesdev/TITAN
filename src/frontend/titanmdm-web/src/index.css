@@ -3,7 +3,7 @@
  * TitanMDM Enterprise
  * Global application stylesheet
  *
- * Tailwind v4 + existing Titan design system.
+ * Tailwind v4 + Titan Enterprise Design System.
  */
 
 @import './styles/titan-tailwind.css';
@@ -12,6 +12,13 @@
 @import './styles/titan-motion.css';
 @import './styles/titan-shell.css';
 @import './styles/titan-enterprise-components.css';
+
+/*
+ * WIN-UI-ALL:
+ * Capa central de modernización de Windows.
+ * Sus selectores se limitan a los componentes identificados.
+ */
+@import './styles/titan-windows-enterprise.css';
 
 html,
 body,

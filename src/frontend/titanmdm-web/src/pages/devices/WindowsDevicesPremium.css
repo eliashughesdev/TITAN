@@ -1,0 +1,617 @@
+
+/*
+ * TITANMDM ENTERPRISE PREMIUM
+ * WIN-B — Inventario + Centro de Control
+ *
+ * Capa visual. No altera RBAC, APIs ni acciones.
+ * Colores: identidad Windows azul / índigo.
+ */
+
+.devices-page:has(.devices-summary),
+.windows-control-page {
+  --win-ink: #172642;
+  --win-primary: #315dea;
+  --win-indigo: #6259df;
+  --win-muted: #73829b;
+  --win-border: #e3eaf5;
+  --win-soft: #f1f5ff;
+  --win-shadow: 0 12px 34px rgba(24, 48, 92, .075);
+}
+
+/* ============================================================
+   INVENTARIO — ENCABEZADO
+   ============================================================ */
+
+.devices-page:has(.devices-summary) {
+  width: 100%;
+  max-width: 1850px;
+  margin: 0 auto;
+  padding-bottom: 36px;
+}
+
+.devices-page:has(.devices-summary) .devices-heading {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 154px;
+  align-items: center;
+  gap: 20px;
+  padding: 27px 30px;
+  border: 1px solid rgba(137, 168, 245, .18);
+  border-radius: 26px;
+  background:
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(153, 173, 255, .26),
+      transparent 33%
+    ),
+    linear-gradient(
+      118deg,
+      #152648 0%,
+      #273d7d 60%,
+      #51428a 100%
+    );
+  box-shadow: 0 18px 45px rgba(24, 45, 99, .17);
+}
+
+.devices-page:has(.devices-summary) .devices-heading::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: -60px;
+  top: -110px;
+  width: 320px;
+  height: 320px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 39px rgba(255,255,255,.045),
+    0 0 0 83px rgba(255,255,255,.03);
+  pointer-events: none;
+}
+
+.devices-page:has(.devices-summary)
+.devices-heading__eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px;
+  background: rgba(255,255,255,.09);
+  color: #cbdcff;
+  font-size: 10px;
+  letter-spacing: .15em;
+}
+
+.devices-page:has(.devices-summary)
+.devices-heading h1 {
+  margin-top: 13px;
+  color: #fff;
+  font-size: clamp(25px, 2.3vw, 36px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+}
+
+.devices-page:has(.devices-summary)
+.devices-heading p {
+  max-width: 650px;
+  color: #d3def5;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.devices-page:has(.devices-summary)
+.devices-heading__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.devices-page:has(.devices-summary)
+.devices-refresh-button {
+  min-height: 43px;
+  padding: 0 17px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 13px;
+  background: #fff;
+  color: #2959c9;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 9px 20px rgba(10, 20, 50, .14);
+  transition: transform .18s, box-shadow .18s;
+}
+
+.devices-page:has(.devices-summary)
+.devices-refresh-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(10, 20, 50, .22);
+}
+
+/* ============================================================
+   INVENTARIO — KPIs
+   ============================================================ */
+
+.devices-page:has(.devices-summary) .devices-summary {
+  gap: 15px;
+  margin-top: 19px;
+  margin-bottom: 21px;
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card {
+  position: relative;
+  min-height: 139px;
+  gap: 14px;
+  padding: 21px;
+  overflow: hidden;
+  border: 1px solid var(--win-border);
+  border-radius: 22px;
+  background: linear-gradient(145deg, #eff5ff, #fff 79%);
+  box-shadow: var(--win-shadow);
+  transition:
+    transform .2s ease,
+    box-shadow .2s ease,
+    border-color .2s ease;
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card:nth-child(2) {
+  background: linear-gradient(145deg, #e9faf2, #fff 79%);
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card:nth-child(3) {
+  background: linear-gradient(145deg, #fff1f4, #fff 79%);
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card:nth-child(4) {
+  background: linear-gradient(145deg, #f2efff, #fff 79%);
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card:hover {
+  transform: translateY(-4px);
+  border-color: #bdd1ff;
+  box-shadow: 0 20px 40px rgba(24, 48, 92, .13);
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card__icon {
+  width: 49px;
+  height: 49px;
+  flex-basis: 49px;
+  border-radius: 16px;
+  background: #fff;
+  color: #315dea;
+  box-shadow: 0 6px 16px rgba(30, 60, 125, .075);
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card > div:last-child > span {
+  color: #63758f;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card strong {
+  color: var(--win-ink);
+  font-size: 31px;
+  font-weight: 850;
+  letter-spacing: -.045em;
+}
+
+.devices-page:has(.devices-summary)
+.devices-summary-card small {
+  color: #8290a6;
+  font-size: 11px;
+}
+
+/* ============================================================
+   INVENTARIO — FILTROS Y TABLA
+   ============================================================ */
+
+.devices-page:has(.devices-summary)
+.devices-panel {
+  overflow: hidden;
+  border: 1px solid var(--win-border);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--win-shadow);
+}
+
+.devices-page:has(.devices-summary)
+.devices-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 11px;
+  padding: 18px;
+  border-bottom: 1px solid #edf1f8;
+  background: linear-gradient(180deg, #fff, #fbfcff);
+}
+
+.devices-page:has(.devices-summary)
+.devices-search {
+  flex: 1 1 280px;
+  min-width: 185px;
+}
+
+.devices-page:has(.devices-summary)
+.devices-toolbar input,
+.devices-page:has(.devices-summary)
+.devices-toolbar select {
+  min-height: 40px;
+  border: 1px solid #dde5f1;
+  border-radius: 12px;
+  background: #f8faff;
+  color: #334665;
+  font-size: 12px;
+  transition: border-color .18s, box-shadow .18s;
+}
+
+.devices-page:has(.devices-summary)
+.devices-toolbar input:focus,
+.devices-page:has(.devices-summary)
+.devices-toolbar select:focus {
+  outline: none;
+  border-color: #7294f4;
+  box-shadow: 0 0 0 3px rgba(49,93,234,.1);
+}
+
+.devices-page:has(.devices-summary)
+.devices-table-wrapper {
+  overflow-x: auto;
+}
+
+.devices-page:has(.devices-summary)
+.devices-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.devices-page:has(.devices-summary)
+.devices-table thead th {
+  padding: 16px 15px;
+  border-bottom: 1px solid #e9eef7;
+  background: #f5f8ff;
+  color: #657995;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.devices-page:has(.devices-summary)
+.devices-table tbody td {
+  padding: 16px 15px;
+  border-bottom: 1px solid #eff2f8;
+  color: #33445f;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.devices-page:has(.devices-summary)
+.devices-table tbody tr {
+  transition: background .16s;
+}
+
+.devices-page:has(.devices-summary)
+.devices-table tbody tr:hover {
+  background: #f3f7ff;
+}
+
+.devices-page:has(.devices-summary)
+.device-platform-icon {
+  width: 41px;
+  height: 41px;
+  border-radius: 14px;
+  color: #315dea;
+  background: #edf3ff;
+}
+
+.devices-page:has(.devices-summary)
+.wit-device-link {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  padding: 4px 0;
+  color: #2454b9;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.devices-page:has(.devices-summary)
+.wit-device-link:hover {
+  color: #143d91;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.devices-page:has(.devices-summary)
+.wit .wit-actions {
+  gap: 11px;
+  padding: 17px 19px;
+  border-bottom: 1px solid #edf1f7;
+  background: #fff;
+}
+
+.devices-page:has(.devices-summary)
+.wit .wit-actions button {
+  min-height: 37px;
+  padding: 8px 13px;
+  border: 1px solid #dce5f3;
+  border-radius: 11px;
+  background: #f4f7ff;
+  color: #2a58c5;
+  font-size: 11px;
+  font-weight: 800;
+  transition: background .18s, transform .18s;
+}
+
+.devices-page:has(.devices-summary)
+.wit .wit-actions button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #eaf0ff;
+}
+
+.devices-page:has(.devices-summary)
+.device-status,
+.devices-page:has(.devices-summary)
+.device-compliance {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* ============================================================
+   CENTRO DE CONTROL — HERO, KPIs Y PANELES
+   ============================================================ */
+
+.windows-control-page {
+  width: 100%;
+  max-width: 1850px;
+  gap: 19px;
+  padding-bottom: 35px;
+}
+
+.windows-control-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 127px;
+  padding: 27px;
+  border: 1px solid rgba(153,179,245,.15);
+  border-radius: 25px;
+  background:
+    radial-gradient(
+      circle at 83% 12%,
+      rgba(163,184,255,.2),
+      transparent 30%
+    ),
+    linear-gradient(120deg, #182b53, #2d4380 60%, #4c4485);
+  box-shadow: 0 18px 46px rgba(23, 44, 91, .17);
+}
+
+.windows-control-device__icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 17px;
+  background: rgba(255,255,255,.13);
+  color: #fff;
+}
+
+.windows-control-eyebrow {
+  color: #c8d8ff;
+  font-size: 10px;
+}
+
+.windows-control-title h1 {
+  color: #fff;
+  font-size: clamp(21px, 2.1vw, 30px);
+  font-weight: 850;
+  letter-spacing: -.035em;
+}
+
+.windows-control-device p {
+  color: #d7e1f6;
+  font-size: 12px;
+}
+
+.windows-control-hero__actions button {
+  min-height: 39px;
+  border-radius: 12px;
+}
+
+.windows-control-kpis {
+  gap: 14px;
+}
+
+.windows-control-kpis article {
+  min-height: 112px;
+  padding: 19px;
+  border: 1px solid var(--win-border);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #eff5ff, #fff 80%);
+  box-shadow: var(--win-shadow);
+}
+
+.windows-control-kpis article:nth-child(2) {
+  background: linear-gradient(145deg, #ecfaf3, #fff 80%);
+}
+
+.windows-control-kpis article:nth-child(3) {
+  background: linear-gradient(145deg, #fff2f5, #fff 80%);
+}
+
+.windows-control-kpis article:nth-child(4) {
+  background: linear-gradient(145deg, #f1efff, #fff 80%);
+}
+
+.windows-control-kpis strong {
+  color: var(--win-ink);
+  font-size: 27px;
+  font-weight: 850;
+}
+
+.windows-control-tabs {
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--win-border);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(20,40,80,.035);
+}
+
+.windows-control-tabs button {
+  min-height: 37px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.windows-control-tabs button.active {
+  border-radius: 11px;
+  background: #ebf1ff;
+  color: #2458d1;
+}
+
+.windows-control-grid {
+  gap: 17px;
+}
+
+.windows-control-card {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--win-border);
+  border-radius: 23px;
+  background: #fff;
+  box-shadow: var(--win-shadow);
+}
+
+.windows-control-card > header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.windows-control-card > header h2 {
+  color: var(--win-ink);
+  font-size: 16px;
+  font-weight: 820;
+}
+
+.windows-control-card button,
+.windows-control-primary,
+.windows-control-secondary {
+  min-height: 38px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 750;
+  transition: transform .18s, box-shadow .18s, opacity .18s;
+}
+
+.windows-control-card button:hover:not(:disabled),
+.windows-control-primary:hover:not(:disabled),
+.windows-control-secondary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(21, 44, 91, .09);
+}
+
+.windows-control-danger-actions button.danger {
+  border-color: #fecdd3;
+  background: #fff0f3;
+  color: #be123c;
+}
+
+.windows-control-danger-actions button.danger:hover:not(:disabled) {
+  background: #ffe4e9;
+}
+
+.windows-control-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.windows-control-table th {
+  background: #f4f7ff;
+  color: #647897;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .065em;
+}
+
+.windows-control-table tbody tr:hover {
+  background: #f5f8ff;
+}
+
+/* ============================================================
+   ACCESIBILIDAD / RESPONSIVE
+   ============================================================ */
+
+.devices-page button:focus-visible,
+.windows-control-page button:focus-visible,
+.devices-page input:focus-visible,
+.windows-control-page input:focus-visible {
+  outline: 3px solid rgba(59,130,246,.52);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1200px) {
+  .devices-page:has(.devices-summary) .devices-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .devices-page:has(.devices-summary) .devices-heading,
+  .windows-control-hero {
+    flex-wrap: wrap;
+    padding: 21px;
+  }
+
+  .devices-page:has(.devices-summary) .devices-toolbar {
+    padding: 13px;
+  }
+
+  .windows-control-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .devices-page:has(.devices-summary) .devices-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .devices-page:has(.devices-summary) .devices-heading h1 {
+    font-size: 25px;
+  }
+
+  .windows-control-hero {
+    border-radius: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .devices-summary-card,
+  .devices-refresh-button,
+  .windows-control-card button,
+  .windows-control-primary,
+  .windows-control-secondary {
+    transition: none !important;
+  }
+
+  .devices-summary-card:hover,
+  .devices-refresh-button:hover,
+  .windows-control-card button:hover {
+    transform: none !important;
+  }
+}

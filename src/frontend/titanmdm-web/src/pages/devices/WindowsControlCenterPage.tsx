@@ -87,6 +87,7 @@ import {
 
 import './WindowsControlCenterPage.css'
 import './WindowsTelemetryCards.css'
+import './WindowsDevicesPremium.css'
 
 const commandDefinitions:
   CommandDefinition[] = [

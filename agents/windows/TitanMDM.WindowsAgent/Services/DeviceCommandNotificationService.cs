@@ -1,3 +1,4 @@
+
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 
@@ -13,6 +14,16 @@ public sealed class DeviceCommandNotificationService : BackgroundService
     private readonly AgentOptions _options;
     private readonly ILogger<DeviceCommandNotificationService> _logger;
 
+    private static readonly TimeSpan[] ReconnectDelays =
+    [
+        TimeSpan.Zero,
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(20),
+        TimeSpan.FromSeconds(30)
+    ];
+
     public DeviceCommandNotificationService(
         DeviceIdentityStore identityStore,
         CommandWakeSignal wakeSignal,
@@ -25,8 +36,12 @@ public sealed class DeviceCommandNotificationService : BackgroundService
         _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
+        _logger.LogInformation(
+            "WIN-C: servicio de notificaciones de comandos iniciado.");
+
         var failures = 0;
 
         while (!stoppingToken.IsCancellationRequested)
@@ -35,16 +50,21 @@ public sealed class DeviceCommandNotificationService : BackgroundService
 
             try
             {
-                var identity = await _identityStore.LoadAsync(stoppingToken);
+                var identity = await _identityStore.LoadAsync(
+                    stoppingToken);
 
                 if (identity is null)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(5),
+                        stoppingToken);
+
                     continue;
                 }
 
-                var closed = new TaskCompletionSource(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
+                var disconnected =
+                    new TaskCompletionSource<bool>(
+                        TaskCreationOptions.RunContinuationsAsynchronously);
 
                 var hubUrl =
                     $"{_options.ServerUrl.TrimEnd('/')}/hubs/device-commands";
@@ -54,21 +74,15 @@ public sealed class DeviceCommandNotificationService : BackgroundService
                         hubUrl,
                         connectionOptions =>
                         {
-                            connectionOptions.Headers["X-Titan-Device-Id"] =
+                            connectionOptions.Headers[
+                                "X-Titan-Device-Id"] =
                                 identity.DeviceId.ToString();
 
-                            connectionOptions.Headers["X-Titan-Device-Secret"] =
+                            connectionOptions.Headers[
+                                "X-Titan-Device-Secret"] =
                                 identity.DeviceSecret;
                         })
-                    .WithAutomaticReconnect(
-                    [
-                        TimeSpan.Zero,
-                        TimeSpan.FromSeconds(2),
-                        TimeSpan.FromSeconds(5),
-                        TimeSpan.FromSeconds(10),
-                        TimeSpan.FromSeconds(20),
-                        TimeSpan.FromSeconds(30)
-                    ])
+                    .WithAutomaticReconnect(ReconnectDelays)
                     .Build();
 
                 connection.On<Guid>(
@@ -76,41 +90,62 @@ public sealed class DeviceCommandNotificationService : BackgroundService
                     commandId =>
                     {
                         _logger.LogDebug(
-                            "Immediate command notification received. CommandId={CommandId}.",
+                            "WIN-C: comando anunciado: {CommandId}",
                             commandId);
 
+                        // El Worker consulta al backend:
+                        // el evento no transporta una orden ejecutable.
                         _wakeSignal.Pulse();
                     });
 
-                connection.Reconnected += _ =>
+                connection.Reconnecting += exception =>
                 {
+                    _logger.LogWarning(
+                        exception,
+                        "WIN-C: canal SignalR reconectando.");
+
+                    return Task.CompletedTask;
+                };
+
+                connection.Reconnected += connectionId =>
+                {
+                    _logger.LogInformation(
+                        "WIN-C: SignalR reconectado. ConnectionId={ConnectionId}",
+                        connectionId);
+
+                    // Recuperar órdenes que pudieran haberse
+                    // anunciado durante la desconexión.
                     _wakeSignal.Pulse();
+
                     return Task.CompletedTask;
                 };
 
                 connection.Closed += exception =>
                 {
-                    closed.TrySetResult();
-
                     if (exception is not null)
                     {
                         _logger.LogWarning(
                             exception,
-                            "Device command notification channel closed.");
+                            "WIN-C: canal SignalR cerrado.");
                     }
+
+                    disconnected.TrySetResult(true);
 
                     return Task.CompletedTask;
                 };
 
                 await connection.StartAsync(stoppingToken);
+
                 failures = 0;
-                _wakeSignal.Pulse();
 
                 _logger.LogInformation(
-                    "Device command notification channel connected. DeviceId={DeviceId}.",
+                    "WIN-C: notificaciones conectadas. DeviceId={DeviceId}",
                     identity.DeviceId);
 
-                await closed.Task.WaitAsync(stoppingToken);
+                // Consulta inicial para recuperar comandos pendientes.
+                _wakeSignal.Pulse();
+
+                await disconnected.Task.WaitAsync(stoppingToken);
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)
@@ -123,26 +158,56 @@ public sealed class DeviceCommandNotificationService : BackgroundService
 
                 _logger.LogWarning(
                     exception,
-                    "Unable to connect the device command notification channel. Attempt={Attempt}.",
+                    "WIN-C: conexión de notificaciones fallida. Intento={Attempt}",
                     failures);
             }
             finally
             {
                 if (connection is not null)
                 {
-                    await connection.DisposeAsync();
+                    try
+                    {
+                        await connection.DisposeAsync();
+                    }
+                    catch (Exception exception)
+                    {
+                        _logger.LogWarning(
+                            exception,
+                            "WIN-C: error liberando la conexión SignalR.");
+                    }
                 }
             }
 
-            var delaySeconds = Math.Min(
-                60,
-                2 * (1 << Math.Min(failures, 5)));
+            if (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
 
-            var jitter = Random.Shared.Next(250, 1500);
-            await Task.Delay(
-                TimeSpan.FromSeconds(delaySeconds) +
-                TimeSpan.FromMilliseconds(jitter),
-                stoppingToken);
+            // Incluso sin SignalR, el Worker conserva
+            // su mecanismo de sondeo HTTP.
+            var exponent = Math.Min(failures, 5);
+
+            var seconds = Math.Min(
+                30,
+                2 * (1 << exponent));
+
+            var jitter = Random.Shared.Next(250, 1250);
+
+            try
+            {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(seconds) +
+                    TimeSpan.FromMilliseconds(jitter),
+                    stoppingToken);
+            }
+            catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
+
+        _logger.LogInformation(
+            "WIN-C: servicio de notificaciones detenido.");
     }
 }

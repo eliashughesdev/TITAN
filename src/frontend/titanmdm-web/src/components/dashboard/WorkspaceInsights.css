@@ -1,185 +1,221 @@
+
+@import './WindowsDashboardPremium.css';
+
+/*
+ * TitanMDM — Advanced Workspace Insights
+ * Premium cards shared across workspace dashboards.
+ */
+
 .workspace-insights {
-  padding: 18px;
-
-  border: 1px solid #e2e7ef;
-  border-radius: 14px;
-
-  background: #ffffff;
-
-  box-shadow:
-    0 5px 18px
-    rgba(15, 23, 42, 0.035);
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e4eaf4;
+  border-radius: 25px;
+  background: #fff;
+  box-shadow: 0 12px 38px rgba(20, 40, 78, .065);
 }
 
 .workspace-insights__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 18px;
-
-  padding-bottom: 14px;
-
-  border-bottom: 1px solid #edf1f5;
+  padding-bottom: 19px;
+  border-bottom: 1px solid #edf1f7;
 }
 
 .workspace-insights__header span {
   display: block;
-
-  color: var(--workspace-primary);
-
-  font-size: 8px;
-  font-weight: 800;
-
-  letter-spacing: 0.12em;
+  color: var(--workspace-primary, #2563eb);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .14em;
 }
 
 .workspace-insights__header h2 {
-  margin: 4px 0 0;
-
-  color: #253147;
-
-  font-size: 15px;
+  margin: 7px 0 0;
+  color: #182943;
+  font-size: 20px;
+  font-weight: 820;
+  letter-spacing: -.035em;
 }
 
 .workspace-insights__header p {
-  margin: 5px 0 0;
-
-  color: #8a95a6;
-
-  font-size: 9px;
+  margin: 8px 0 0;
+  color: #75849b;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .workspace-insights__header > svg {
-  color: var(--workspace-primary);
+  flex: 0 0 auto;
+  color: var(--workspace-primary, #2563eb);
 }
 
 .workspace-insights-grid {
   display: grid;
-
-  grid-template-columns:
-    repeat(
-      4,
-      minmax(
-        0,
-        1fr
-      )
-    );
-
-  gap: 9px;
-
-  padding-top: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 19px;
 }
 
 .workspace-insight-card {
-  min-height: 91px;
-
+  position: relative;
+  isolation: isolate;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+  min-height: 124px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid #e7edf7;
+  border-radius: 19px;
+  background:
+    linear-gradient(145deg, #f1f6ff, #fff 80%);
+  box-shadow: 0 5px 18px rgba(17, 39, 81, .045);
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
 
-  gap: 11px;
+.workspace-insight-card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: -32px;
+  top: -40px;
+  width: 105px;
+  height: 105px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, .045);
+  pointer-events: none;
+}
 
-  padding: 12px;
-
-  border: 1px solid #edf0f4;
-  border-radius: 10px;
-
-  background: #fafbfd;
+.workspace-insight-card:hover {
+  transform: translateY(-3px);
+  border-color: #c4d6ff;
+  box-shadow: 0 13px 29px rgba(20, 41, 85, .095);
 }
 
 .workspace-insight-card__icon {
-  width: 37px;
-  height: 37px;
-
-  flex: 0 0 37px;
-
   display: grid;
+  flex: 0 0 44px;
   place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  color: var(--workspace-primary, #2563eb);
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(20, 45, 95, .06);
+}
 
-  border-radius: 9px;
-
-  color: var(--workspace-primary);
-  background: var(--workspace-soft);
+.workspace-insight-card > div:last-child {
+  min-width: 0;
 }
 
 .workspace-insight-card span {
   display: block;
-
-  color: #778396;
-
-  font-size: 8px;
-  font-weight: 700;
+  color: #667894;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.4;
 }
 
 .workspace-insight-card strong {
   display: block;
-
-  margin-top: 3px;
-
-  color: #1d2939;
-
-  font-size: 20px;
-  line-height: 1;
+  margin-top: 9px;
+  color: #172943;
+  font-size: clamp(20px, 2vw, 27px);
+  font-weight: 850;
+  line-height: 1.1;
+  letter-spacing: -.04em;
 }
 
 .workspace-insight-card small {
   display: block;
+  margin-top: 9px;
+  color: #8b98ad;
+  font-size: 10px;
+  line-height: 1.45;
+}
 
-  margin-top: 6px;
-
-  color: #98a2b3;
-
-  font-size: 7px;
-  line-height: 1.35;
+.workspace-insight-card--success {
+  border-color: #dcf5e8;
+  background: linear-gradient(145deg, #ebfaf3, #fff 80%);
 }
 
 .workspace-insight-card--success
 .workspace-insight-card__icon {
-  color: #15803d;
-  background: #edfdf3;
+  color: #059669;
+}
+
+.workspace-insight-card--success::after {
+  background: rgba(16, 185, 129, .055);
+}
+
+.workspace-insight-card--warning {
+  border-color: #faecc9;
+  background: linear-gradient(145deg, #fffae9, #fff 80%);
 }
 
 .workspace-insight-card--warning
 .workspace-insight-card__icon {
-  color: #b54708;
-  background: #fff6e8;
+  color: #d97706;
+}
+
+.workspace-insight-card--warning::after {
+  background: rgba(245, 158, 11, .07);
+}
+
+.workspace-insight-card--danger {
+  border-color: #f8dce3;
+  background: linear-gradient(145deg, #fff0f3, #fff 80%);
 }
 
 .workspace-insight-card--danger
 .workspace-insight-card__icon {
-  color: #b42318;
-  background: #fff0ef;
+  color: #e11d48;
 }
 
-@media (max-width: 1300px) {
+.workspace-insight-card--danger::after {
+  background: rgba(225, 29, 72, .055);
+}
+
+@media (max-width: 1350px) {
   .workspace-insights-grid {
-    grid-template-columns:
-      repeat(
-        3,
-        minmax(
-          0,
-          1fr
-        )
-      );
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 950px) {
+@media (max-width: 980px) {
   .workspace-insights-grid {
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(
-          0,
-          1fr
-        )
-      );
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 620px) {
+  .workspace-insights {
+    padding: 17px;
+    border-radius: 20px;
+  }
+
   .workspace-insights-grid {
-    grid-template-columns:
-      1fr;
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-insights__header h2 {
+    font-size: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-insight-card {
+    transition: none;
+  }
+
+  .workspace-insight-card:hover {
+    transform: none;
   }
 }

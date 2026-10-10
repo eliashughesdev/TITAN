@@ -101,7 +101,7 @@ export function WorkspaceInsights({
       summary.windows
 
     return (
-      <section className="workspace-insights">
+      <section className="workspace-insights workspace-insights--windows">
         <header className="workspace-insights__header">
           <div>
             <span>

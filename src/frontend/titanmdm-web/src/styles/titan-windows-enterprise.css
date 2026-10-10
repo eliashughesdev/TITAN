@@ -1,0 +1,826 @@
+
+/*
+ * TitanMDM Enterprise Premium
+ * Windows visual consolidation — WIN-UI-ALL
+ *
+ * CSS-only presentation layer.
+ * Does not alter API, permissions, state or remote commands.
+ */
+
+:root {
+  --win-ui-ink: #172744;
+  --win-ui-muted: #72819a;
+  --win-ui-blue: #315feb;
+  --win-ui-indigo: #615ce3;
+  --win-ui-border: #e2e9f4;
+  --win-ui-shadow: 0 10px 34px rgba(21, 41, 82, .07);
+  --win-ui-shadow-hover: 0 18px 44px rgba(21, 41, 82, .13);
+  --win-ui-radius: 23px;
+}
+
+/* =========================================================
+   PAGE ROOTS
+   ========================================================= */
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page,
+  .wr
+) {
+  --win-panel-bg: #fff;
+  --win-panel-border: var(--win-ui-border);
+  --win-panel-shadow: var(--win-ui-shadow);
+  min-width: 0;
+}
+
+/* =========================================================
+   TITLES / HERO HEADERS
+   ========================================================= */
+
+:is(
+  .devices-heading,
+  .device-detail-header,
+  .windows-control-hero,
+  .fleet-header,
+  .enrollment-heading,
+  .policies-header,
+  .apps-header,
+  .security-header,
+  .reports-page .reports-header,
+  .wr .wr-header
+) {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  padding: 27px 30px;
+  border: 1px solid rgba(146, 175, 241, .18);
+  border-radius: 26px;
+  background:
+    radial-gradient(
+      circle at 86% 2%,
+      rgba(168, 190, 255, .24),
+      transparent 34%
+    ),
+    linear-gradient(
+      116deg,
+      #162849 0%,
+      #29427e 61%,
+      #4e4385 100%
+    );
+  box-shadow: 0 18px 45px rgba(22, 42, 90, .16);
+}
+
+:is(
+  .devices-heading,
+  .device-detail-header,
+  .windows-control-hero,
+  .fleet-header,
+  .enrollment-heading,
+  .policies-header,
+  .apps-header,
+  .security-header,
+  .reports-page .reports-header,
+  .wr .wr-header
+) :is(h1, h2) {
+  color: #fff;
+  font-size: clamp(23px, 2.1vw, 34px);
+  line-height: 1.15;
+  font-weight: 850;
+  letter-spacing: -.035em;
+}
+
+:is(
+  .devices-heading,
+  .device-detail-header,
+  .windows-control-hero,
+  .fleet-header,
+  .enrollment-heading,
+  .policies-header,
+  .apps-header,
+  .security-header,
+  .reports-page .reports-header,
+  .wr .wr-header
+) p {
+  color: #d8e4fa;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+:is(
+  .devices-heading__eyebrow,
+  .fleet-eyebrow,
+  .enrollment-eyebrow,
+  .apps-eyebrow,
+  .security-eyebrow,
+  .windows-control-eyebrow,
+  .wr .wr-eyebrow
+) {
+  color: #c9dcff;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.windows-control-device__icon,
+.device-detail-device-icon {
+  border-radius: 17px;
+  background: rgba(255,255,255,.13);
+  color: #fff;
+}
+
+/* =========================================================
+   KPI CARDS
+   ========================================================= */
+
+:is(
+  .devices-summary-card,
+  .device-detail-kpis article,
+  .windows-control-kpis article,
+  .fleet-stat,
+  .enrollment-stat-card,
+  .policy-kpis article,
+  .apps-stat-card,
+  .security-stat,
+  .reports-page .reports-stat
+) {
+  position: relative;
+  overflow: hidden;
+  min-height: 125px;
+  padding: 20px;
+  border: 1px solid var(--win-ui-border);
+  border-radius: 22px;
+  background: linear-gradient(145deg, #eff5ff, #fff 81%);
+  box-shadow: var(--win-ui-shadow);
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+:is(
+  .devices-summary-card,
+  .device-detail-kpis article,
+  .windows-control-kpis article,
+  .fleet-stat,
+  .enrollment-stat-card,
+  .policy-kpis article,
+  .apps-stat-card,
+  .security-stat,
+  .reports-page .reports-stat
+):hover {
+  transform: translateY(-3px);
+  border-color: #bfd0f9;
+  box-shadow: var(--win-ui-shadow-hover);
+}
+
+:is(
+  .devices-summary,
+  .device-detail-kpis,
+  .windows-control-kpis,
+  .fleet-stats,
+  .enrollment-stats,
+  .policy-kpis,
+  .apps-stat-grid,
+  .security-stats,
+  .reports-page .reports-stats
+) {
+  gap: 14px;
+}
+
+:is(
+  .devices-summary-card,
+  .device-detail-kpis article,
+  .windows-control-kpis article,
+  .fleet-stat,
+  .enrollment-stat-card,
+  .policy-kpis article,
+  .apps-stat-card,
+  .security-stat,
+  .reports-page .reports-stat
+) strong {
+  color: var(--win-ui-ink);
+  font-size: clamp(23px, 2vw, 31px);
+  font-weight: 850;
+  letter-spacing: -.04em;
+}
+
+:is(
+  .devices-summary-card,
+  .device-detail-kpis article,
+  .windows-control-kpis article,
+  .fleet-stat,
+  .enrollment-stat-card,
+  .policy-kpis article,
+  .apps-stat-card,
+  .security-stat,
+  .reports-page .reports-stat
+) :is(span, small) {
+  color: var(--win-ui-muted);
+}
+
+/* =========================================================
+   PANELS / CONTENT CARDS
+   ========================================================= */
+
+:is(
+  .devices-panel,
+  .device-detail-card,
+  .windows-control-card,
+  .fleet-groups,
+  .fleet-builder,
+  .fleet-devices,
+  .fleet-command-center,
+  .fleet-selected-group,
+  .enrollment-panel,
+  .policy-table-card,
+  .apps-panel,
+  .apps-package-card,
+  .security-panel,
+  .security-risk-card,
+  .reports-page .reports-panel,
+  .wr .wr-card,
+  .wmc
+) {
+  min-width: 0;
+  border: 1px solid var(--win-ui-border);
+  border-radius: var(--win-ui-radius);
+  background: #fff;
+  box-shadow: var(--win-ui-shadow);
+}
+
+:is(
+  .device-detail-card,
+  .windows-control-card,
+  .fleet-groups,
+  .fleet-builder,
+  .fleet-command-center,
+  .fleet-selected-group,
+  .enrollment-panel,
+  .apps-panel,
+  .security-panel,
+  .reports-page .reports-panel
+) {
+  padding: 21px;
+}
+
+:is(
+  .device-detail-card,
+  .windows-control-card,
+  .fleet-panel-title,
+  .enrollment-panel-header,
+  .apps-panel,
+  .security-panel-heading,
+  .reports-page .reports-panel
+) h2 {
+  color: var(--win-ui-ink);
+  font-size: 16px;
+  font-weight: 830;
+  letter-spacing: -.02em;
+}
+
+/* =========================================================
+   FORM CONTROLS
+   ========================================================= */
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea
+) {
+  min-height: 39px;
+  max-width: 100%;
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  background-color: #f8faff;
+  color: #34455f;
+  font-size: 12px;
+  transition:
+    border-color .18s,
+    box-shadow .18s,
+    background-color .18s;
+}
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea
+):focus-visible {
+  outline: none;
+  border-color: #7193ef;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(49,95,235,.11);
+}
+
+/* =========================================================
+   BUTTONS — MODERN BASE
+   Avoid modifying canvas / viewer interaction surfaces.
+   ========================================================= */
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page,
+  .wr
+) button:not(.wit-device-link):not(.device-row-clickable) {
+  border-radius: 12px;
+  font-family: inherit;
+  font-weight: 750;
+  transition:
+    transform .18s ease,
+    background-color .18s ease,
+    box-shadow .18s ease,
+    border-color .18s ease;
+}
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page
+) button:not(:disabled):not(.wit-device-link):hover {
+  box-shadow: 0 7px 19px rgba(28,54,104,.12);
+}
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page,
+  .wr
+) button:focus-visible {
+  outline: 3px solid rgba(58, 111, 244, .48);
+  outline-offset: 3px;
+}
+
+:is(
+  .devices-page,
+  .device-detail-page,
+  .windows-control-page,
+  .fleet-page,
+  .enrollment-page,
+  .policies-page,
+  .apps-page,
+  .security-page,
+  .reports-page,
+  .wr
+) button:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+:is(
+  .devices-refresh-button,
+  .device-action-primary,
+  .windows-control-primary,
+  .fleet-primary,
+  .enrollment-primary-button,
+  .policy-button--primary,
+  .apps-panel .primary,
+  .security-primary-button,
+  .reports-page .reports-actions button.primary,
+  .wr button.wr-primary
+) {
+  min-height: 40px;
+  border: 1px solid #2f5bdc;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #346cf3, #274dbd);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 7px 18px rgba(39,77,189,.19);
+}
+
+:is(
+  .device-action-secondary,
+  .windows-control-secondary,
+  .fleet-secondary,
+  .enrollment-refresh-button,
+  .policy-button--secondary,
+  .security-secondary-button
+) {
+  min-height: 39px;
+  border: 1px solid #dce5f3;
+  border-radius: 12px;
+  background: #f7f9ff;
+  color: #284a91;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+/* =========================================================
+   TABS AND TOOLBARS
+   ========================================================= */
+
+:is(
+  .device-detail-tabs,
+  .windows-control-tabs,
+  .apps-tabs
+) {
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid var(--win-ui-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(24,43,80,.045);
+}
+
+:is(
+  .device-detail-tabs,
+  .windows-control-tabs,
+  .apps-tabs
+) button {
+  min-height: 38px;
+  border-radius: 11px;
+  padding: 8px 13px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+:is(
+  .device-detail-tabs,
+  .windows-control-tabs,
+  .apps-tabs
+) button.active {
+  border-radius: 11px;
+  background: #ebf1ff;
+  color: #2456cb;
+}
+
+:is(
+  .devices-toolbar,
+  .policy-toolbar,
+  .apps-toolbar,
+  .apps-catalog-toolbar,
+  .wr .wr-toolbar
+) {
+  gap: 11px;
+  border-color: #e9eef7;
+  background: #fbfcff;
+}
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+
+:is(
+  .devices-table,
+  .device-command-table,
+  .windows-control-table,
+  .fleet-table,
+  .enrollment-table,
+  .policy-table,
+  .apps-table,
+  .security-table,
+  .wmc table
+) {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+:is(
+  .devices-table,
+  .device-command-table,
+  .windows-control-table,
+  .fleet-table,
+  .enrollment-table,
+  .policy-table,
+  .apps-table,
+  .security-table,
+  .wmc table
+) th {
+  padding: 13px 14px;
+  border-bottom: 1px solid #e7edf7;
+  background: #f5f8ff;
+  color: #65768f;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+:is(
+  .devices-table,
+  .device-command-table,
+  .windows-control-table,
+  .fleet-table,
+  .enrollment-table,
+  .policy-table,
+  .apps-table,
+  .security-table,
+  .wmc table
+) td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #edf1f8;
+  color: #34445c;
+  font-size: 12px;
+}
+
+:is(
+  .devices-table,
+  .device-command-table,
+  .windows-control-table,
+  .fleet-table,
+  .enrollment-table,
+  .policy-table,
+  .apps-table,
+  .security-table,
+  .wmc table
+) tbody tr {
+  transition: background-color .16s;
+}
+
+:is(
+  .devices-table,
+  .device-command-table,
+  .windows-control-table,
+  .fleet-table,
+  .enrollment-table,
+  .policy-table,
+  .apps-table,
+  .security-table,
+  .wmc table
+) tbody tr:hover {
+  background-color: #f3f7ff;
+}
+
+/* =========================================================
+   BADGES AND STATUS
+   ========================================================= */
+
+:is(
+  .device-status,
+  .device-compliance,
+  .device-detail-status,
+  .policy-status,
+  .enrollment-status,
+  .app-badge,
+  .apps-package-status,
+  .security-risk-badge,
+  .command-status
+) {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+:is(
+  .device-status--online,
+  .device-detail-status--online,
+  .enrollment-status-active,
+  .policy-status--active
+) {
+  background: #e4f8ed;
+  color: #07804c;
+}
+
+/* =========================================================
+   REMOTE SUPPORT
+   Limited to visual UI. Do not affect viewer/canvas/input.
+   ========================================================= */
+
+.wr .wr-sidebar,
+.wr .wr-card {
+  border: 1px solid var(--win-ui-border);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: var(--win-ui-shadow);
+}
+
+.wr .wr-card-title h2,
+.wr h2 {
+  color: var(--win-ui-ink);
+  font-size: 16px;
+  font-weight: 820;
+}
+
+.wr :is(
+  input:not([type="checkbox"]),
+  select,
+  textarea
+) {
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  background: #f8faff;
+}
+
+.wr .wr-console {
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.wr .wr-toolbar {
+  border-radius: 15px;
+}
+
+.wr button.wr-primary {
+  background: linear-gradient(135deg, #346cf3, #254bb7);
+  border-color: #2f5bdc;
+  color: #fff;
+}
+
+.wr button.wr-danger {
+  border-radius: 12px;
+  background: #fff0f3;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+/* =========================================================
+   MODULE COMPLETION / SPECIALIST SUBPANELS
+   ========================================================= */
+
+.wmc {
+  padding: 20px;
+}
+
+.wmc > header {
+  border-color: #e9eef7;
+}
+
+.wmc h2 {
+  color: var(--win-ui-ink);
+  font-size: 17px;
+  font-weight: 820;
+}
+
+.wmc :is(input, select) {
+  min-height: 39px;
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  background: #f8faff;
+}
+
+.wmc button {
+  border-radius: 12px;
+  font-weight: 750;
+}
+
+.wmc :focus-visible {
+  outline: 3px solid rgba(58,111,244,.48);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   DARK MODE / ACCESSIBILITY
+   ========================================================= */
+
+@media (max-width: 900px) {
+  :is(
+    .devices-heading,
+    .device-detail-header,
+    .windows-control-hero,
+    .fleet-header,
+    .enrollment-heading,
+    .policies-header,
+    .apps-header,
+    .security-header,
+    .reports-page .reports-header,
+    .wr .wr-header
+  ) {
+    flex-wrap: wrap;
+    padding: 22px;
+  }
+
+  :is(
+    .devices-summary,
+    .device-detail-kpis,
+    .windows-control-kpis,
+    .fleet-stats,
+    .enrollment-stats,
+    .policy-kpis,
+    .apps-stat-grid,
+    .security-stats,
+    .reports-page .reports-stats
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  :is(
+    .devices-heading,
+    .device-detail-header,
+    .windows-control-hero,
+    .fleet-header,
+    .enrollment-heading,
+    .policies-header,
+    .apps-header,
+    .security-header,
+    .reports-page .reports-header,
+    .wr .wr-header
+  ) {
+    padding: 17px;
+    border-radius: 20px;
+  }
+
+  :is(
+    .devices-summary,
+    .device-detail-kpis,
+    .windows-control-kpis,
+    .fleet-stats,
+    .enrollment-stats,
+    .policy-kpis,
+    .apps-stat-grid,
+    .security-stats,
+    .reports-page .reports-stats
+  ) {
+    grid-template-columns: 1fr;
+  }
+
+  :is(
+    .device-detail-card,
+    .windows-control-card,
+    .enrollment-panel,
+    .apps-panel,
+    .security-panel,
+    .reports-page .reports-panel
+  ) {
+    padding: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(
+    .devices-page,
+    .device-detail-page,
+    .windows-control-page,
+    .fleet-page,
+    .enrollment-page,
+    .policies-page,
+    .apps-page,
+    .security-page,
+    .reports-page,
+    .wr
+  ) *,
+  :is(
+    .devices-page,
+    .device-detail-page,
+    .windows-control-page,
+    .fleet-page,
+    .enrollment-page,
+    .policies-page,
+    .apps-page,
+    .security-page,
+    .reports-page,
+    .wr
+  ) *::before,
+  :is(
+    .devices-page,
+    .device-detail-page,
+    .windows-control-page,
+    .fleet-page,
+    .enrollment-page,
+    .policies-page,
+    .apps-page,
+    .security-page,
+    .reports-page,
+    .wr
+  ) *::after {
+    transition-duration: .01ms !important;
+  }
+}

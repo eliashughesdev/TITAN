@@ -194,6 +194,8 @@ import {
   HelpdeskTemplatesAdminPage,
 } from './pages/helpdesk/HelpdeskTemplatesAdminPage'
 
+import { RemoteSupportDirectoryPage } from './pages/remote/RemoteSupportDirectoryPage'
+
 interface ApplicationRoute {
   path: string
   page: ReactNode
@@ -749,16 +751,15 @@ const applicationRoutes:
       ],
     },
 
+   {
+      path: 'remote',
+      page: <RemoteSupportDirectoryPage />,
+      permissions: ['remote.view'],
+    },
     {
-      path:
-        'remote',
-
-      page:
-        <RemotePage />,
-
-      permissions: [
-        'remote.view',
-      ],
+      path: 'remote/viewer',
+      page: <RemotePage />,
+      permissions: ['remote.view'],
     },
 
     {

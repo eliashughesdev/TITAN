@@ -1,0 +1,399 @@
+
+/*
+ * TitanMDM Enterprise — Windows Dashboard Premium
+ * WIN-A / Phase 01
+ *
+ * Diseño aplicado al dashboard que contiene el panel
+ * avanzado de Windows, sin alterar React, rutas o datos.
+ */
+
+.dashboard-page:has(.workspace-insights--windows) {
+  --windows-ink: #142440;
+  --windows-blue: #2563eb;
+  --windows-indigo: #6366f1;
+  --windows-muted: #65758f;
+  --windows-border: #e4eaf4;
+  --windows-shadow: 0 12px 38px rgba(22, 40, 80, .075);
+  --workspace-primary: #2563eb;
+  --workspace-border: #cddcff;
+  --workspace-soft: #eff5ff;
+
+  width: 100%;
+  max-width: 1900px;
+  gap: 22px;
+  padding-bottom: 30px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading--hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 175px;
+  padding: 31px 35px;
+  border: 1px solid rgba(150, 174, 235, .15);
+  border-radius: 28px;
+  color: #fff;
+  background:
+    radial-gradient(
+      circle at 85% 8%,
+      rgba(150, 176, 255, .24),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 42% 130%,
+      rgba(99, 102, 241, .35),
+      transparent 34%
+    ),
+    linear-gradient(118deg, #122344, #263c7d 58%, #463f85);
+  box-shadow: 0 20px 48px rgba(20, 39, 86, .19);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading--hero::after {
+  content: "";
+  position: absolute;
+  right: -64px;
+  bottom: -130px;
+  z-index: -1;
+  width: 340px;
+  height: 340px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 36px rgba(255,255,255,.045),
+    0 0 0 78px rgba(255,255,255,.035);
+  pointer-events: none;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  background: rgba(255,255,255,.1);
+  color: #dfe8ff;
+  font-size: 10px;
+  letter-spacing: .16em;
+  backdrop-filter: blur(8px);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading h1 {
+  margin-top: 15px;
+  color: #fff;
+  font-size: clamp(25px, 2.2vw, 38px);
+  font-weight: 850;
+  line-height: 1.13;
+  letter-spacing: -.045em;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading p {
+  max-width: 610px;
+  margin-top: 10px;
+  color: #d5e1fa;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-heading__actions {
+  position: relative;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-live-status {
+  min-height: 40px;
+  padding: 10px 14px;
+  border: 1px solid rgba(172, 230, 201, .38);
+  border-radius: 13px;
+  background: rgba(34, 197, 94, .12);
+  color: #e4ffec;
+  font-size: 11px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-refresh-button {
+  min-height: 41px;
+  padding: 0 17px;
+  border: 1px solid rgba(255,255,255,.21);
+  border-radius: 13px;
+  background: rgba(255,255,255,.94);
+  color: #244b9c;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 10px 25px rgba(10, 22, 60, .15);
+  cursor: pointer;
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-refresh-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(10, 22, 60, .23);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-refresh-button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+/* Tarjetas superiores */
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-grid {
+  gap: 14px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 144px;
+  padding: 20px;
+  border: 1px solid var(--windows-border);
+  border-radius: 23px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(239, 245, 255, .85),
+      #fff 75%
+    );
+  box-shadow: var(--windows-shadow);
+  transition:
+    transform .2s ease,
+    box-shadow .2s ease,
+    border-color .2s ease;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card:nth-child(2) {
+  background: linear-gradient(145deg, #eafaf4, #fff 76%);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card:nth-child(3) {
+  background: linear-gradient(145deg, #fff2f5, #fff 76%);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card:nth-child(4) {
+  background: linear-gradient(145deg, #f1efff, #fff 76%);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card:nth-child(5) {
+  background: linear-gradient(145deg, #fff9eb, #fff 76%);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card:hover {
+  transform: translateY(-4px);
+  border-color: #b8cbf8;
+  box-shadow: 0 20px 42px rgba(32, 60, 110, .13);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card__icon {
+  width: 46px;
+  height: 46px;
+  flex-basis: 46px;
+  border-radius: 16px;
+  background: #fff;
+  color: #2563eb;
+  box-shadow: 0 4px 14px rgba(32, 67, 135, .075);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card__content span {
+  color: #65758e;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card__content strong {
+  margin-top: 9px;
+  color: var(--windows-ink);
+  font-size: clamp(24px, 2vw, 32px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card__content small {
+  margin-top: 9px;
+  color: #7c8ba1;
+  font-size: 10px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-kpi-card__trend {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: #e9f0ff;
+  color: #2459c2;
+  font-size: 10px;
+}
+
+/* Gráficas */
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-grid {
+  gap: 18px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-card {
+  padding: 23px;
+  border: 1px solid var(--windows-border);
+  border-radius: 25px;
+  background: #fff;
+  box-shadow: var(--windows-shadow);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-card__header {
+  min-height: 78px;
+  padding-bottom: 18px;
+  border-color: #edf1f8;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-card__header > div > span {
+  color: #4779e3;
+  font-size: 10px;
+  letter-spacing: .14em;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-card__header h2 {
+  margin-top: 6px;
+  color: var(--windows-ink);
+  font-size: 18px;
+  font-weight: 820;
+  letter-spacing: -.025em;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-card__header p {
+  color: var(--windows-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-chart-container {
+  min-width: 0;
+  min-height: 280px;
+  padding-top: 16px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-donut-center strong {
+  color: var(--windows-ink);
+  font-size: 30px;
+  font-weight: 850;
+}
+
+/* Tarjetas operacionales */
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-operations-grid {
+  gap: 18px;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+.dashboard-operation-card {
+  border: 1px solid var(--windows-border);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--windows-shadow);
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-page:has(.workspace-insights--windows)
+button:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, .55);
+  outline-offset: 3px;
+}
+
+/* Adaptabilidad */
+
+@media (max-width: 1250px) {
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-heading--hero {
+    padding: 24px;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 530px) {
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-heading--hero {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-chart-card {
+    padding: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-kpi-card,
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-refresh-button {
+    transition: none;
+  }
+
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-kpi-card:hover,
+  .dashboard-page:has(.workspace-insights--windows)
+  .dashboard-refresh-button:hover {
+    transform: none;
+  }
+}

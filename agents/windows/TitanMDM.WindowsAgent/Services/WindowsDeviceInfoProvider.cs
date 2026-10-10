@@ -96,6 +96,9 @@ public sealed class WindowsDeviceInfoProvider
                 displayVersion,
                 currentBuild);
 
+        var interactiveUser =
+            new WindowsInteractiveUserResolver().GetActiveUser();
+
         return new WindowsDeviceInformation(
             DeviceName:
                 Environment.MachineName,
@@ -127,12 +130,10 @@ public sealed class WindowsDeviceInfoProvider
                 agentVersion,
 
             UserName:
-                Normalize(
-                    Environment.UserName),
+                interactiveUser?.UserName,
 
             DomainName:
-                Normalize(
-                    Environment.UserDomainName),
+               interactiveUser?.DomainName,
 
             Architecture:
                 RuntimeInformation

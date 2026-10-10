@@ -1,0 +1,89 @@
+
+/*
+ * TitanMDM — Dedicated Remote Viewer
+ * Visual layout only; never intercepts remote input.
+ */
+
+.wr.wr--viewer {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+}
+
+.wr.wr--viewer > .wr-header {
+  padding: 15px 20px;
+  border-radius: 17px;
+}
+
+.wr.wr--viewer > .wr-header h1 {
+  font-size: 19px;
+}
+
+.wr.wr--viewer > .wr-header p {
+  font-size: 11px;
+}
+
+.wr.wr--viewer .wr-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.wr.wr--viewer .wr-sidebar {
+  display: none;
+}
+
+.wr.wr--viewer .wr-console {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dce6f6;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 12px 35px rgba(20, 38, 74, .08);
+}
+
+.wr.wr--viewer .wr-toolbar {
+  min-height: 60px;
+  padding: 12px 18px;
+  gap: 12px;
+  border-bottom: 1px solid #e4ebf6;
+  background: #f8faff;
+}
+
+.wr.wr--viewer .wr-viewer {
+  position: relative;
+  min-height: min(73vh, 850px);
+  width: 100%;
+  overflow: hidden;
+}
+
+.wr.wr--viewer .wr-viewer canvas {
+  max-width: 100%;
+}
+
+.wr.wr--viewer .wr-session-info {
+  padding: 12px 18px;
+  border-top: 1px solid #e8eef7;
+  color: #61738f;
+  background: #fff;
+}
+
+.wr.wr--viewer button:focus-visible {
+  outline: 3px solid rgba(37,99,235,.5);
+  outline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .wr.wr--viewer > .wr-header {
+    flex-wrap: wrap;
+  }
+
+  .wr.wr--viewer .wr-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .wr.wr--viewer .wr-viewer {
+    min-height: 55vh;
+  }
+}
