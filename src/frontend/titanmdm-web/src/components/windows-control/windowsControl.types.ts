@@ -114,3 +114,51 @@ export type SendWindowsCommand =
     commandType: string,
     payload?: Record<string, unknown>,
   ) => Promise<void>
+
+export interface InventoryDeviceView {
+  computerName: string | null
+  userName: string | null
+  domainName: string | null
+  manufacturer: string | null
+  model: string | null
+  serialNumber: string | null
+  cpuName: string | null
+  totalMemoryBytes: number | null
+  operatingSystem: string | null
+  operatingSystemVersion: string | null
+  osArchitecture: string | null
+  currentBuild: string | null
+  productName: string | null
+  displayVersion: string | null
+  installDateUtc: string | null
+  systemDrive: string | null
+  systemDriveFreeBytes: number | null
+  agentVersion: string | null
+}
+
+export interface InventoryDiskView {
+  name: string
+  driveType: string | null
+  fileSystem: string | null
+  volumeLabel: string | null
+  totalBytes: number
+  freeBytes: number
+}
+
+export interface InventoryNetworkView {
+  name: string
+  description: string | null
+  interfaceType: string | null
+  operationalStatus: string | null
+  macAddress: string | null
+  speed: number | null
+  ipAddresses: string[]
+}
+
+export interface InventoryView {
+  available: boolean
+  collectedAtUtc: string | null
+  device: InventoryDeviceView | null
+  disks: InventoryDiskView[]
+  network: InventoryNetworkView[]
+}

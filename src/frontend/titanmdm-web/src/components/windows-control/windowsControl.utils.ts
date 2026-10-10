@@ -1220,6 +1220,461 @@ export function extractUninstallTarget(
   }
 }
 
+export function parseInventory(
+  command:
+    DeviceCommand | null,
+): import(
+  './windowsControl.types'
+).InventoryView {
+  const empty:
+    import(
+      './windowsControl.types'
+    ).InventoryView = {
+    available: false,
+    collectedAtUtc: null,
+    device: null,
+    disks: [],
+    network: [],
+  }
+
+  if (
+    !command
+    ||
+    command.status !==
+      'Success'
+  ) {
+    return empty
+  }
+
+  const root =
+    asObject(
+      safeParseJson(
+        command.resultJson,
+      ),
+    )
+
+  if (!root) {
+    return empty
+  }
+
+  const device =
+    objectValue(
+      root,
+      'Device',
+      'device',
+    )
+
+  const disksRaw =
+    property(
+      root,
+      'Disks',
+      'disks',
+    )
+
+  const networkRaw =
+    property(
+      root,
+      'Network',
+      'network',
+    )
+
+  const disks =
+    Array.isArray(
+      disksRaw,
+    )
+      ? disksRaw
+      : []
+      .map(
+        value =>
+          asObject(
+            value,
+          ),
+      )
+      .filter(
+        value =>
+          value !==
+          null,
+      )
+      .map(
+        value => {
+          const item =
+            value as JsonObject
+
+          return {
+            name:
+              stringValue(
+                item,
+                'Name',
+                'name',
+              )
+              ??
+              '',
+
+            driveType:
+              stringValue(
+                item,
+                'DriveType',
+                'driveType',
+              ),
+
+            fileSystem:
+              stringValue(
+                item,
+                'FileSystem',
+                'fileSystem',
+              ),
+
+            volumeLabel:
+              stringValue(
+                item,
+                'VolumeLabel',
+                'volumeLabel',
+              ),
+
+            totalBytes:
+              numberValue(
+                item,
+                'TotalBytes',
+                'totalBytes',
+              )
+              ??
+              0,
+
+            freeBytes:
+              numberValue(
+                item,
+                'FreeBytes',
+                'freeBytes',
+              )
+              ??
+              0,
+          }
+        },
+      )
+      .filter(
+        item =>
+          item.name.length >
+          0,
+      )
+
+  const network =
+    Array.isArray(
+      networkRaw,
+    )
+      ? networkRaw
+      : []
+      .map(
+        value =>
+          asObject(
+            value,
+          ),
+      )
+      .filter(
+        value =>
+          value !==
+          null,
+      )
+      .map(
+        value => {
+          const item =
+            value as JsonObject
+
+          const ipValue =
+            property(
+              item,
+              'IpAddresses',
+              'ipAddresses',
+            )
+
+          const ipAddresses =
+            Array.isArray(
+              ipValue,
+            )
+              ? ipValue.map(
+                  value =>
+                    String(
+                      value,
+                    ),
+                )
+              : []
+
+          return {
+            name:
+              stringValue(
+                item,
+                'Name',
+                'name',
+              )
+              ??
+              '',
+
+            description:
+              stringValue(
+                item,
+                'Description',
+                'description',
+              ),
+
+            interfaceType:
+              stringValue(
+                item,
+                'InterfaceType',
+                'interfaceType',
+              ),
+
+            operationalStatus:
+              stringValue(
+                item,
+                'OperationalStatus',
+                'operationalStatus',
+              ),
+
+            macAddress:
+              stringValue(
+                item,
+                'MacAddress',
+                'macAddress',
+              ),
+
+            speed:
+              numberValue(
+                item,
+                'Speed',
+                'speed',
+              ),
+
+            ipAddresses,
+          }
+        },
+      )
+      .filter(
+        item =>
+          item.name.length >
+          0,
+      )
+
+  return {
+    available: true,
+
+    collectedAtUtc:
+      stringValue(
+        root,
+        'CollectedAtUtc',
+        'collectedAtUtc',
+      ),
+
+    device: {
+      computerName:
+        stringValue(
+          device,
+          'ComputerName',
+          'computerName',
+        ),
+
+      userName:
+        stringValue(
+          device,
+          'UserName',
+          'userName',
+        ),
+
+      domainName:
+        stringValue(
+          device,
+          'DomainName',
+          'domainName',
+        ),
+
+      manufacturer:
+        stringValue(
+          device,
+          'Manufacturer',
+          'manufacturer',
+        ),
+
+      model:
+        stringValue(
+          device,
+          'Model',
+          'model',
+        ),
+
+      serialNumber:
+        stringValue(
+          device,
+          'SerialNumber',
+          'serialNumber',
+        ),
+
+      cpuName:
+        stringValue(
+          device,
+          'CpuName',
+          'cpuName',
+        ),
+
+      totalMemoryBytes:
+        numberValue(
+          device,
+          'TotalMemoryBytes',
+          'totalMemoryBytes',
+        ),
+
+      operatingSystem:
+        stringValue(
+          device,
+          'OperatingSystem',
+          'operatingSystem',
+        ),
+
+      operatingSystemVersion:
+        stringValue(
+          device,
+          'OperatingSystemVersion',
+          'operatingSystemVersion',
+        ),
+
+      osArchitecture:
+        stringValue(
+          device,
+          'OsArchitecture',
+          'osArchitecture',
+        ),
+
+      currentBuild:
+        stringValue(
+          device,
+          'CurrentBuild',
+          'currentBuild',
+        ),
+
+      productName:
+        stringValue(
+          device,
+          'ProductName',
+          'productName',
+        ),
+
+      displayVersion:
+        stringValue(
+          device,
+          'DisplayVersion',
+          'displayVersion',
+        ),
+
+      installDateUtc:
+        stringValue(
+          device,
+          'InstallDateUtc',
+          'installDateUtc',
+        ),
+
+      systemDrive:
+        stringValue(
+          device,
+          'SystemDrive',
+          'systemDrive',
+        ),
+
+      systemDriveFreeBytes:
+        numberValue(
+          device,
+          'SystemDriveFreeBytes',
+          'systemDriveFreeBytes',
+        ),
+
+      agentVersion:
+        stringValue(
+          device,
+          'AgentVersion',
+          'agentVersion',
+        ),
+    },
+
+    disks,
+    network,
+  }
+}
+
+export function resultSummary(
+  command:
+    DeviceCommand | null,
+): string | null {
+  if (!command) {
+    return null
+  }
+
+  if (
+    command.status ===
+      'Failed'
+    ||
+    command.status ===
+      'Timeout'
+  ) {
+    return (
+      command.errorMessage
+      ??
+      command.errorCode
+      ??
+      null
+    )
+  }
+
+  if (
+    command.status !==
+      'Success'
+    ||
+    !command.resultJson
+  ) {
+    return null
+  }
+
+  const parsed =
+    asObject(
+      safeParseJson(
+        command.resultJson,
+      ),
+    )
+
+  if (!parsed) {
+    return null
+  }
+
+  const message =
+    stringValue(
+      parsed,
+      'message',
+      'Message',
+    )
+
+  if (message) {
+    return message
+  }
+
+  const action =
+    stringValue(
+      parsed,
+      'action',
+      'Action',
+    )
+
+  const accepted =
+    booleanValue(
+      parsed,
+      'accepted',
+      'success',
+      'Success',
+    )
+
+  if (accepted !== null) {
+    return accepted
+      ? `${action ? `${action} ` : 'Comando '}ejecutado correctamente.`
+      : `${action ?? 'Comando'} rechazado.`
+  }
+
+  return null
+}
+
 export function getErrorMessage(
   error: unknown,
   fallback: string,

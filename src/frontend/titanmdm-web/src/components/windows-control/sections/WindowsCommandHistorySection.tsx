@@ -14,6 +14,7 @@ import type {
 import {
   formatDate,
   prettyResult,
+  resultSummary,
 } from '../windowsControl.utils'
 
 import {
@@ -63,12 +64,18 @@ export function WindowsCommandHistorySection({
         </header>
 
         <div className="windows-command-list">
-          {commands.map(
-            command => (
-              <article
-                key={command.id}
-                className="windows-command-item"
-              >
+{commands.map(
+            command => {
+              const summary =
+                resultSummary(
+                  command,
+                )
+
+              return (
+                <article
+                  key={command.id}
+                  className="windows-command-item"
+                >
                 <div className="windows-command-item__main">
                   <strong>
                     {command.commandType}
@@ -112,6 +119,12 @@ export function WindowsCommandHistorySection({
                   )}
                 </div>
 
+                {summary && (
+                  <p className="windows-command-item__summary">
+                    {summary}
+                  </p>
+                )}
+
                 {(command.resultJson
                   ||
                   command.errorMessage) && (
@@ -128,7 +141,8 @@ export function WindowsCommandHistorySection({
                   </details>
                 )}
               </article>
-            ),
+              )
+            },
           )}
         </div>
       </article>

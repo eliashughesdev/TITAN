@@ -12,6 +12,8 @@ import {
 
 import type { DeviceListItem } from '../../types/device'
 
+import { resultSummary } from '../windows-control/windowsControl.utils'
+
 interface Props {
   packageId?: string
   policyId?: string
@@ -371,15 +373,51 @@ export function WindowsOperationResults({
             <p role="alert">{detail.errorMessage}</p>
           )}
 
-          <pre
-            style={{
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {detail.resultJson ||
-              'El agente todavía no ha entregado un resultado.'}
-          </pre>
+          {(() => {
+            const summary = resultSummary(detail)
+
+            return summary ? (
+              <p
+                style={{
+                  marginTop: 8,
+                  padding: '9px 11px',
+                  borderRadius: 8,
+                  background: '#eff8ff',
+                  color: '#175cd3',
+                  border: '1px solid #d0e3ff',
+                  fontSize: 13,
+                }}
+              >
+                {summary}
+              </p>
+            ) : null
+          })()}
+
+          {detail.resultJson ? (
+            <details
+              style={{
+                marginTop: 8,
+              }}
+            >
+              <summary>
+                Ver detalle técnico
+              </summary>
+
+              <pre
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  marginTop: 8,
+                }}
+              >
+                {detail.resultJson}
+              </pre>
+            </details>
+          ) : (
+            <p>
+              El agente todavía no ha entregado un resultado.
+            </p>
+          )}
 
           <button
             type="button"
