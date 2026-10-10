@@ -25,6 +25,7 @@ public sealed class DeviceCommandConfiguration
         builder.Property(x => x.Status)
             .HasConversion<string>()
             .HasMaxLength(30)
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.Property(x => x.ResultJson)

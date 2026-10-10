@@ -1,6 +1,8 @@
 import {
   Boxes,
   Cpu,
+  CheckCircle2,
+  Info,
   Laptop,
   Network,
   Package,
@@ -15,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -27,6 +30,10 @@ import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../api/deviceCommandsApi'
+
+import {
+  deviceCommandSignalR,
+} from '../../api/deviceCommandSignalR'
 
 import {
   devicesApi,
@@ -67,6 +74,12 @@ import {
 import type {
   DeviceDetails,
 } from '../../types/device'
+
+import {
+  commandProgressMessage,
+  isTerminalCommand,
+  mergeCommand,
+} from '../../utils/deviceCommandPresentation'
 
 import './WindowsControlCenterPage.css'
 import './WindowsTelemetryCards.css'
@@ -231,6 +244,49 @@ export function WindowsControlCenterPage() {
     >(null)
 
   const [
+    messageTone,
+    setMessageTone,
+  ] = useState<'info' | 'success'>('info')
+
+  const trackedCommandId = useRef<string | null>(null)
+  const activeDeviceId = useRef(deviceId)
+
+  const handleCommandUpdate = useCallback(
+    (command: DeviceCommand) => {
+      setCommands(current =>
+        mergeCommand(current, command),
+      )
+
+      if (trackedCommandId.current !== command.id) {
+        return
+      }
+
+      if (
+        command.status === 'Failed' ||
+        command.status === 'Timeout' ||
+        command.status === 'Cancelled'
+      ) {
+        setMessage(null)
+        setError(commandProgressMessage(command))
+        trackedCommandId.current = null
+        return
+      }
+
+      setMessage(commandProgressMessage(command))
+      setMessageTone(
+        command.status === 'Success'
+          ? 'success'
+          : 'info',
+      )
+
+      if (isTerminalCommand(command.status)) {
+        trackedCommandId.current = null
+      }
+    },
+    [],
+  )
+
+  const [
     processFilter,
     setProcessFilter,
   ] =
@@ -393,21 +449,44 @@ export function WindowsControlCenterPage() {
                 deviceId,
               )
 
-          setCommands(
-            response.items,
+          if (activeDeviceId.current !== deviceId) {
+            return
+          }
+
+          setCommands(current =>
+            response.items.reduce(
+              (merged, command) =>
+                mergeCommand(merged, command),
+              current,
+            ),
           )
+
+          response.items.forEach(handleCommandUpdate)
         } catch {
           // Polling silencioso.
         }
       },
       [
         deviceId,
+        handleCommandUpdate,
       ],
     )
 
   useEffect(
     () => {
-      void loadData()
+      activeDeviceId.current = deviceId
+    },
+    [deviceId],
+  )
+
+  useEffect(
+    () => {
+      const timer = window.setTimeout(
+        () => void loadData(),
+        0,
+      )
+
+      return () => window.clearTimeout(timer)
     },
     [
       loadData,
@@ -432,6 +511,20 @@ export function WindowsControlCenterPage() {
     [
       refreshCommands,
     ],
+  )
+
+  useEffect(
+    () => {
+      if (!deviceId) {
+        return
+      }
+
+      return deviceCommandSignalR.subscribe(
+        deviceId,
+        handleCommandUpdate,
+      )
+    },
+    [deviceId, handleCommandUpdate],
   )
 
   useEffect(
@@ -486,6 +579,8 @@ export function WindowsControlCenterPage() {
             null,
           )
 
+          setMessageTone('info')
+
           const command =
             await deviceCommandsApi
               .create({
@@ -503,19 +598,14 @@ export function WindowsControlCenterPage() {
               })
 
           setCommands(
-            current => [
-              command,
-
-              ...current.filter(
-                item =>
-                  item.id !==
-                  command.id,
-              ),
-            ],
+            current =>
+              mergeCommand(current, command),
           )
 
+          trackedCommandId.current = command.id
+
           setMessage(
-            `${commandType} enviado al endpoint.`,
+            commandProgressMessage(command),
           )
         } catch (
           commandError
@@ -909,7 +999,15 @@ export function WindowsControlCenterPage() {
       )}
 
       {message && (
-        <div className="windows-control-notice windows-control-notice--success">
+        <div
+          className={
+            `windows-control-notice windows-control-notice--${messageTone}`
+          }
+        >
+          {messageTone === 'success'
+            ? <CheckCircle2 size={17} />
+            : <Info size={17} />}
+
           {message}
         </div>
       )}

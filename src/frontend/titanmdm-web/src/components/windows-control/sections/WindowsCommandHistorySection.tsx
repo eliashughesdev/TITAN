@@ -2,6 +2,11 @@ import {
   SquareTerminal,
 } from 'lucide-react'
 
+import {
+  useEffect,
+  useState,
+} from 'react'
+
 import type {
   DeviceCommand,
 } from '../../../api/deviceCommandsApi'
@@ -11,6 +16,12 @@ import {
   prettyResult,
 } from '../windowsControl.utils'
 
+import {
+  formatCommandElapsed,
+  getCommandStatusLabel,
+  isTerminalCommand,
+} from '../../../utils/deviceCommandPresentation'
+
 interface Props {
   commands:
     DeviceCommand[]
@@ -19,6 +30,23 @@ interface Props {
 export function WindowsCommandHistorySection({
   commands,
 }: Props) {
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (commands.every(command =>
+      isTerminalCommand(command.status),
+    )) {
+      return
+    }
+
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      1000,
+    )
+
+    return () => window.clearInterval(timer)
+  }, [commands])
+
   return (
     <section className="windows-control-single">
       <article className="windows-control-card windows-control-card--wide">
@@ -51,7 +79,9 @@ export function WindowsCommandHistorySection({
                       `windows-command-status windows-command-status--${command.status.toLowerCase()}`
                     }
                   >
-                    {command.status}
+                    {getCommandStatusLabel(
+                      command.status,
+                    )}
                   </span>
                 </div>
 
@@ -65,6 +95,14 @@ export function WindowsCommandHistorySection({
                   <span>
                     Intentos:{' '}
                     {command.deliveryAttempts}
+                  </span>
+
+                  <span>
+                    Transcurrido:{' '}
+                    {formatCommandElapsed(
+                      command,
+                      now,
+                    )}
                   </span>
 
                   {command.errorCode && (

@@ -228,11 +228,11 @@ public static class InfrastructureServiceExtensions
 
                                     if (
                                         !string.IsNullOrWhiteSpace(
-                                            accessToken)
-                                        &&
-                                        path
-                                            .StartsWithSegments(
-                                                "/hubs/remote-support"))
+                                            accessToken) &&
+                                        (path.StartsWithSegments(
+                                            "/hubs/remote-support") ||
+                                         path.StartsWithSegments(
+                                            "/hubs/device-commands")))
                                     {
                                         context.Token =
                                             accessToken;
@@ -336,6 +336,10 @@ public static class InfrastructureServiceExtensions
         // ============================================================
         // COMMAND ENGINE
         // ============================================================
+
+        services.AddSingleton<
+            IDeviceCommandNotifier,
+            NullDeviceCommandNotifier>();
 
         services.AddScoped<
             IDeviceCommandService,

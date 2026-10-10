@@ -288,6 +288,12 @@
   border: 1px solid #ccebd9;
 }
 
+.device-detail-notice--info {
+  color: #175cd3;
+  background: #eff8ff;
+  border: 1px solid #b2ddff;
+}
+
 .device-detail-notice--error {
   color: #b53e3e;
   background: #fff2f2;

@@ -10,11 +10,14 @@ public sealed class DeviceCommandService
     : IDeviceCommandService
 {
     private readonly TitanMdmDbContext _dbContext;
+    private readonly IDeviceCommandNotifier _notifier;
 
     public DeviceCommandService(
-        TitanMdmDbContext dbContext)
+        TitanMdmDbContext dbContext,
+        IDeviceCommandNotifier notifier)
     {
         _dbContext = dbContext;
+        _notifier = notifier;
     }
 
     public async Task<DeviceCommandDto> CreateAsync(
@@ -75,9 +78,14 @@ public sealed class DeviceCommandService
                 "El dispositivo no existe o no pertenece a la organización.");
         }
 
+        var expirationMinutes =
+            GetEffectiveExpirationMinutes(
+                request.CommandType,
+                request.ExpirationMinutes);
+
         var expiresAtUtc =
             DateTime.UtcNow.AddMinutes(
-                request.ExpirationMinutes);
+                expirationMinutes);
 
         var command =
             new DeviceCommand(
@@ -98,7 +106,18 @@ public sealed class DeviceCommandService
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
-        return Map(command);
+        var dto = DeviceCommandMapper.Map(command);
+
+        await _notifier.NotifyAvailableAsync(
+            command.DeviceId,
+            command.Id,
+            cancellationToken);
+
+        await _notifier.NotifyUpdatedAsync(
+            dto,
+            cancellationToken);
+
+        return dto;
     }
 
     public async Task<DeviceCommandDto?> GetByIdAsync(
@@ -117,7 +136,7 @@ public sealed class DeviceCommandService
 
         return command is null
             ? null
-            : Map(command);
+            : DeviceCommandMapper.Map(command);
     }
 
     public async Task<DeviceCommandListResultDto>
@@ -189,7 +208,7 @@ public sealed class DeviceCommandService
                     cancellationToken);
 
         return new DeviceCommandListResultDto(
-            commands.Select(Map).ToArray(),
+            commands.Select(DeviceCommandMapper.Map).ToArray(),
             totalCount,
             page,
             pageSize,
@@ -230,30 +249,25 @@ public sealed class DeviceCommandService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        await _notifier.NotifyUpdatedAsync(
+            DeviceCommandMapper.Map(command),
+            cancellationToken);
     }
 
-    private static DeviceCommandDto Map(
-        DeviceCommand command)
+    private static int GetEffectiveExpirationMinutes(
+        string commandType,
+        int requestedMinutes)
     {
-        return new DeviceCommandDto(
-            command.Id,
-            command.OrganizationId,
-            command.DeviceId,
-            command.CommandType,
-            command.PayloadJson,
-            command.Status.ToString(),
-            command.CreatedByUserId,
-            command.CreatedAtUtc,
-            command.UpdatedAtUtc,
-            command.ExpiresAtUtc,
-            command.QueuedAtUtc,
-            command.SentAtUtc,
-            command.DeliveredAtUtc,
-            command.StartedAtUtc,
-            command.CompletedAtUtc,
-            command.ResultJson,
-            command.ErrorCode,
-            command.ErrorMessage,
-            command.DeliveryAttempts);
+        var maximumMinutes = commandType.Trim().ToUpperInvariant() switch
+        {
+            "LOCK_DEVICE" => 2,
+            "RESTART_DEVICE" or "SHUTDOWN_DEVICE" => 5,
+            "PROCESS_KILL" or "SERVICE_START" or
+                "SERVICE_STOP" or "SERVICE_RESTART" => 5,
+            _ => requestedMinutes
+        };
+
+        return Math.Min(requestedMinutes, maximumMinutes);
     }
 }

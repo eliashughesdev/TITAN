@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 
@@ -10,6 +11,10 @@ import {
 } from '../../../api/deviceCommandsApi'
 
 import {
+  deviceCommandSignalR,
+} from '../../../api/deviceCommandSignalR'
+
+import {
   devicesApi,
 } from '../../../api/devicesApi'
 
@@ -17,6 +22,12 @@ import type {
   AndroidDeviceDetails,
   DeviceDetails,
 } from '../../../types/device'
+
+import {
+  commandProgressMessage,
+  isTerminalCommand,
+  mergeCommand,
+} from '../../../utils/deviceCommandPresentation'
 
 export function useDeviceDetail(
   deviceId:
@@ -77,6 +88,51 @@ export function useDeviceDetail(
       null,
     )
 
+  const [
+    messageTone,
+    setMessageTone,
+  ] = useState<'info' | 'success'>(
+    'info',
+  )
+
+  const trackedCommandId = useRef<string | null>(null)
+  const activeDeviceId = useRef(deviceId)
+
+  const handleCommandUpdate = useCallback(
+    (command: DeviceCommand) => {
+      setCommands(current =>
+        mergeCommand(current, command),
+      )
+
+      if (trackedCommandId.current !== command.id) {
+        return
+      }
+
+      if (
+        command.status === 'Failed' ||
+        command.status === 'Timeout' ||
+        command.status === 'Cancelled'
+      ) {
+        setMessage(null)
+        setError(commandProgressMessage(command))
+        trackedCommandId.current = null
+        return
+      }
+
+      setMessage(commandProgressMessage(command))
+      setMessageTone(
+        command.status === 'Success'
+          ? 'success'
+          : 'info',
+      )
+
+      if (isTerminalCommand(command.status)) {
+        trackedCommandId.current = null
+      }
+    },
+    [],
+  )
+
   const refreshCommands =
     useCallback(
       async () => {
@@ -91,9 +147,19 @@ export function useDeviceDetail(
                 deviceId,
               )
 
-          setCommands(
-            response.items,
+          if (activeDeviceId.current !== deviceId) {
+            return
+          }
+
+          setCommands(current =>
+            response.items.reduce(
+              (merged, command) =>
+                mergeCommand(merged, command),
+              current,
+            ),
           )
+
+          response.items.forEach(handleCommandUpdate)
         } catch (
           refreshError
         ) {
@@ -105,6 +171,7 @@ export function useDeviceDetail(
       },
       [
         deviceId,
+        handleCommandUpdate,
       ],
     )
 
@@ -251,6 +318,8 @@ export function useDeviceDetail(
             null,
           )
 
+          setMessageTone('info')
+
           const command =
             await deviceCommandsApi
               .create({
@@ -262,19 +331,14 @@ export function useDeviceDetail(
               })
 
           setCommands(
-            current => [
-              command,
-
-              ...current.filter(
-                item =>
-                  item.id !==
-                  command.id,
-              ),
-            ],
+            current =>
+              mergeCommand(current, command),
           )
 
+          trackedCommandId.current = command.id
+
           setMessage(
-            `Comando ${commandType} enviado correctamente. Estado actual: ${command.status}.`,
+            commandProgressMessage(command),
           )
         } catch (
           commandError
@@ -301,11 +365,37 @@ export function useDeviceDetail(
 
   useEffect(
     () => {
-      void loadDevice()
+      activeDeviceId.current = deviceId
+    },
+    [deviceId],
+  )
+
+  useEffect(
+    () => {
+      const timer = window.setTimeout(
+        () => void loadDevice(),
+        0,
+      )
+
+      return () => window.clearTimeout(timer)
     },
     [
       loadDevice,
     ],
+  )
+
+  useEffect(
+    () => {
+      if (!deviceId) {
+        return
+      }
+
+      return deviceCommandSignalR.subscribe(
+        deviceId,
+        handleCommandUpdate,
+      )
+    },
+    [deviceId, handleCommandUpdate],
   )
 
   useEffect(
@@ -355,6 +445,7 @@ export function useDeviceDetail(
 
     error,
     message,
+    messageTone,
 
     loadDevice,
     refreshCommands,

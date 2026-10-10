@@ -218,8 +218,7 @@ export function latestByType(
   commandType:
     string,
 ): DeviceCommand | null {
-  return (
-    [...commands]
+  const matches = [...commands]
       .filter(
         command =>
           command.commandType ===
@@ -237,10 +236,11 @@ export function latestByType(
           new Date(
             left.createdAtUtc,
           ).getTime(),
-      )[0]
-    ??
-    null
-  )
+      )
+
+  return matches.find(
+    command => command.status === 'Success',
+  ) ?? matches[0] ?? null
 }
 
 export function commandArray(

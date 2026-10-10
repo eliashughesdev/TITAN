@@ -3,6 +3,11 @@ import {
   RotateCw,
 } from 'lucide-react'
 
+import {
+  useEffect,
+  useState,
+} from 'react'
+
 import type {
   DeviceCommand,
 } from '../../../api/deviceCommandsApi'
@@ -11,6 +16,12 @@ import {
   formatDeviceDate,
   getCommandStatusClass,
 } from '../utils/deviceDetail.utils'
+
+import {
+  formatCommandElapsed,
+  getCommandStatusLabel,
+  isTerminalCommand,
+} from '../../../utils/deviceCommandPresentation'
 
 interface Props {
   commands:
@@ -28,6 +39,23 @@ export function DeviceCommandsPanel({
   isAndroid,
   onRefresh,
 }: Props) {
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (commands.every(command =>
+      isTerminalCommand(command.status),
+    )) {
+      return
+    }
+
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      1000,
+    )
+
+    return () => window.clearInterval(timer)
+  }, [commands])
+
   return (
     <section className="device-detail-card device-detail-card--wide">
       <header className="device-command-header">
@@ -91,7 +119,7 @@ export function DeviceCommandsPanel({
               </th>
 
               <th>
-                Intentos
+                Transcurrido
               </th>
 
               <th>
@@ -139,10 +167,9 @@ export function DeviceCommandsPanel({
                           )}`
                         }
                       >
-                        {
-                          command
-                            .status
-                        }
+                        {getCommandStatusLabel(
+                          command.status,
+                        )}
                       </span>
                     </td>
 
@@ -161,20 +188,17 @@ export function DeviceCommandsPanel({
                     </td>
 
                     <td>
-                      {
-                        command
-                          .deliveryAttempts
-                      }
+                      {formatCommandElapsed(
+                        command,
+                        now,
+                      )}
                     </td>
 
                     <td className="command-result">
-                      {command
-                        .errorMessage
-                      ??
-                      command
-                        .resultJson
-                      ??
-                      '—'}
+                      {command.errorMessage ??
+                        (command.status === 'Success'
+                          ? 'Ejecución confirmada por el agente'
+                          : 'Sin resultado terminal')}
                     </td>
                   </tr>
                 ),

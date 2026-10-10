@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Applications;
+using TitanMDM.Application.Commands;
 using TitanMDM.Application.Commands.Agent;
 using TitanMDM.Application.Location;
 using TitanMDM.Application.Security;
@@ -31,12 +32,16 @@ public sealed class DeviceCommandAgentService
     private readonly WindowsInventoryResultProcessor
         _windowsInventoryProcessor;
 
+    private readonly IDeviceCommandNotifier
+        _notifier;
+
     public DeviceCommandAgentService(
         TitanMdmDbContext dbContext,
         IApplicationInventoryService applicationInventoryService,
         ISecurityPostureService securityPostureService,
         IDeviceLocationService deviceLocationService,
-        WindowsInventoryResultProcessor windowsInventoryProcessor)
+        WindowsInventoryResultProcessor windowsInventoryProcessor,
+        IDeviceCommandNotifier notifier)
     {
         _dbContext =
             dbContext;
@@ -52,6 +57,56 @@ public sealed class DeviceCommandAgentService
 
         _windowsInventoryProcessor =
             windowsInventoryProcessor;
+
+        _notifier =
+            notifier;
+    }
+
+    public async Task ExpireStaleCommandsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var staleCommands = await _dbContext.DeviceCommands
+            .Where(command =>
+                (command.Status == DeviceCommandStatus.Pending ||
+                 command.Status == DeviceCommandStatus.Queued ||
+                 command.Status == DeviceCommandStatus.Dispatching ||
+                 command.Status == DeviceCommandStatus.Sent ||
+                 command.Status == DeviceCommandStatus.Delivered ||
+                 command.Status == DeviceCommandStatus.Executing) &&
+                (command.ExpiresAtUtc <= now ||
+                 (command.Status == DeviceCommandStatus.Sent &&
+                  command.DeliveryAttempts >= 5 &&
+                  command.SentAtUtc <= now.AddSeconds(-30))))
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        foreach (var command in staleCommands)
+        {
+            if (command.ExpiresAtUtc <= now)
+            {
+                command.MarkTimeout();
+            }
+            else
+            {
+                command.CompleteFailure(
+                    "COMMAND_DELIVERY_FAILED",
+                    "El agente no confirmó la entrega después de cinco intentos.");
+            }
+        }
+
+        if (staleCommands.Count == 0)
+        {
+            return;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var command in staleCommands)
+        {
+            await NotifyUpdatedAsync(command, cancellationToken);
+        }
     }
 
     // ============================================================
@@ -74,32 +129,17 @@ public sealed class DeviceCommandAgentService
         var now =
             DateTime.UtcNow;
 
-        var expiredCommands =
-            await _dbContext
-                .DeviceCommands
-                .Where(
-                    x =>
-                        x.DeviceId ==
-                            deviceId
-                        &&
-                        (
-                            x.Status ==
-                                DeviceCommandStatus.Pending
-                            ||
-                            x.Status ==
-                                DeviceCommandStatus.Queued
-                            ||
-                            x.Status ==
-                                DeviceCommandStatus.Dispatching
-                            ||
-                            x.Status ==
-                                DeviceCommandStatus.Sent
-                        )
-                        &&
-                        x.ExpiresAtUtc <=
-                            now)
-                .ToListAsync(
-                    cancellationToken);
+        var expiredCommands = await _dbContext.DeviceCommands
+            .Where(command =>
+                command.DeviceId == deviceId &&
+                (command.Status == DeviceCommandStatus.Pending ||
+                 command.Status == DeviceCommandStatus.Queued ||
+                 command.Status == DeviceCommandStatus.Dispatching ||
+                 command.Status == DeviceCommandStatus.Sent ||
+                 command.Status == DeviceCommandStatus.Delivered ||
+                 command.Status == DeviceCommandStatus.Executing) &&
+                command.ExpiresAtUtc <= now)
+            .ToListAsync(cancellationToken);
 
         foreach (
             var expiredCommand
@@ -109,31 +149,121 @@ public sealed class DeviceCommandAgentService
                 .MarkTimeout();
         }
 
-        var commands =
-            await _dbContext
-                .DeviceCommands
-                .Where(
-                    x =>
-                        x.DeviceId ==
-                            deviceId
-                        &&
-                        (
-                            x.Status ==
-                                DeviceCommandStatus.Pending
-                            ||
-                            x.Status ==
-                                DeviceCommandStatus.Queued
-                        )
-                        &&
-                        x.ExpiresAtUtc >
+        if (expiredCommands.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            foreach (var expiredCommand in expiredCommands)
+            {
+                await NotifyUpdatedAsync(expiredCommand, cancellationToken);
+            }
+        }
+
+        var redeliveryBefore = now.AddSeconds(-30);
+
+        var claimable = _dbContext.DeviceCommands
+            .AsNoTracking()
+            .Where(command =>
+                command.DeviceId == deviceId &&
+                command.ExpiresAtUtc > now &&
+                (command.Status == DeviceCommandStatus.Pending ||
+                 command.Status == DeviceCommandStatus.Queued ||
+                 (command.Status == DeviceCommandStatus.Sent &&
+                  command.DeliveryAttempts < 5 &&
+                  command.SentAtUtc <= redeliveryBefore)));
+
+        const string urgentType = "LOCK_DEVICE";
+
+        var hasUrgentInFlight = await _dbContext.DeviceCommands
+            .AsNoTracking()
+            .AnyAsync(command =>
+                command.DeviceId == deviceId &&
+                (command.Status == DeviceCommandStatus.Delivered ||
+                 command.Status == DeviceCommandStatus.Executing ||
+                 (command.Status == DeviceCommandStatus.Sent &&
+                  command.SentAtUtc > redeliveryBefore)) &&
+                command.CommandType == urgentType,
+                cancellationToken);
+
+        var hasStandardInFlight = await _dbContext.DeviceCommands
+            .AsNoTracking()
+            .AnyAsync(command =>
+                command.DeviceId == deviceId &&
+                (command.Status == DeviceCommandStatus.Delivered ||
+                 command.Status == DeviceCommandStatus.Executing ||
+                 (command.Status == DeviceCommandStatus.Sent &&
+                  command.SentAtUtc > redeliveryBefore)) &&
+                command.CommandType != urgentType,
+                cancellationToken);
+
+        var urgentIds = hasUrgentInFlight
+            ? []
+            : await claimable
+            .Where(command => command.CommandType == urgentType)
+            .OrderBy(command => command.CreatedAtUtc)
+            .Select(command => command.Id)
+            .Take(1)
+            .ToListAsync(cancellationToken);
+
+        var regularIds = hasStandardInFlight
+            ? []
+            : await claimable
+            .Where(command => command.CommandType != urgentType)
+            .OrderBy(command => command.CreatedAtUtc)
+            .Select(command => command.Id)
+            .Take(1)
+            .ToListAsync(cancellationToken);
+
+        var candidateIds = urgentIds
+            .Concat(regularIds)
+            .ToList();
+
+        var claimedIds = new List<Guid>(candidateIds.Count);
+
+        foreach (var commandId in candidateIds)
+        {
+            var affected = await _dbContext.DeviceCommands
+                .Where(command =>
+                    command.Id == commandId &&
+                    command.DeviceId == deviceId &&
+                    command.ExpiresAtUtc > now &&
+                    (command.Status == DeviceCommandStatus.Pending ||
+                     command.Status == DeviceCommandStatus.Queued ||
+                     (command.Status == DeviceCommandStatus.Sent &&
+                      command.DeliveryAttempts < 5 &&
+                      command.SentAtUtc <= redeliveryBefore)))
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                            command => command.Status,
+                            DeviceCommandStatus.Sent)
+                        .SetProperty(
+                            command => command.DeliveryAttempts,
+                            command => command.DeliveryAttempts + 1)
+                        .SetProperty(
+                            command => command.SentAtUtc,
                             now)
-                .OrderBy(
-                    x =>
-                        x.CreatedAtUtc)
-                .Take(
-                    20)
-                .ToListAsync(
+                        .SetProperty(
+                            command => command.UpdatedAtUtc,
+                            now),
                     cancellationToken);
+
+            if (affected == 1)
+            {
+                claimedIds.Add(commandId);
+            }
+        }
+
+        var commands = claimedIds.Count == 0
+            ? []
+            : await _dbContext.DeviceCommands
+                .AsNoTracking()
+                .Where(command => claimedIds.Contains(command.Id))
+                .ToListAsync(cancellationToken);
+
+        commands = commands
+            .OrderBy(command => candidateIds.IndexOf(command.Id))
+            .ToList();
 
         var result =
             new List<
@@ -143,12 +273,6 @@ public sealed class DeviceCommandAgentService
             var command
             in commands)
         {
-            command
-                .MarkDispatching();
-
-            command
-                .MarkSent();
-
             result.Add(
                 new AgentCommandDto(
                     command.Id,
@@ -156,11 +280,9 @@ public sealed class DeviceCommandAgentService
                     command.PayloadJson,
                     command.CreatedAtUtc,
                     command.ExpiresAtUtc));
-        }
 
-        await _dbContext
-            .SaveChangesAsync(
-                cancellationToken);
+            await NotifyUpdatedAsync(command, cancellationToken);
+        }
 
         return result;
     }
@@ -186,6 +308,8 @@ public sealed class DeviceCommandAgentService
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        await NotifyUpdatedAsync(command, cancellationToken);
     }
 
     // ============================================================
@@ -209,6 +333,8 @@ public sealed class DeviceCommandAgentService
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        await NotifyUpdatedAsync(command, cancellationToken);
     }
 
     // ============================================================
@@ -226,6 +352,17 @@ public sealed class DeviceCommandAgentService
                 deviceId,
                 commandId,
                 cancellationToken);
+
+        if (command.Status == DeviceCommandStatus.Success)
+        {
+            return;
+        }
+
+        if (IsTerminal(command.Status))
+        {
+            throw new InvalidOperationException(
+                $"El comando ya terminó con estado {command.Status}.");
+        }
 
         var commandType =
             command.CommandType
@@ -364,6 +501,8 @@ public sealed class DeviceCommandAgentService
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        await NotifyUpdatedAsync(command, cancellationToken);
     }
 
     // ============================================================
@@ -400,6 +539,17 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
+        if (command.Status == DeviceCommandStatus.Failed)
+        {
+            return;
+        }
+
+        if (IsTerminal(command.Status))
+        {
+            throw new InvalidOperationException(
+                $"El comando ya terminó con estado {command.Status}.");
+        }
+
         command
             .CompleteFailure(
                 errorCode,
@@ -409,6 +559,8 @@ public sealed class DeviceCommandAgentService
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        await NotifyUpdatedAsync(command, cancellationToken);
     }
 
     // ============================================================
@@ -474,5 +626,22 @@ public sealed class DeviceCommandAgentService
             throw new InvalidOperationException(
                 $"{commandType} no devolvió información.");
         }
+    }
+
+    private Task NotifyUpdatedAsync(
+        DeviceCommand command,
+        CancellationToken cancellationToken)
+    {
+        return _notifier.NotifyUpdatedAsync(
+            DeviceCommandMapper.Map(command),
+            cancellationToken);
+    }
+
+    private static bool IsTerminal(DeviceCommandStatus status)
+    {
+        return status is DeviceCommandStatus.Success or
+            DeviceCommandStatus.Failed or
+            DeviceCommandStatus.Timeout or
+            DeviceCommandStatus.Cancelled;
     }
 }

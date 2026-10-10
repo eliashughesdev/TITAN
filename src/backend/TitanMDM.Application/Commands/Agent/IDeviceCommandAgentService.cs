@@ -2,6 +2,9 @@ namespace TitanMDM.Application.Commands.Agent;
 
 public interface IDeviceCommandAgentService
 {
+    Task ExpireStaleCommandsAsync(
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyCollection<AgentCommandDto>> GetPendingCommandsAsync(
         Guid deviceId,
         CancellationToken cancellationToken = default);

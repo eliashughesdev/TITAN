@@ -89,6 +89,10 @@ builder.Services
     .AddSingleton<
         AgentRetryPolicy>();
 
+builder.Services
+    .AddSingleton<
+        CommandWakeSignal>();
+
 /*
  * ==============================================================
  * WINDOWS PROVIDERS
@@ -247,6 +251,10 @@ builder.Services
 builder.Services
     .AddHostedService<
         Worker>();
+
+builder.Services
+    .AddHostedService<
+        DeviceCommandNotificationService>();
 
 builder.Services
     .AddHostedService<

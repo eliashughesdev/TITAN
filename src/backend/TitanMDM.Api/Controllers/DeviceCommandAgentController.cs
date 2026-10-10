@@ -73,12 +73,29 @@ public sealed class DeviceCommandAgentController
         }
         catch (InvalidOperationException ex)
         {
+            return CommandStateError(ex);
+        }
+    }
+
+    private IActionResult CommandStateError(
+        InvalidOperationException exception)
+    {
+        if (exception.Message.StartsWith(
+                "El comando no existe",
+                StringComparison.OrdinalIgnoreCase))
+        {
             return NotFound(new
             {
                 code = "COMMAND_NOT_FOUND",
-                message = ex.Message
+                message = exception.Message
             });
         }
+
+        return Conflict(new
+        {
+            code = "INVALID_COMMAND_STATE",
+            message = exception.Message
+        });
     }
 
     [HttpPost("{commandId:guid}/executing")]
@@ -106,11 +123,7 @@ public sealed class DeviceCommandAgentController
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(new
-            {
-                code = "COMMAND_NOT_FOUND",
-                message = ex.Message
-            });
+            return CommandStateError(ex);
         }
     }
 
@@ -141,11 +154,7 @@ public sealed class DeviceCommandAgentController
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(new
-            {
-                code = "COMMAND_NOT_FOUND",
-                message = ex.Message
-            });
+            return CommandStateError(ex);
         }
     }
 
@@ -178,11 +187,7 @@ public sealed class DeviceCommandAgentController
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(new
-            {
-                code = "COMMAND_NOT_FOUND",
-                message = ex.Message
-            });
+            return CommandStateError(ex);
         }
     }
 

@@ -9,6 +9,7 @@ using TitanMDM.Api.Ponches;
 using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
+using TitanMDM.Application.Commands;
 
 using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence;
@@ -153,6 +154,13 @@ builder.Services.AddTitanAuthorization();
 
 builder.Services.AddSingleton<
     RemoteSupportNotifier>();
+
+builder.Services.AddSingleton<
+    IDeviceCommandNotifier,
+    DeviceCommandSignalRNotifier>();
+
+builder.Services.AddHostedService<
+    DeviceCommandExpirationService>();
 
 builder.Services.AddSingleton<
     RemoteHostTokenService>();
@@ -415,6 +423,14 @@ app.MapHub<
     RemoteSupportHub>(
         RemoteSupportHub.Route);
 
+app.MapHub<
+    DeviceCommandHub>(
+        DeviceCommandHub.Route,
+        options =>
+        {
+            options.CloseOnAuthenticationExpiration = true;
+        });
+
 // ============================================================================
 // ROOT INFORMATION
 // ============================================================================
@@ -465,6 +481,9 @@ app.MapGet(
 
                 remoteSupportHub =
                     RemoteSupportHub.Route,
+
+                deviceCommandHub =
+                    DeviceCommandHub.Route,
 
                 utc =
                     DateTime.UtcNow

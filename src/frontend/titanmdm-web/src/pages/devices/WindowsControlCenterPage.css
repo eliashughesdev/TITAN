@@ -587,3 +587,9 @@
 .windows-command-details pre {
   margin-top: 8px;
 }
+
+.windows-control-notice--info {
+  border: 1px solid #b2ddff;
+  color: #175cd3;
+  background: #eff8ff;
+}

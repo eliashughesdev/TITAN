@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
+
 using Microsoft.Extensions.Options;
 
 using TitanMDM.WindowsAgent.Configuration;
@@ -35,8 +38,32 @@ public sealed class Worker
     private readonly AgentRetryPolicy
         _retryPolicy;
 
+    private readonly CommandWakeSignal
+        _commandWakeSignal;
+
     private readonly AgentOptions
         _options;
+
+    private readonly Channel<AgentCommand>
+        _urgentCommands = Channel.CreateBounded<AgentCommand>(
+            new BoundedChannelOptions(32)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+    private readonly Channel<AgentCommand>
+        _standardCommands = Channel.CreateBounded<AgentCommand>(
+            new BoundedChannelOptions(128)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+    private readonly ConcurrentDictionary<Guid, byte>
+        _scheduledCommands = new();
 
     public Worker(
         ILogger<Worker> logger,
@@ -47,6 +74,7 @@ public sealed class Worker
         AgentRuntimeSettingsStore runtimeSettingsStore,
         AgentLifecycleCoordinator lifecycle,
         AgentRetryPolicy retryPolicy,
+        CommandWakeSignal commandWakeSignal,
         IOptions<AgentOptions> options)
     {
         _logger =
@@ -72,6 +100,9 @@ public sealed class Worker
 
         _retryPolicy =
             retryPolicy;
+
+        _commandWakeSignal =
+            commandWakeSignal;
 
         _options =
             options.Value;
@@ -101,6 +132,14 @@ public sealed class Worker
 
         var consecutiveFailures =
             0;
+
+        var urgentProcessor = ProcessLaneAsync(
+            _urgentCommands.Reader,
+            stoppingToken);
+
+        var standardProcessor = ProcessLaneAsync(
+            _standardCommands.Reader,
+            stoppingToken);
 
         while (
             !stoppingToken
@@ -174,7 +213,18 @@ public sealed class Worker
                         break;
                     }
 
-                    await ProcessCommandAsync(
+                    if (!_scheduledCommands.TryAdd(
+                            command.CommandId,
+                            0))
+                    {
+                        continue;
+                    }
+
+                    var writer = IsUrgent(command)
+                        ? _urgentCommands.Writer
+                        : _standardCommands.Writer;
+
+                    await writer.WriteAsync(
                         command,
                         stoppingToken);
                 }
@@ -245,6 +295,20 @@ public sealed class Worker
             await DelayWithBackoffAsync(
                 consecutiveFailures,
                 stoppingToken);
+        }
+
+        _urgentCommands.Writer.TryComplete();
+        _standardCommands.Writer.TryComplete();
+
+        try
+        {
+            await Task.WhenAll(
+                urgentProcessor,
+                standardProcessor);
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
         }
 
         _lifecycle.MarkStopping();
@@ -467,6 +531,31 @@ public sealed class Worker
     // COMMAND EXECUTION
     // ============================================================
 
+    private async Task ProcessLaneAsync(
+        ChannelReader<AgentCommand> reader,
+        CancellationToken cancellationToken)
+    {
+        await foreach (var command in reader.ReadAllAsync(cancellationToken))
+        {
+            try
+            {
+                await ProcessCommandAsync(command, cancellationToken);
+            }
+            finally
+            {
+                _scheduledCommands.TryRemove(command.CommandId, out _);
+            }
+        }
+    }
+
+    private static bool IsUrgent(AgentCommand command)
+    {
+        return string.Equals(
+            command.CommandType,
+            "LOCK_DEVICE",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task ProcessCommandAsync(
         AgentCommand command,
         CancellationToken cancellationToken)
@@ -555,6 +644,13 @@ public sealed class Worker
                         .IsCancellationRequested)
         {
             throw;
+        }
+        catch (AgentCommandStateException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Comando descartado porque SQL ya registra un estado incompatible. CommandId={CommandId}.",
+                command.CommandId);
         }
         catch (
             Exception ex)
@@ -658,11 +754,10 @@ public sealed class Worker
     {
         try
         {
-            await Task.Delay(
+            await _commandWakeSignal.WaitAsync(
                 TimeSpan.FromSeconds(
                     Math.Clamp(
-                        _options
-                            .CommandPollingIntervalSeconds,
+                        _options.CommandPollingIntervalSeconds,
                         5,
                         300)),
                 cancellationToken);
@@ -707,13 +802,9 @@ public sealed class Worker
 
         try
         {
-            await Task.Delay(
-                TimeSpan.FromSeconds(
-                    seconds)
-                +
-                TimeSpan.FromMilliseconds(
-                    jitterMilliseconds),
-
+            await _commandWakeSignal.WaitAsync(
+                TimeSpan.FromSeconds(seconds) +
+                TimeSpan.FromMilliseconds(jitterMilliseconds),
                 cancellationToken);
         }
         catch (

@@ -440,9 +440,22 @@ public sealed class TitanMdmApiClient
             operation,
             (int)response.StatusCode);
 
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            throw new AgentCommandStateException(responseBody);
+        }
+
         throw new HttpRequestException(
             $"TitanMDM rechazó la operación '{operation}'. " +
             $"HTTP {(int)response.StatusCode}. " +
             responseBody);
+    }
+}
+
+public sealed class AgentCommandStateException : Exception
+{
+    public AgentCommandStateException(string message)
+        : base(message)
+    {
     }
 }

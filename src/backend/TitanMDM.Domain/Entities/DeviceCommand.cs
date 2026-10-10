@@ -139,7 +139,18 @@ public sealed class DeviceCommand
 
     public void MarkDelivered()
     {
+        if (Status == DeviceCommandStatus.Delivered)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
+
+        if (Status != DeviceCommandStatus.Sent)
+        {
+            throw new InvalidOperationException(
+                $"A command in state {Status} cannot be delivered.");
+        }
 
         Status = DeviceCommandStatus.Delivered;
         DeliveredAtUtc = DateTime.UtcNow;
@@ -148,7 +159,18 @@ public sealed class DeviceCommand
 
     public void MarkExecuting()
     {
+        if (Status == DeviceCommandStatus.Executing)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
+
+        if (Status != DeviceCommandStatus.Delivered)
+        {
+            throw new InvalidOperationException(
+                $"A command in state {Status} cannot start execution.");
+        }
 
         Status = DeviceCommandStatus.Executing;
         StartedAtUtc ??= DateTime.UtcNow;
@@ -158,7 +180,18 @@ public sealed class DeviceCommand
     public void CompleteSuccess(
         string? resultJson)
     {
+        if (Status == DeviceCommandStatus.Success)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
+
+        if (Status != DeviceCommandStatus.Executing)
+        {
+            throw new InvalidOperationException(
+                $"A command in state {Status} cannot complete successfully.");
+        }
 
         Status = DeviceCommandStatus.Success;
         ResultJson = string.IsNullOrWhiteSpace(resultJson)
@@ -177,6 +210,11 @@ public sealed class DeviceCommand
         string? errorMessage,
         string? resultJson = null)
     {
+        if (Status == DeviceCommandStatus.Failed)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
 
         Status = DeviceCommandStatus.Failed;
@@ -190,6 +228,11 @@ public sealed class DeviceCommand
 
     public void MarkTimeout()
     {
+        if (Status == DeviceCommandStatus.Timeout)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
 
         Status = DeviceCommandStatus.Timeout;
@@ -203,7 +246,19 @@ public sealed class DeviceCommand
 
     public void Cancel()
     {
+        if (Status == DeviceCommandStatus.Cancelled)
+        {
+            return;
+        }
+
         EnsureNotTerminal();
+
+        if (Status is DeviceCommandStatus.Delivered or
+            DeviceCommandStatus.Executing)
+        {
+            throw new InvalidOperationException(
+                "A delivered or executing command cannot be cancelled safely.");
+        }
 
         Status = DeviceCommandStatus.Cancelled;
         CompletedAtUtc = DateTime.UtcNow;

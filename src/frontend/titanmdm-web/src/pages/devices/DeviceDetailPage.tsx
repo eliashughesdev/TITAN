@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Info,
   RefreshCw,
   XCircle,
 } from 'lucide-react'
@@ -74,6 +75,7 @@ export function DeviceDetailPage() {
 
     error,
     message,
+    messageTone,
 
     loadDevice,
     refreshCommands,
@@ -201,10 +203,14 @@ export function DeviceDetailPage() {
       )}
 
       {message && (
-        <div className="device-detail-notice device-detail-notice--success">
-          <CheckCircle2
-            size={17}
-          />
+        <div
+          className={
+            `device-detail-notice device-detail-notice--${messageTone}`
+          }
+        >
+          {messageTone === 'success'
+            ? <CheckCircle2 size={17} />
+            : <Info size={17} />}
 
           <span>
             {message}
@@ -276,4 +282,4 @@ export function DeviceDetailPage() {
       )}
     </div>
   )
-} 
+}
