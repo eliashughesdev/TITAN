@@ -70,6 +70,7 @@ export const Permissions = {
   remote: {
     view: 'remote.view',
     manage: 'remote.manage',
+    elevate: 'remote.elevate',
   },
 
   reports: {

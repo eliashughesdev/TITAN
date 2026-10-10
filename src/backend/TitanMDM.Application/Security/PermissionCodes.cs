@@ -14,7 +14,6 @@ public static class PermissionCodes
         public const string GlobalView =
             "dashboard.global.view";
     }
-
     // ============================================================
     // WORKSPACES
     // ============================================================
@@ -148,7 +147,18 @@ public static class PermissionCodes
 
         public const string Manage =
             "remote.manage";
+
+        /// <summary>
+        /// Autoriza solicitar operaciones administrativas
+        /// remotas, sujeto a Site Scope, sesión conectada,
+        /// lease exclusivo y ejecutor habilitado.
+        ///
+        /// No equivale a un token de administrador Windows.
+        /// </summary>
+        public const string Elevate =
+            "remote.elevate";
     }
+
 
     // ============================================================
     // REPORTS

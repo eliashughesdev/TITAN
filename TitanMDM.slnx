@@ -2,6 +2,7 @@
   <Folder Name="/agents/" />
   <Folder Name="/agents/windows/">
     <Project Path="agents/windows/TitanMDM.RemoteHost/TitanMDM.RemoteHost.csproj" />
+    <Project Path="agents/windows/TitanMDM.RemoteUiaHost/TitanMDM.RemoteUiaHost.csproj" />
     <Project Path="agents/windows/TitanMDM.WindowsAgent/TitanMDM.WindowsAgent.csproj" />
   </Folder>
   <Folder Name="/src/" />

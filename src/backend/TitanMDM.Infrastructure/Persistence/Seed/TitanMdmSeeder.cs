@@ -59,7 +59,6 @@ public sealed partial class TitanMdmSeeder
             // =====================================================
             // DASHBOARD / WORKSPACES
             // =====================================================
-
             new(
                 "dashboard.view",
                 "Ver dashboard",
@@ -258,9 +257,16 @@ public sealed partial class TitanMdmSeeder
                 "RemoteSupport",
                 "Permite iniciar y administrar sesiones remotas."),
 
+            new(
+                "remote.elevate",
+                "Solicitar elevación administrativa remota",
+                "RemoteSupport",
+                "Permite solicitar operaciones administrativas remotas sujetas a autorización adicional, control exclusivo, auditoría y disponibilidad del ejecutor privilegiado."),
+
             // =====================================================
             // REPORTS
             // =====================================================
+
 
             new(
                 "reports.view",

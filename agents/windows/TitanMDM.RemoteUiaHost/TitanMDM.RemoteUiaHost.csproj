@@ -1,0 +1,33 @@
+
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>TitanMDM.RemoteUiaHost</AssemblyName>
+    <RootNamespace>TitanMDM.RemoteUiaHost</RootNamespace>
+    <Version>0.1.0</Version>
+    <Company>TitanMDM</Company>
+    <Product>TitanMDM Remote UIAccess Host</Product>
+    <Description>
+      Isolated readiness component for authorized remote elevation.
+    </Description>
+
+    <!--
+      Deshabilitado por defecto.
+      La compilación normal NO solicita UIAccess.
+    -->
+    <EnableTitanUIAccess Condition="'$(EnableTitanUIAccess)' == ''">false</EnableTitanUIAccess>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableTitanUIAccess)' == 'true'">
+    <ApplicationManifest>app.uiaccess.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableTitanUIAccess)' != 'true'">
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+</Project>
