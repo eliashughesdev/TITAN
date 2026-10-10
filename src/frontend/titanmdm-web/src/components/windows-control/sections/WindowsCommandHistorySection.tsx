@@ -13,7 +13,6 @@ import type {
 
 import {
   formatDate,
-  prettyResult,
   resultSummary,
 } from '../windowsControl.utils'
 
@@ -22,6 +21,10 @@ import {
   getCommandStatusLabel,
   isTerminalCommand,
 } from '../../../utils/deviceCommandPresentation'
+
+import {
+  CommandResultView,
+} from '../CommandResultView'
 
 interface Props {
   commands:
@@ -64,11 +67,16 @@ export function WindowsCommandHistorySection({
         </header>
 
         <div className="windows-command-list">
-{commands.map(
+          {commands.map(
             command => {
               const summary =
                 resultSummary(
                   command,
+                )
+
+              const terminal =
+                isTerminalCommand(
+                  command.status,
                 )
 
               return (
@@ -76,71 +84,67 @@ export function WindowsCommandHistorySection({
                   key={command.id}
                   className="windows-command-item"
                 >
-                <div className="windows-command-item__main">
-                  <strong>
-                    {command.commandType}
-                  </strong>
+                  <div className="windows-command-item__main">
+                    <strong>
+                      {command.commandType}
+                    </strong>
 
-                  <span
-                    className={
-                      `windows-command-status windows-command-status--${command.status.toLowerCase()}`
-                    }
-                  >
-                    {getCommandStatusLabel(
-                      command.status,
-                    )}
-                  </span>
-                </div>
-
-                <div className="windows-command-item__meta">
-                  <span>
-                    {formatDate(
-                      command.createdAtUtc,
-                    )}
-                  </span>
-
-                  <span>
-                    Intentos:{' '}
-                    {command.deliveryAttempts}
-                  </span>
-
-                  <span>
-                    Transcurrido:{' '}
-                    {formatCommandElapsed(
-                      command,
-                      now,
-                    )}
-                  </span>
-
-                  {command.errorCode && (
-                    <span>
-                      {command.errorCode}
-                    </span>
-                  )}
-                </div>
-
-                {summary && (
-                  <p className="windows-command-item__summary">
-                    {summary}
-                  </p>
-                )}
-
-                {(command.resultJson
-                  ||
-                  command.errorMessage) && (
-                  <details className="windows-command-details">
-                    <summary>
-                      Ver detalle técnico
-                    </summary>
-
-                    <pre>
-                      {prettyResult(
-                        command,
+                    <span
+                      className={
+                        `windows-command-status windows-command-status--${command.status.toLowerCase()}`
+                      }
+                    >
+                      {getCommandStatusLabel(
+                        command.status,
                       )}
-                    </pre>
-                  </details>
-                )}
-              </article>
+                    </span>
+                  </div>
+
+                  <div className="windows-command-item__meta">
+                    <span>
+                      {formatDate(
+                        command.createdAtUtc,
+                      )}
+                    </span>
+
+                    <span>
+                      Intentos:{' '}
+                      {command.deliveryAttempts}
+                    </span>
+
+                    <span>
+                      Transcurrido:{' '}
+                      {formatCommandElapsed(
+                        command,
+                        now,
+                      )}
+                    </span>
+
+                    {command.errorCode && (
+                      <span>
+                        {command.errorCode}
+                      </span>
+                    )}
+                  </div>
+
+                  {summary && (
+                    <p className="windows-command-item__summary">
+                      {summary}
+                    </p>
+                  )}
+
+                  {terminal && (
+                    <details className="windows-command-details">
+                      <summary>
+                        Ver resultado
+                      </summary>
+
+                      <div className="windows-command-result">
+                        <CommandResultView command={command} />
+                      </div>
+                    </details>
+                  )}
+                </article>
               )
             },
           )}

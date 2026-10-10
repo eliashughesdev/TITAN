@@ -17,6 +17,10 @@ import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../api/deviceCommandsApi'
+
+import {
+  CommandResultView,
+} from '../windows-control/CommandResultView'
 import { useAuth } from '../../auth/AuthContext'
 import type {
   DeviceListItem,
@@ -974,7 +978,8 @@ export function WindowsModuleCompletion({
                           <summary>
                             Ver resultado reportado
                           </summary>
-                          <pre>{command.resultJson}</pre>
+
+                          <CommandResultView command={command} />
                         </details>
                       )}
                     </td>

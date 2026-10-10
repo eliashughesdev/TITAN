@@ -599,6 +599,20 @@
   margin-top: 8px;
 }
 
+.windows-command-result {
+  margin-top: 8px;
+}
+
+.windows-command-item__error {
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b42318;
+  background: #fef3f2;
+  font-size: 9px;
+}
+
 .windows-control-notice--info {
   border: 1px solid #b2ddff;
   color: #175cd3;

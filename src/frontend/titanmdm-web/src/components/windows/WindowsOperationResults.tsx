@@ -13,6 +13,7 @@ import {
 import type { DeviceListItem } from '../../types/device'
 
 import { resultSummary } from '../windows-control/windowsControl.utils'
+import { CommandResultView } from '../windows-control/CommandResultView'
 
 interface Props {
   packageId?: string
@@ -393,31 +394,7 @@ export function WindowsOperationResults({
             ) : null
           })()}
 
-          {detail.resultJson ? (
-            <details
-              style={{
-                marginTop: 8,
-              }}
-            >
-              <summary>
-                Ver detalle técnico
-              </summary>
-
-              <pre
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  overflowWrap: 'anywhere',
-                  marginTop: 8,
-                }}
-              >
-                {detail.resultJson}
-              </pre>
-            </details>
-          ) : (
-            <p>
-              El agente todavía no ha entregado un resultado.
-            </p>
-          )}
+          <CommandResultView command={detail} />
 
           <button
             type="button"

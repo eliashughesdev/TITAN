@@ -243,6 +243,28 @@ export function latestByType(
   ) ?? matches[0] ?? null
 }
 
+export function arrayItemObjects(
+  value: unknown,
+): JsonObject[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map(
+      item =>
+        asObject(
+          item,
+        ),
+    )
+    .filter(
+      (
+        item,
+      ): item is JsonObject =>
+        item !== null,
+    )
+}
+
 export function commandArray(
   command:
     DeviceCommand | null,
@@ -1279,27 +1301,11 @@ export function parseInventory(
     )
 
   const disks =
-    Array.isArray(
+    arrayItemObjects(
       disksRaw,
     )
-      ? disksRaw
-      : []
       .map(
-        value =>
-          asObject(
-            value,
-          ),
-      )
-      .filter(
-        value =>
-          value !==
-          null,
-      )
-      .map(
-        value => {
-          const item =
-            value as JsonObject
-
+        item => {
           return {
             name:
               stringValue(
@@ -1358,27 +1364,11 @@ export function parseInventory(
       )
 
   const network =
-    Array.isArray(
+    arrayItemObjects(
       networkRaw,
     )
-      ? networkRaw
-      : []
       .map(
-        value =>
-          asObject(
-            value,
-          ),
-      )
-      .filter(
-        value =>
-          value !==
-          null,
-      )
-      .map(
-        value => {
-          const item =
-            value as JsonObject
-
+        item => {
           const ipValue =
             property(
               item,
@@ -1594,6 +1584,70 @@ export function parseInventory(
     disks,
     network,
   }
+}
+
+export function scalarFields(
+  value: unknown,
+): Array<{
+  label: string
+  value: string
+}> {
+  const object =
+    asObject(
+      value,
+    )
+
+  if (!object) {
+    return []
+  }
+
+  return Object.entries(
+    object,
+  ).flatMap(
+    ([
+      key,
+      field,
+    ]) => {
+      if (
+        field ===
+          null
+        ||
+        field ===
+          undefined
+        ||
+        typeof field ===
+          'string'
+        ||
+        typeof field ===
+          'number'
+        ||
+        typeof field ===
+          'boolean'
+      ) {
+        return [
+          {
+            label: key,
+
+            value:
+              field ===
+                null
+              ||
+              field ===
+                undefined
+              ||
+              field ===
+                ''
+                ? 'N/D'
+                : String(
+                    field,
+                  ),
+          },
+        ]
+      }
+
+      return []
+    },
+  )
 }
 
 export function resultSummary(
