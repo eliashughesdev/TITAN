@@ -1,0 +1,255 @@
+
+/*
+ * TitanMDM Enterprise Shell — GLOBAL-UI-02
+ * Compatible con titan-shell.css existente.
+ */
+
+.titan-enterprise-layout {
+  --titan-workspace-accent: #4f6cf7;
+  --titan-workspace-soft: #edf1ff;
+  isolation: isolate;
+}
+
+.titan-enterprise-layout[data-titan-workspace="ponches"] {
+  --titan-workspace-accent: #168c9d;
+  --titan-workspace-soft: #e9f9fb;
+}
+
+.titan-enterprise-layout[data-titan-workspace="helpdesk"] {
+  --titan-workspace-accent: #7565d9;
+  --titan-workspace-soft: #f2efff;
+}
+
+.titan-enterprise-layout[data-titan-workspace="administration"] {
+  --titan-workspace-accent: #64748b;
+  --titan-workspace-soft: #f1f5f9;
+}
+
+.titan-sidebar-container {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 51;
+  min-width: 0;
+}
+
+.titan-enterprise-main {
+  min-width: 0;
+  width: 100%;
+  overflow: clip;
+}
+
+.titan-enterprise-topbar {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.titan-enterprise-header {
+  min-width: 0;
+  flex: 1;
+}
+
+.titan-enterprise-module-nav {
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.titan-enterprise-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.titan-enterprise-page {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Mobile controls hidden on desktop */
+
+.titan-mobile-menu,
+.titan-mobile-close,
+.titan-mobile-sidebar-header {
+  display: none;
+}
+
+.titan-mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(12, 24, 49, 0.56);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+
+/* Focus and accessibility */
+
+.titan-enterprise-layout :where(
+  button,
+  a,
+  input,
+  select,
+  textarea
+):focus-visible {
+  outline: 2px solid var(--titan-workspace-accent);
+  outline-offset: 3px;
+}
+
+.titan-enterprise-layout :where(
+  button,
+  a
+):disabled {
+  cursor: not-allowed;
+}
+
+/* Laptop and tablet */
+
+@media (max-width: 1200px) {
+  .titan-enterprise-content {
+    padding: 20px;
+  }
+}
+
+/* Mobile navigation */
+
+@media (max-width: 960px) {
+  .titan-enterprise-layout {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .titan-sidebar-container {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(310px, 88vw);
+    max-width: 88vw;
+    height: 100dvh;
+    overflow-y: auto;
+    z-index: 70;
+    visibility: hidden;
+    transform: translateX(-102%);
+    pointer-events: none;
+    transition:
+      transform 220ms ease,
+      visibility 220ms ease;
+    background: #152753;
+    box-shadow: 14px 0 44px rgba(7, 18, 42, 0.2);
+  }
+
+  .titan-sidebar-container--open {
+    visibility: visible;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .titan-sidebar-container .sidebar {
+    position: relative;
+    top: auto;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    min-height: calc(100dvh - 55px);
+    flex-basis: auto;
+    box-shadow: none;
+  }
+
+  .titan-sidebar-container .sidebar--collapsed {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .titan-mobile-sidebar-header {
+    display: flex;
+    min-height: 55px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .titan-mobile-close {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  .titan-enterprise-topbar {
+    position: relative;
+    min-height: 64px;
+  }
+
+  .titan-mobile-menu {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    margin-left: 10px;
+    padding: 0;
+    border: 1px solid var(--titan-border);
+    border-radius: 12px;
+    color: var(--titan-text);
+    background: #fff;
+  }
+
+  .titan-enterprise-header {
+    width: calc(100% - 52px);
+  }
+
+  .titan-enterprise-header .app-header {
+    min-width: 0;
+  }
+
+  .titan-enterprise-module-nav {
+    max-width: 100vw;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .titan-enterprise-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .titan-enterprise-content {
+    padding: 12px;
+  }
+
+  .titan-enterprise-header .app-header__search {
+    display: none;
+  }
+
+  .titan-enterprise-header .app-header__user-info {
+    display: none;
+  }
+
+  .titan-enterprise-page {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-sidebar-container {
+    transition: none;
+  }
+
+  .titan-mobile-backdrop {
+    backdrop-filter: none;
+  }
+}

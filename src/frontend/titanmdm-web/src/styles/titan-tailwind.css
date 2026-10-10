@@ -1,0 +1,47 @@
+
+/*
+ * TitanMDM Enterprise - Global Design Foundation
+ * Tailwind CSS 4, integrado sin reset global.
+ */
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-titan-primary: var(--titan-primary);
+  --color-titan-surface: var(--titan-surface-solid);
+  --color-titan-soft: var(--titan-surface-soft);
+  --color-titan-text: var(--titan-text);
+  --color-titan-muted: var(--titan-text-3);
+  --color-titan-border: var(--titan-border);
+  --color-titan-success: var(--titan-success);
+  --color-titan-warning: var(--titan-warning);
+  --color-titan-danger: var(--titan-danger);
+
+  --font-titan: var(--titan-font-sans);
+  --radius-titan: var(--titan-radius-lg);
+}
+
+/* Workspace accents */
+
+[data-titan-workspace="windows"] {
+  --titan-workspace-accent: #4f6cf7;
+  --titan-workspace-accent-soft: #edf1ff;
+}
+
+[data-titan-workspace="android"] {
+  --titan-workspace-accent: #16966f;
+  --titan-workspace-accent-soft: #e9f9f2;
+}
+
+[data-titan-workspace="helpdesk"] {
+  --titan-workspace-accent: #7565d9;
+  --titan-workspace-accent-soft: #f2efff;
+}
+
+[data-titan-workspace="ponches"] {
+  --titan-workspace-accent: #168c9d;
+  --titan-workspace-accent-soft: #e9f9fb;
+}

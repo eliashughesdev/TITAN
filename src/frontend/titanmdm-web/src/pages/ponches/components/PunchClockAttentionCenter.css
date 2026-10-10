@@ -1,0 +1,338 @@
+
+.pclock-center {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e4eaf3;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 36px rgba(25, 39, 75, .055);
+}
+
+.pclock-center-header,
+.pclock-heading,
+.pclock-card-top,
+.pclock-card-actions,
+.pclock-dialog-header,
+.pclock-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pclock-center-header {
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.pclock-heading {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.pclock-heading-icon,
+.pclock-device-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border-radius: 15px;
+  color: #bd244b;
+  background: #fff0f3;
+}
+
+.pclock-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .11em;
+  color: #bd244b;
+}
+
+.pclock-heading h2 {
+  margin: 5px 0 4px;
+  color: #15223a;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.pclock-heading p {
+  margin: 0;
+  font-size: 12px;
+  color: #8491a6;
+}
+
+.pclock-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid #e7eaf1;
+  border-radius: 11px;
+  background: #fff;
+  color: #bb2148;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pclock-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pclock-card {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e8ebf2;
+  border-radius: 18px;
+  background: linear-gradient(155deg, #fff 15%, #fafbfe 100%);
+  box-shadow: 0 5px 18px rgba(30, 46, 80, .035);
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.pclock-card:hover {
+  border-color: #f5a8b6;
+  box-shadow: 0 10px 26px rgba(99, 38, 65, .095);
+}
+
+.pclock-card-top {
+  margin-bottom: 11px;
+}
+
+.pclock-device-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.pclock-device-status {
+  border-radius: 100px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.pclock-device-status.offline {
+  color: #cc254b;
+  background: #ffe8ee;
+}
+
+.pclock-device-status.slow {
+  color: #a16207;
+  background: #fff1cf;
+}
+
+.pclock-card h3 {
+  margin: 0 0 14px;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.pclock-card-details {
+  display: grid;
+  gap: 9px;
+  min-height: 111px;
+  margin-bottom: 16px;
+}
+
+.pclock-card-details > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #65748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pclock-card-details svg {
+  flex: 0 0 auto;
+  color: #9ca7ba;
+}
+
+.pclock-card-actions {
+  padding-top: 13px;
+  border-top: 1px solid #edf0f5;
+}
+
+.pclock-card-actions button {
+  display: inline-flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  min-height: 35px;
+  padding: 7px 9px;
+  border: 1px solid #e2e6ee;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pclock-card-actions .pclock-restart:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.pclock-card-actions .pclock-incident {
+  border-color: #243c69;
+  color: #fff;
+  background: #243c69;
+}
+
+.pclock-card-actions .pclock-incident:hover {
+  background: #172b50;
+}
+
+.pclock-success,
+.pclock-all-clear {
+  border-radius: 14px;
+  padding: 16px;
+  color: #087d57;
+  background: #e8fbf2;
+}
+
+.pclock-success {
+  display: flex;
+  gap: 9px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+
+.pclock-all-clear {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 40px;
+  text-align: center;
+}
+
+.pclock-all-clear p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.pclock-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(13, 24, 46, .6);
+  backdrop-filter: blur(5px);
+}
+
+.pclock-dialog {
+  width: min(510px, 100%);
+  padding: 24px;
+  border: 1px solid #e5eaf3;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(9, 20, 43, .3);
+}
+
+.pclock-dialog-header {
+  align-items: flex-start;
+}
+
+.pclock-dialog-header h3 {
+  margin: 6px 0;
+  font-size: 22px;
+  color: #17243f;
+}
+
+.pclock-dialog-header button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pclock-dialog-device {
+  padding: 11px 13px;
+  border-radius: 11px;
+  color: #475569;
+  background: #f4f7fb;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.pclock-dialog-label {
+  display: block;
+  margin: 17px 0 9px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pclock-dialog textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid #dbe2ed;
+  border-radius: 12px;
+  color: #1e293b;
+  font: inherit;
+}
+
+.pclock-dialog textarea:focus {
+  outline: 2px solid #e99aac;
+}
+
+.pclock-dialog-error {
+  color: #be123c;
+  font-size: 12px;
+}
+
+.pclock-dialog-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.pclock-dialog-actions button {
+  padding: 10px 15px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pclock-dialog-actions .pclock-dialog-submit {
+  color: #fff;
+  border-color: #bf2349;
+  background: #bf2349;
+}
+
+@media (max-width: 1100px) {
+  .pclock-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .pclock-center {
+    padding: 16px;
+  }
+
+  .pclock-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pclock-card-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pclock-card {
+    transition: none;
+  }
+
+  .pclock-dialog-backdrop {
+    backdrop-filter: none;
+  }
+}

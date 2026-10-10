@@ -1,6 +1,17 @@
+
+/*
+ * TitanMDM Enterprise
+ * Global application stylesheet
+ *
+ * Tailwind v4 + existing Titan design system.
+ */
+
+@import './styles/titan-tailwind.css';
+
 @import './styles/titan-theme.css';
 @import './styles/titan-motion.css';
 @import './styles/titan-shell.css';
+@import './styles/titan-enterprise-components.css';
 
 html,
 body,
@@ -22,16 +33,15 @@ body {
     BlinkMacSystemFont,
     sans-serif;
 
-  background:
-    var(--titan-bg);
+  background: var(--titan-bg);
+  color: var(--titan-text);
 
-  color:
-    var(--titan-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
   color: inherit;
-
   text-decoration: none;
 }
 

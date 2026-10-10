@@ -1,0 +1,150 @@
+
+/*
+ * TitanMDM Enterprise — Shared Components
+ * GLOBAL-UI-03
+ */
+
+.titan-stat-card {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.titan-stat-card--clickable {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.titan-stat-card--clickable:focus-visible {
+  outline: 2px solid var(--titan-primary);
+  outline-offset: 3px;
+}
+
+.titan-stat-trend {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 22px;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.titan-stat-trend--up {
+  background: var(--titan-success-soft);
+  color: var(--titan-success);
+}
+
+.titan-stat-trend--down {
+  background: var(--titan-danger-soft);
+  color: var(--titan-danger);
+}
+
+.titan-stat-trend--neutral {
+  background: var(--titan-surface-muted);
+  color: var(--titan-text-3);
+}
+
+.titan-stat-skeleton,
+.titan-skeleton-line {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    #e7edf6 0%,
+    #f5f8fc 50%,
+    #e7edf6 100%
+  );
+  background-size: 200% 100%;
+  animation: titan-skeleton 1.5s ease-in-out infinite;
+}
+
+.titan-stat-skeleton {
+  width: 65%;
+  height: 27px;
+}
+
+.titan-skeleton-line {
+  width: 100%;
+  height: 18px;
+}
+
+.titan-skeleton-line:nth-child(2) {
+  width: 80%;
+}
+
+.titan-skeleton-line:nth-child(3) {
+  width: 94%;
+}
+
+.titan-section-loading,
+.titan-table-loading {
+  display: grid;
+  gap: 13px;
+  padding: 20px;
+}
+
+.titan-table-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 30px;
+  text-align: center;
+  color: var(--titan-text-3);
+}
+
+.titan-table-empty strong {
+  color: var(--titan-text);
+}
+
+.titan-table-empty p {
+  margin: 0;
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.titan-enterprise-table {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.titan-enterprise-table .titan-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.titan-section-card__action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@keyframes titan-skeleton {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+@media (max-width: 640px) {
+  .titan-section-card__header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .titan-section-card__action {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-stat-skeleton,
+  .titan-skeleton-line {
+    animation: none;
+  }
+}

@@ -1,7 +1,24 @@
+
+import { useMemo, useState } from 'react'
+import type { ReactNode, CSSProperties } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { motion, useReducedMotion } from 'motion/react'
+
 import {
-  useMemo,
-  useState,
-} from 'react'
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import {
   Activity,
@@ -9,1632 +26,1218 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  BellRing,
   Building2,
   CheckCircle2,
   Clock3,
   Database,
-  Gauge,
+  Fingerprint,
   LogIn,
   LogOut,
-  MonitorSmartphone,
-  Pause,
   Radio,
   RefreshCw,
   Search,
   Server,
+  ShieldCheck,
+  Sparkles,
   Users,
   Wifi,
   WifiOff,
 } from 'lucide-react'
 
-import {
-  useSearchParams,
-} from 'react-router-dom'
+import type { DashboardSnapshot } from '../lib/dashboardApi'
+import { ponchesDashboardQueryOptions } from '../lib/dashboardQueries'
+import { PunchClockAttentionCenter } from '../components/PunchClockAttentionCenter'
 
-import {
-  useQuery,
-} from '@tanstack/react-query'
-
-import {
-  ponchesDashboardQueryOptions,
-} from '../lib/dashboardQueries'
-
-import {
-  Btn,
-  PageHeader,
-} from '../ui/kit'
-
-type MetricTone =
-  | 'default'
-  | 'green'
-  | 'amber'
-  | 'red'
-  | 'blue'
-
-type MetricCardProps = {
-  label: string
-  value:
-    | string
-    | number
-  subtitle: string
-  icon:
-    React.ReactNode
-  tone?:
-    MetricTone
-  onClick?:
-    () => void
+const PALETTE = {
+  red: '#c41e43',
+  rose: '#e85c79',
+  indigo: '#6366f1',
+  teal: '#0d9488',
+  amber: '#f59e0b',
+  blue: '#0ea5e9',
+  purple: '#8b5cf6',
 }
 
-function MetricCard({
-  label,
-  value,
-  subtitle,
-  icon,
-  tone = 'default',
-  onClick,
-}: MetricCardProps) {
-  const tones:
-    Record<
-      MetricTone,
-      string
-    > = {
-      default:
-        'bg-white border-zinc-200',
+const DEPARTMENT_COLORS = [
+  PALETTE.red,
+  PALETTE.rose,
+  PALETTE.indigo,
+  PALETTE.teal,
+  PALETTE.amber,
+  PALETTE.purple,
+  PALETTE.blue,
+]
 
-      green:
-        'bg-emerald-50/70 border-emerald-100',
+const formatNumber = new Intl.NumberFormat('es-DO')
 
-      amber:
-        'bg-amber-50/70 border-amber-100',
+function fmt(value?: number | null): string {
+  return formatNumber.format(value ?? 0)
+}
 
-      red:
-        'bg-rose-50/70 border-rose-100',
+function formatDate(value?: string | null): string {
+  if (!value) return '—'
 
-      blue:
-        'bg-sky-50/70 border-sky-100',
-    }
+  const parsed = new Date(value)
 
-  const content = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">
-            {label}
-          </p>
-
-          <p className="mt-1.5 text-2xl font-black tracking-tight text-zinc-900">
-            {value}
-          </p>
-
-          <p className="mt-1 truncate text-[11px] text-zinc-500">
-            {subtitle}
-          </p>
-        </div>
-
-        <div className="shrink-0 rounded-xl bg-white p-2 text-[#c8102e] shadow-sm ring-1 ring-black/5">
-          {icon}
-        </div>
-      </div>
-
-      {onClick && (
-        <div className="mt-3 flex items-center justify-end text-[10px] font-semibold text-[#c8102e] opacity-0 transition-opacity group-hover:opacity-100">
-          Ver detalle
-          <ArrowRight
-            size={12}
-            className="ml-1"
-          />
-        </div>
-      )}
-    </>
-  )
-
-  const className =
-    `group rounded-2xl border p-4 text-left shadow-sm transition ${
-      tones[
-        tone
-      ]
-    } ${
-      onClick
-        ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
-        : ''
-    }`
-
-  if (
-    onClick
-  ) {
-    return (
-      <button
-        type="button"
-        className={
-          className
-        }
-        onClick={
-          onClick
-        }
-      >
-        {content}
-      </button>
-    )
+  if (Number.isNaN(parsed.getTime())) {
+    return value
   }
 
+  return parsed.toLocaleString('es-DO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+function formatPunchTime(value?: string | null): string {
+  if (!value) return '—'
+
+  // SQL may return a time without a calendar date.
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(value)) {
+    return value
+  }
+
+  const parsed = new Date(value)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value
+  }
+
+  return parsed.toLocaleTimeString('es-DO', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function percentageChange(
+  current: number,
+  previous: number,
+): number | null {
+  if (previous <= 0) return null
+
+  return Math.round(
+    ((current - previous) / previous) * 100,
+  )
+}
+
+function usableEmployeeName(
+  name: string | null | undefined,
+  code: string | undefined,
+): string {
+  const value = (name ?? '').trim()
+
+  if (
+    !value ||
+    /^NN[-_ ]?\d+$/i.test(value) ||
+    /^\d+$/.test(value) ||
+    (
+      value.length > 15 &&
+      /^[a-z0-9+/]+={0,2}$/i.test(value)
+    )
+  ) {
+    return code
+      ? `Pendiente de identificar · ${code}`
+      : 'Colaborador sin identificar'
+  }
+
+  return value
+}
+
+interface PremiumPanelProps {
+  title: string
+  eyebrow?: string
+  description?: string
+  icon: ReactNode
+  action?: ReactNode
+  children: ReactNode
+  className?: string
+}
+
+function PremiumPanel({
+  title,
+  eyebrow,
+  description,
+  icon,
+  action,
+  children,
+  className = '',
+}: PremiumPanelProps) {
   return (
-    <article
+    <section
       className={
+        'min-w-0 rounded-[26px] border border-slate-200/80 ' +
+        'bg-white p-5 shadow-[0_12px_44px_rgba(20,36,72,0.055)] ' +
+        'sm:p-6 ' +
         className
       }
     >
-      {content}
-    </article>
-  )
-}
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+            {icon}
+          </span>
 
-function EmptyCompact({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
-  return (
-    <div className="flex min-h-[82px] items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 px-4 py-5 text-center">
-      <div>
-        <p className="text-sm font-semibold text-zinc-700">
-          {title}
-        </p>
-
-        <p className="mt-1 text-xs text-zinc-400">
-          {description}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function percentChange(
-  current: number,
-  previous: number,
-) {
-  if (
-    previous <= 0
-  ) {
-    return null
-  }
-
-  return Math.round(
-    (
-      (
-        current -
-        previous
-      ) /
-      previous
-    ) *
-      100,
-  )
-}
-
-function formatDateTime(
-  value?:
-    | string
-    | null,
-) {
-  if (
-    !value
-  ) {
-    return '—'
-  }
-
-  const date =
-    new Date(
-      value,
-    )
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return value
-  }
-
-  return date
-    .toLocaleString()
-}
-
-function formatClock(
-  value?:
-    | string
-    | null,
-) {
-  if (
-    !value
-  ) {
-    return '—'
-  }
-
-  const date =
-    new Date(
-      value,
-    )
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return value
-  }
-
-  return date
-    .toLocaleTimeString(
-      [],
-      {
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-      },
-    )
-}
-
-export default function Dashboard() {
-  const [
-    ,
-    setSearchParams,
-  ] =
-    useSearchParams()
-
-  const [
-    autoRefresh,
-    setAutoRefresh,
-  ] =
-    useState(
-      true,
-    )
-
-  const [
-    search,
-    setSearch,
-  ] =
-    useState(
-      '',
-    )
-
-  const {
-    data:
-      snapshot,
-
-    error,
-
-    isLoading,
-
-    isFetching,
-
-    refetch,
-  } =
-    useQuery({
-      ...ponchesDashboardQueryOptions(),
-
-      /*
-       * Actualización silenciosa.
-       *
-       * Los datos actuales NO desaparecen mientras
-       * llega el siguiente snapshot.
-       */
-      refetchInterval:
-        autoRefresh
-          ? 30_000
-          : false,
-    })
-
-  function open(
-    section: string,
-  ) {
-    setSearchParams({
-      section,
-    })
-  }
-
-  const onlinePercent =
-    snapshot &&
-    snapshot.devicesTotal >
-      0
-      ? Math.round(
-          (
-            snapshot.devicesOnline /
-            snapshot.devicesTotal
-          ) *
-            100,
-        )
-      : 0
-
-  const attendanceDelta =
-    snapshot
-      ? percentChange(
-          snapshot.punchesToday,
-          snapshot.punchesYesterday,
-        )
-      : null
-
-  const employeeDelta =
-    snapshot
-      ? percentChange(
-          snapshot.employeesToday,
-          snapshot.employeesYesterday,
-        )
-      : null
-
-  const peakHour =
-    useMemo(
-      () => {
-        const rows =
-          snapshot?.byHour ??
-          []
-
-        if (
-          rows.length ===
-          0
-        ) {
-          return null
-        }
-
-        return [
-          ...rows,
-        ].sort(
-          (
-            a,
-            b,
-          ) =>
-            b.total -
-            a.total,
-        )[0]
-      },
-      [
-        snapshot,
-      ],
-    )
-
-  const maxHour =
-    Math.max(
-      1,
-      ...(
-        snapshot?.byHour ??
-        []
-      ).map(
-        item =>
-          item.total,
-      ),
-    )
-
-  const maxDepartment =
-    Math.max(
-      1,
-      ...(
-        snapshot?.byDepartment ??
-        []
-      ).map(
-        item =>
-          item.total,
-      ),
-    )
-
-  const filteredPunches =
-    useMemo(
-      () => {
-        const term =
-          search
-            .trim()
-            .toLowerCase()
-
-        if (
-          !term
-        ) {
-          return (
-            snapshot
-              ?.recentPunches ??
-            []
-          )
-        }
-
-        return (
-          snapshot
-            ?.recentPunches ??
-          []
-        ).filter(
-          item =>
-            [
-              item.codigo,
-              item.nombre,
-              item.departamento,
-              item.dispositivo_origen,
-            ]
-              .filter(
-                Boolean,
-              )
-              .some(
-                value =>
-                  String(
-                    value,
-                  )
-                    .toLowerCase()
-                    .includes(
-                      term,
-                    ),
-              ),
-        )
-      },
-      [
-        snapshot,
-        search,
-      ],
-    )
-
-  const problematicDevices =
-    useMemo(
-      () =>
-        (
-          snapshot
-            ?.healthItems ??
-          []
-        )
-          .filter(
-            item =>
-              !item.online ||
-              (
-                item.latencyMs !=
-                  null &&
-                item.latencyMs >
-                  300
-              ),
-          )
-          .sort(
-            (
-              a,
-              b,
-            ) =>
-              Number(
-                a.online,
-              ) -
-              Number(
-                b.online,
-              ),
-          ),
-      [
-        snapshot,
-      ],
-    )
-
-  const warningsCount =
-    snapshot
-      ?.warnings.length ??
-    0
-
-  if (
-    isLoading &&
-    !snapshot
-  ) {
-    return (
-      <div className="flex min-h-[45vh] flex-col items-center justify-center gap-4">
-        <RefreshCw
-          size={32}
-          className="animate-spin text-[#c8102e]"
-        />
-
-        <div className="text-center">
-          <p className="font-semibold text-zinc-800">
-            Preparando Centro Operativo
-          </p>
-
-          <p className="mt-1 text-sm text-zinc-500">
-            Recuperando el primer snapshot operacional.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      <PageHeader
-        kicker="Ponches · Centro Operativo"
-        title="Dashboard General"
-        subtitle={
-          snapshot
-            ? `Actualizado ${formatDateTime(
-                snapshot.generatedAt,
-              )}`
-            : 'Resumen operacional del módulo biométrico.'
-        }
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Btn
-              tone="ghost"
-              onClick={() =>
-                setAutoRefresh(
-                  value =>
-                    !value,
-                )
-              }
-            >
-              {autoRefresh
-                ? (
-                  <Radio
-                    size={16}
-                  />
-                )
-                : (
-                  <Pause
-                    size={16}
-                  />
-                )}
-
-              {autoRefresh
-                ? 'En vivo'
-                : 'Pausado'}
-            </Btn>
-
-            <Btn
-              tone="primary"
-              disabled={
-                isFetching
-              }
-              onClick={() =>
-                void refetch()
-              }
-            >
-              <RefreshCw
-                size={16}
-                className={
-                  isFetching
-                    ? 'animate-spin'
-                    : ''
-                }
-              />
-
-              Actualizar
-            </Btn>
-          </div>
-        }
-      />
-
-      {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-          <AlertTriangle
-            size={16}
-          />
-
-          No se pudo obtener la última actualización.
-          Se conservaron los datos disponibles en caché.
-        </div>
-      )}
-
-      {snapshot
-        ?.warnings &&
-        snapshot
-          .warnings
-          .length >
-          0 && (
-          <div className="flex flex-wrap gap-2">
-            {snapshot
-              .warnings
-              .slice(
-                0,
-                4,
-              )
-              .map(
-                warning => (
-                  <button
-                    type="button"
-                    key={
-                      warning
-                    }
-                    onClick={() =>
-                      open(
-                        'devices',
-                      )
-                    }
-                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800"
-                  >
-                    {warning}
-                  </button>
-                ),
-              )}
-          </div>
-        )}
-
-      {/*
-       * ======================================================
-       * KPIs
-       * ======================================================
-       */}
-
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
-        <MetricCard
-          label="Ponches hoy"
-          value={
-            snapshot
-              ?.punchesToday ??
-            0
-          }
-          subtitle={
-            attendanceDelta ==
-              null
-              ? 'Actividad registrada'
-              : `${
-                  attendanceDelta >=
-                  0
-                    ? '+'
-                    : ''
-                }${attendanceDelta}% vs ayer`
-          }
-          icon={
-            attendanceDelta !=
-              null &&
-            attendanceDelta <
-              0
-              ? (
-                <ArrowDownRight
-                  size={19}
-                />
-              )
-              : (
-                <ArrowUpRight
-                  size={19}
-                />
-              )
-          }
-          tone="blue"
-          onClick={() =>
-            open(
-              'records',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Colaboradores"
-          value={
-            snapshot
-              ?.employeesToday ??
-            0
-          }
-          subtitle={
-            employeeDelta ==
-              null
-              ? 'Registrados hoy'
-              : `${
-                  employeeDelta >=
-                  0
-                    ? '+'
-                    : ''
-                }${employeeDelta}% vs ayer`
-          }
-          icon={
-            <Users
-              size={19}
-            />
-          }
-          onClick={() =>
-            open(
-              'collaborators',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Entradas"
-          value={
-            snapshot
-              ?.entriesToday ??
-            0
-          }
-          subtitle="Entradas de hoy"
-          icon={
-            <LogIn
-              size={19}
-            />
-          }
-          tone="green"
-          onClick={() =>
-            open(
-              'records',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Salidas"
-          value={
-            snapshot
-              ?.exitsToday ??
-            0
-          }
-          subtitle="Salidas de hoy"
-          icon={
-            <LogOut
-              size={19}
-            />
-          }
-          onClick={() =>
-            open(
-              'records',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Turnos abiertos"
-          value={
-            snapshot
-              ?.openShifts ??
-            0
-          }
-          subtitle="Entrada sin salida"
-          icon={
-            <Clock3
-              size={19}
-            />
-          }
-          tone={
-            (
-              snapshot
-                ?.openShifts ??
-              0
-            ) >
-            0
-              ? 'amber'
-              : 'green'
-          }
-          onClick={() =>
-            open(
-              'records',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Relojes online"
-          value={
-            `${
-              snapshot
-                ?.devicesOnline ??
-              0
-            }/${
-              snapshot
-                ?.devicesTotal ??
-              0
-            }`
-          }
-          subtitle={`${onlinePercent}% disponible`}
-          icon={
-            <Wifi
-              size={19}
-            />
-          }
-          tone="green"
-          onClick={() =>
-            open(
-              'devices',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Relojes offline"
-          value={
-            snapshot
-              ?.devicesOffline ??
-            0
-          }
-          subtitle="Requieren atención"
-          icon={
-            <WifiOff
-              size={19}
-            />
-          }
-          tone={
-            (
-              snapshot
-                ?.devicesOffline ??
-              0
-            ) >
-            0
-              ? 'red'
-              : 'green'
-          }
-          onClick={() =>
-            open(
-              'devices',
-            )
-          }
-        />
-
-        <MetricCard
-          label="Alertas"
-          value={
-            warningsCount
-          }
-          subtitle={
-            snapshot
-              ?.databaseOnline
-              ? 'Estado operacional'
-              : 'Revisar BioTime'
-          }
-          icon={
-            <AlertTriangle
-              size={19}
-            />
-          }
-          tone={
-            warningsCount >
-              0
-              ? 'amber'
-              : 'green'
-          }
-          onClick={() =>
-            open(
-              'devices',
-            )
-          }
-        />
-      </section>
-
-      {/*
-       * ======================================================
-       * INFRAESTRUCTURA + ACTIVIDAD
-       * ======================================================
-       */}
-
-      <section className="grid items-start gap-4 xl:grid-cols-[1.55fr_.75fr]">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="font-semibold text-zinc-900">
-                Actividad por hora
-              </h2>
-
-              <p className="text-sm text-zinc-500">
-                Distribución de ponches durante el día.
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-rose-500">
+                {eyebrow}
               </p>
-            </div>
+            )}
 
-            <Activity className="text-[#c8102e]" />
-          </div>
-
-          {(
-            snapshot
-              ?.byHour ??
-            []
-          ).length ===
-          0 ? (
-            <div className="mt-4">
-              <EmptyCompact
-                title="Sin actividad suficiente"
-                description="El gráfico aparecerá cuando existan registros horarios."
-              />
-            </div>
-          ) : (
-            <>
-              <div className="mt-5 flex h-40 items-end gap-2">
-                {snapshot?.byHour.map(
-                  item => (
-                    <button
-                      type="button"
-                      key={
-                        item.hour
-                      }
-                      onClick={() =>
-                        open(
-                          'records',
-                        )
-                      }
-                      className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
-                      title={`${String(
-                        item.hour,
-                      ).padStart(
-                        2,
-                        '0',
-                      )}:00 · ${
-                        item.total
-                      } ponches`}
-                    >
-                      <span className="text-[10px] font-semibold text-zinc-500 opacity-0 group-hover:opacity-100">
-                        {
-                          item.total
-                        }
-                      </span>
-
-                      <div
-                        className="w-full rounded-t-md bg-gradient-to-t from-[#991b2f] to-[#e11d48]"
-                        style={{
-                          height:
-                            `${Math.max(
-                              6,
-                              (
-                                item.total /
-                                maxHour
-                              ) *
-                                115,
-                            )}px`,
-                        }}
-                      />
-
-                      <span className="text-[9px] text-zinc-400">
-                        {String(
-                          item.hour,
-                        ).padStart(
-                          2,
-                          '0',
-                        )}
-                      </span>
-                    </button>
-                  ),
-                )}
-              </div>
-
-              <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3 text-xs text-zinc-500">
-                <span>
-                  Hora pico
-                </span>
-
-                <strong className="text-zinc-900">
-                  {peakHour
-                    ? `${String(
-                        peakHour.hour,
-                      ).padStart(
-                        2,
-                        '0',
-                      )}:00 · ${
-                        peakHour.total
-                      } registros`
-                    : '—'}
-                </strong>
-              </div>
-            </>
-          )}
-        </article>
-
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <Server className="text-[#c8102e]" />
-
-            <div>
-              <h2 className="font-semibold">
-                Infraestructura
-              </h2>
-
-              <p className="text-xs text-zinc-500">
-                TitanMDM → Python → BioTime
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <StatusRow
-              label="Gateway Python"
-              online={
-                snapshot
-                  ?.serviceOnline ??
-                false
-              }
-              icon={
-                <Server
-                  size={16}
-                />
-              }
-            />
-
-            <StatusRow
-              label="Base BioTime"
-              online={
-                snapshot
-                  ?.databaseOnline ??
-                false
-              }
-              icon={
-                <Database
-                  size={16}
-                />
-              }
-            />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4">
-            <div className="rounded-xl bg-zinc-50 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-zinc-400">
-                Último snapshot
-              </p>
-
-              <p className="mt-1 text-sm font-bold">
-                {formatClock(
-                  snapshot
-                    ?.generatedAt,
-                )}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                open(
-                  'sync-history',
-                )
-              }
-              className="rounded-xl bg-zinc-50 p-3 text-left transition hover:bg-rose-50"
-            >
-              <p className="text-[10px] uppercase tracking-wide text-zinc-400">
-                Sincronización
-              </p>
-
-              <p className="mt-1 text-sm font-bold text-[#c8102e]">
-                Ver historial
-              </p>
-            </button>
-          </div>
-        </article>
-      </section>
-
-      {/*
-       * ======================================================
-       * DEPARTAMENTOS + DISPOSITIVOS PROBLEMÁTICOS
-       * ======================================================
-       */}
-
-      <section className="grid items-start gap-4 xl:grid-cols-2">
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold">
-                Ponches por departamento
-              </h2>
-
-              <p className="text-sm text-zinc-500">
-                Distribución organizacional.
-              </p>
-            </div>
-
-            <Building2 className="text-[#c8102e]" />
-          </div>
-
-          {(
-            snapshot
-              ?.byDepartment ??
-            []
-          ).length ===
-          0 ? (
-            <div className="mt-4">
-              <EmptyCompact
-                title="Sin distribución departamental"
-                description="No existen datos departamentales para mostrar."
-              />
-            </div>
-          ) : (
-            <div className="mt-5 space-y-3">
-              {snapshot
-                ?.byDepartment
-                .slice(
-                  0,
-                  6,
-                )
-                .map(
-                  item => (
-                    <button
-                      type="button"
-                      key={
-                        item.name
-                      }
-                      onClick={() =>
-                        open(
-                          'records',
-                        )
-                      }
-                      className="block w-full text-left"
-                    >
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="truncate font-semibold">
-                          {
-                            item.name
-                          }
-                        </span>
-
-                        <span className="text-zinc-500">
-                          {
-                            item.total
-                          }
-                        </span>
-                      </div>
-
-                      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                        <div
-                          className="h-full rounded-full bg-[#c8102e]"
-                          style={{
-                            width:
-                              `${Math.max(
-                                3,
-                                (
-                                  item.total /
-                                  maxDepartment
-                                ) *
-                                  100,
-                              )}%`,
-                          }}
-                        />
-                      </div>
-                    </button>
-                  ),
-                )}
-            </div>
-          )}
-        </article>
-
-        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold">
-                Relojes que requieren atención
-              </h2>
-
-              <p className="text-sm text-zinc-500">
-                Offline o con latencia elevada.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                open(
-                  'devices',
-                )
-              }
-              className="flex items-center gap-1 text-sm font-semibold text-[#c8102e]"
-            >
-              Ver todos
-
-              <ArrowRight
-                size={14}
-              />
-            </button>
-          </div>
-
-          {problematicDevices.length ===
-          0 ? (
-            <div className="mt-4">
-              <div className="flex min-h-[82px] items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
-                <CheckCircle2
-                  size={22}
-                  className="text-emerald-600"
-                />
-
-                <div>
-                  <p className="text-sm font-semibold text-emerald-900">
-                    Red biométrica estable
-                  </p>
-
-                  <p className="text-xs text-emerald-700">
-                    No hay relojes offline ni con latencia crítica.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 divide-y divide-zinc-100">
-              {problematicDevices
-                .slice(
-                  0,
-                  5,
-                )
-                .map(
-                  item => (
-                    <button
-                      type="button"
-                      key={
-                        item.name
-                      }
-                      onClick={() =>
-                        open(
-                          'devices',
-                        )
-                      }
-                      className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-zinc-50"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className={
-                            `rounded-xl p-2 ${
-                              item.online
-                                ? 'bg-amber-50 text-amber-600'
-                                : 'bg-rose-50 text-rose-600'
-                            }`
-                          }
-                        >
-                          {item.online
-                            ? (
-                              <Wifi
-                                size={16}
-                              />
-                            )
-                            : (
-                              <WifiOff
-                                size={16}
-                              />
-                            )}
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {
-                              item.name
-                            }
-                          </p>
-
-                          <p className="text-xs text-zinc-500">
-                            {
-                              item.punchesToday
-                            } ponches hoy
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right text-xs">
-                        <p
-                          className={
-                            item.online
-                              ? 'font-semibold text-amber-600'
-                              : 'font-semibold text-rose-600'
-                          }
-                        >
-                          {item.online
-                            ? 'Latencia'
-                            : 'Offline'}
-                        </p>
-
-                        <p className="text-zinc-400">
-                          {item.latencyMs ==
-                          null
-                            ? '—'
-                            : `${item.latencyMs} ms`}
-                        </p>
-                      </div>
-                    </button>
-                  ),
-                )}
-            </div>
-          )}
-        </article>
-      </section>
-
-      {/*
-       * ======================================================
-       * PONCHES RECIENTES
-       * ======================================================
-       */}
-
-      <article className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-zinc-100 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="font-semibold">
-              Ponches recientes
+            <h2 className="text-base font-extrabold tracking-tight text-slate-900 sm:text-lg">
+              {title}
             </h2>
 
-            <p className="text-xs text-zinc-500">
-              Últimos registros recibidos.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-
-              <input
-                value={
-                  search
-                }
-                onChange={
-                  event =>
-                    setSearch(
-                      event.target.value,
-                    )
-                }
-                placeholder="Buscar..."
-                className="w-56 rounded-xl border border-zinc-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#c8102e]"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                open(
-                  'records',
-                )
-              }
-              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
-            >
-              Historial
-            </button>
+            {description && (
+              <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                {description}
+              </p>
+            )}
           </div>
         </div>
 
-        {filteredPunches.length ===
-        0 ? (
-          <div className="p-4">
-            <EmptyCompact
-              title="Sin registros recientes"
-              description="Los últimos ponches aparecerán en esta sección."
-            />
-          </div>
+        {action}
+      </div>
+
+      {children}
+    </section>
+  )
+}
+
+interface Metric {
+  label: string
+  value: string
+  detail: string
+  icon: ReactNode
+  color: string
+  surface: string
+  section: string
+  delta?: number | null
+}
+
+function PremiumMetric({
+  item,
+  onClick,
+}: {
+  item: Metric
+  onClick: () => void
+}) {
+  const reduced = useReducedMotion()
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      initial={reduced ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={reduced ? undefined : { y: -4 }}
+      transition={{ duration: reduced ? 0 : 0.23 }}
+      className="group relative flex min-h-[153px] min-w-0 flex-col justify-between overflow-hidden rounded-[23px] border border-slate-200/70 bg-white p-4 text-left shadow-[0_8px_30px_rgba(23,38,73,0.055)] transition-shadow hover:shadow-[0_18px_44px_rgba(23,38,73,0.12)]"
+      style={{
+        '--card-accent': item.color,
+        '--card-surface': item.surface,
+        background: `linear-gradient(145deg, ${item.surface} 0%, #ffffff 72%)`,
+      } as CSSProperties}
+    >
+      <div
+        className="pointer-events-none absolute -right-7 -top-8 h-28 w-28 rounded-full opacity-40 blur-2xl"
+        style={{ backgroundColor: item.surface }}
+      />
+
+      <div className="relative flex items-start justify-between gap-2">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-500">
+          {item.label}
+        </span>
+
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] bg-white shadow-sm"
+          style={{ color: item.color }}
+        >
+          {item.icon}
+        </span>
+      </div>
+
+      <strong className="relative my-2 text-[clamp(1.5rem,2vw,2rem)] font-black tracking-tight text-slate-900">
+        {item.value}
+      </strong>
+
+      <div className="relative flex items-end justify-between gap-2">
+        <span className="min-w-0 text-[11px] leading-snug text-slate-500">
+          {item.detail}
+        </span>
+
+        {item.delta != null ? (
+          <span
+            className={
+              'inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 text-[10px] font-bold ' +
+              (item.delta >= 0
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-rose-50 text-rose-700')
+            }
+          >
+            {item.delta >= 0
+              ? <ArrowUpRight size={12} />
+              : <ArrowDownRight size={12} />}
+            {Math.abs(item.delta)}%
+          </span>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th className="px-4 py-3">
-                    Código
-                  </th>
-
-                  <th className="px-4 py-3">
-                    Colaborador
-                  </th>
-
-                  <th className="px-4 py-3">
-                    Departamento
-                  </th>
-
-                  <th className="px-4 py-3">
-                    Entrada
-                  </th>
-
-                  <th className="px-4 py-3">
-                    Salida
-                  </th>
-
-                  <th className="px-4 py-3">
-                    Dispositivo
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-zinc-100">
-                {filteredPunches
-                  .slice(
-                    0,
-                    8,
-                  )
-                  .map(
-                    (
-                      punch,
-                      index,
-                    ) => (
-                      <tr
-                        key={
-                          punch.id ??
-                          `${punch.codigo}-${index}`
-                        }
-                        className="cursor-pointer hover:bg-zinc-50"
-                        onClick={() =>
-                          open(
-                            'records',
-                          )
-                        }
-                      >
-                        <td className="px-4 py-3 font-mono text-xs">
-                          {punch.codigo ||
-                            '—'}
-                        </td>
-
-                        <td className="px-4 py-3 font-semibold">
-                          {punch.nombre ||
-                            'Sin identificar'}
-                        </td>
-
-                        <td className="px-4 py-3 text-zinc-600">
-                          {punch.departamento ||
-                            'Sin departamento'}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatDateTime(
-                            punch.entrada,
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatDateTime(
-                            punch.salida,
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3 text-zinc-500">
-                          {punch.dispositivo_origen ||
-                            '—'}
-                        </td>
-                      </tr>
-                    ),
-                  )}
-              </tbody>
-            </table>
-          </div>
+          <ArrowUpRight
+            size={17}
+            className="shrink-0 opacity-40 transition-opacity group-hover:opacity-100"
+            style={{ color: item.color }}
+          />
         )}
-      </article>
+      </div>
+    </motion.button>
+  )
+}
 
-      {/*
-       * ======================================================
-       * ACCIONES
-       * ======================================================
-       */}
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <QuickAction
-          title="Ponches"
-          description="Consultar historial"
-          icon={
-            <Activity
-              size={18}
-            />
-          }
-          onClick={() =>
-            open(
-              'records',
-            )
-          }
-        />
-
-        <QuickAction
-          title="Relojes"
-          description="Estado biométrico"
-          icon={
-            <MonitorSmartphone
-              size={18}
-            />
-          }
-          onClick={() =>
-            open(
-              'devices',
-            )
-          }
-        />
-
-        <QuickAction
-          title="Colaboradores"
-          description="Personal registrado"
-          icon={
-            <Users
-              size={18}
-            />
-          }
-          onClick={() =>
-            open(
-              'collaborators',
-            )
-          }
-        />
-
-        <QuickAction
-          title="Sincronización"
-          description="Modo espejo"
-          icon={
-            <RefreshCw
-              size={18}
-            />
-          }
-          onClick={() =>
-            open(
-              'mirror',
-            )
-          }
-        />
-
-        <QuickAction
-          title="Reportes"
-          description="Análisis operativo"
-          icon={
-            <Gauge
-              size={18}
-            />
-          }
-          onClick={() =>
-            open(
-              'reports',
-            )
-          }
-        />
-      </section>
+function EmptyChart({
+  message,
+}: {
+  message: string
+}) {
+  return (
+    <div className="flex min-h-[270px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-5 text-center">
+      <Activity size={30} className="text-slate-300" />
+      <strong className="mt-3 text-sm text-slate-700">
+        Sin datos disponibles
+      </strong>
+      <p className="mt-1 max-w-sm text-xs text-slate-500">
+        {message}
+      </p>
     </div>
   )
 }
 
-function StatusRow({
-  label,
+function ServiceRow({
+  name,
+  detail,
   online,
   icon,
 }: {
-  label: string
+  name: string
+  detail: string
   online: boolean
-  icon:
-    React.ReactNode
+  icon: ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50/70 px-3 py-2.5">
-      <div className="flex items-center gap-3">
-        <span className="text-zinc-500">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/75 p-3.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm">
           {icon}
         </span>
 
-        <span className="text-sm font-medium">
-          {label}
-        </span>
+        <div className="min-w-0">
+          <strong className="block truncate text-xs font-bold text-slate-800">
+            {name}
+          </strong>
+          <span className="text-[11px] text-slate-500">
+            {detail}
+          </span>
+        </div>
       </div>
 
       <span
         className={
-          `flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
-            online
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-rose-100 text-rose-700'
-          }`
+          'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ' +
+          (online
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-rose-100 text-rose-700')
         }
       >
-        {online
-          ? (
-            <CheckCircle2
-              size={11}
-            />
-          )
-          : (
-            <AlertTriangle
-              size={11}
-            />
-          )}
-
-        {online
-          ? 'Operativo'
-          : 'Revisar'}
+        {online ? 'Operativo' : 'Sin conexión'}
       </span>
     </div>
   )
 }
 
-function QuickAction({
-  title,
-  description,
-  icon,
-  onClick,
-}: {
-  title: string
-  description: string
-  icon:
-    React.ReactNode
-  onClick:
-    () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={
-        onClick
-      }
-      className="group rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-md"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[#c8102e]">
-          {icon}
-        </span>
+function buildMetrics(snapshot: DashboardSnapshot): Metric[] {
+  return [
+    {
+      label: 'Ponches hoy',
+      value: fmt(snapshot.punchesToday),
+      detail: 'Registros biométricos',
+      icon: <Fingerprint size={20} />,
+      color: PALETTE.red,
+      surface: '#fff1f3',
+      section: 'records',
+      delta: percentageChange(
+        snapshot.punchesToday,
+        snapshot.punchesYesterday,
+      ),
+    },
+    {
+      label: 'Colaboradores',
+      value: fmt(snapshot.employeesToday),
+      detail: 'Con actividad hoy',
+      icon: <Users size={20} />,
+      color: PALETTE.indigo,
+      surface: '#f0efff',
+      section: 'collaborators',
+      delta: percentageChange(
+        snapshot.employeesToday,
+        snapshot.employeesYesterday,
+      ),
+    },
+    {
+      label: 'Entradas',
+      value: fmt(snapshot.entriesToday),
+      detail: 'Entradas registradas',
+      icon: <LogIn size={20} />,
+      color: PALETTE.teal,
+      surface: '#e9faf4',
+      section: 'records',
+    },
+    {
+      label: 'Salidas',
+      value: fmt(snapshot.exitsToday),
+      detail: 'Salidas registradas',
+      icon: <LogOut size={20} />,
+      color: PALETTE.blue,
+      surface: '#eff6ff',
+      section: 'records',
+    },
+    {
+      label: 'Turnos abiertos',
+      value: fmt(snapshot.openShifts),
+      detail: 'Entradas sin salida',
+      icon: <Clock3 size={20} />,
+      color: '#d97706',
+      surface: '#fffbeb',
+      section: 'records',
+    },
+    {
+      label: 'Relojes online',
+      value: `${snapshot.devicesOnline}/${snapshot.devicesTotal}`,
+      detail: 'Dispositivos disponibles',
+      icon: <Wifi size={20} />,
+      color: '#059669',
+      surface: '#ecfdf5',
+      section: 'devices',
+    },
+    {
+      label: 'Relojes offline',
+      value: fmt(snapshot.devicesOffline),
+      detail: 'Requieren atención',
+      icon: <WifiOff size={20} />,
+      color: '#e11d48',
+      surface: '#fff1f2',
+      section: 'devices',
+    },
+    {
+      label: 'Alertas',
+      value: fmt(snapshot.warnings.length),
+      detail: 'Avisos operativos',
+      icon: <BellRing size={20} />,
+      color: '#b45309',
+      surface: '#fef9e7',
+      section: 'devices',
+    },
+  ]
+}
 
-        <ArrowUpRight
-          size={15}
-          className="text-zinc-300 transition group-hover:text-[#c8102e]"
-        />
+export default function PonchesPremiumDashboard() {
+  const [, setSearchParams] = useSearchParams()
+  const reducedMotion = useReducedMotion()
+
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [activityMode, setActivityMode] =
+    useState<'area' | 'bar'>('area')
+  const [search, setSearch] = useState('')
+
+  const {
+    data: snapshot,
+    error,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    ...ponchesDashboardQueryOptions(),
+    refetchInterval: autoRefresh ? 30_000 : false,
+  })
+
+  function navigate(section: string) {
+    setSearchParams({ section })
+  }
+
+  const metrics = useMemo(
+    () => snapshot ? buildMetrics(snapshot) : [],
+    [snapshot],
+  )
+
+  const hourly = useMemo(() => {
+    const values = new Map(
+      (snapshot?.byHour ?? []).map(item => [
+        item.hour,
+        item.total,
+      ]),
+    )
+
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour: `${String(hour).padStart(2, '0')}:00`,
+      total: values.get(hour) ?? 0,
+    }))
+  }, [snapshot?.byHour])
+
+  const byDepartment = useMemo(
+    () => [...(snapshot?.byDepartment ?? [])]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 7),
+    [snapshot?.byDepartment],
+  )
+
+  const dailyTrend = useMemo(
+    () => [...(snapshot?.byDay ?? [])].slice(-14),
+    [snapshot?.byDay],
+  )
+
+  const recent = useMemo(() => {
+    const term = search.trim().toLowerCase()
+
+    return (snapshot?.recentPunches ?? [])
+      .filter(row => {
+        if (!term) return true
+
+        return [
+          row.codigo,
+          row.nombre,
+          row.departamento,
+          row.dispositivo_origen,
+        ].some(value =>
+          String(value ?? '').toLowerCase().includes(term),
+        )
+      })
+      .slice(0, 8)
+  }, [snapshot?.recentPunches, search])
+
+  const peakHour = hourly.reduce(
+    (best, item) => item.total > best.total ? item : best,
+    hourly[0],
+  )
+
+  const hasHourlyData = hourly.some(item => item.total > 0)
+
+  const tooltipStyle: CSSProperties = {
+    borderRadius: 14,
+    border: '1px solid #e5eaf3',
+    boxShadow: '0 14px 42px rgba(15,23,42,0.12)',
+    fontSize: 12,
+  }
+
+  if (isLoading && !snapshot) {
+    return (
+      <div className="space-y-5 p-1" role="status">
+        <div className="h-40 animate-pulse rounded-[28px] bg-slate-200/70" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <div
+              key={index}
+              className="h-36 animate-pulse rounded-3xl bg-slate-200/70"
+            />
+          ))}
+        </div>
+        <span className="sr-only">Cargando dashboard de Ponches</span>
       </div>
+    )
+  }
 
-      <p className="mt-3 text-sm font-semibold text-zinc-900">
-        {title}
-      </p>
+  if (!snapshot) {
+    return (
+      <PremiumPanel
+        title="No fue posible cargar Ponches"
+        description={
+          error instanceof Error
+            ? error.message
+            : 'Comprueba la conectividad con Python y BioTime.'
+        }
+        icon={<AlertTriangle size={21} />}
+        action={
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white"
+          >
+            Reintentar
+          </button>
+        }
+      >
+        <EmptyChart message="No se muestran datos de ejemplo cuando falla el servicio." />
+      </PremiumPanel>
+    )
+  }
 
-      <p className="mt-1 text-xs text-zinc-500">
-        {description}
-      </p>
-    </button>
+  const availability = snapshot.devicesTotal > 0
+    ? Math.round(
+        (snapshot.devicesOnline / snapshot.devicesTotal) * 100,
+      )
+    : 0
+
+  const pieData = [
+    {
+      name: 'Online',
+      value: snapshot.devicesOnline,
+      color: PALETTE.teal,
+    },
+    {
+      name: 'Offline',
+      value: snapshot.devicesOffline,
+      color: '#f4c6d0',
+    },
+  ]
+
+  return (
+    <div className="min-w-0 space-y-5 pb-10">
+      {/* PREMIUM HERO */}
+
+      <header className="relative isolate overflow-hidden rounded-[30px] bg-[linear-gradient(120deg,#142449_0%,#26376a_52%,#593455_100%)] px-6 py-7 text-white shadow-[0_18px_50px_rgba(25,39,78,0.16)] sm:px-8 sm:py-9">
+        <div className="pointer-events-none absolute -right-14 -top-24 h-72 w-72 rounded-full bg-rose-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-[-120px] left-[30%] h-64 w-64 rounded-full bg-indigo-400/15 blur-3xl" />
+
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-6">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-rose-100">
+              <Sparkles size={14} />
+              TitanMDM · Biometric Intelligence
+            </div>
+
+            <h1 className="mt-5 text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
+              Centro de inteligencia biométrica
+            </h1>
+
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-200">
+              Monitoreo ejecutivo de asistencia, colaboradores
+              y conectividad de la infraestructura biométrica.
+            </p>
+
+            <p className="mt-5 inline-flex items-center gap-2 text-xs text-slate-200">
+              <Clock3 size={15} />
+              Actualizado: {formatDate(snapshot.generatedAt)}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={autoRefresh}
+              onClick={() => setAutoRefresh(value => !value)}
+              className={
+                'inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-bold ' +
+                (autoRefresh
+                  ? 'border-emerald-300/40 bg-emerald-400/15 text-emerald-100'
+                  : 'border-white/20 bg-white/10 text-white')
+              }
+            >
+              <Radio size={16} />
+              {autoRefresh ? 'En vivo' : 'Pausado'}
+            </button>
+
+            <button
+              type="button"
+              disabled={isFetching}
+              onClick={() => void refetch()}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-rose-950/20 transition hover:bg-rose-400 disabled:opacity-60"
+            >
+              <RefreshCw
+                size={16}
+                className={isFetching ? 'animate-spin' : ''}
+              />
+              Actualizar
+            </button>
+          </div>
+        </div>
+
+        <Fingerprint
+          size={155}
+          strokeWidth={0.65}
+          className="pointer-events-none absolute -bottom-9 right-12 hidden rotate-[-12deg] text-white/10 lg:block"
+        />
+      </header>
+
+      {/* OPERATIONAL WARNINGS */}
+
+      {snapshot.warnings.length > 0 && (
+        <div className="flex flex-wrap gap-2" role="status">
+          {snapshot.warnings.map((warning, index) => (
+            <button
+              key={`${warning}-${index}`}
+              type="button"
+              onClick={() => navigate('devices')}
+              className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              <AlertTriangle size={14} />
+              {warning}
+              <ArrowRight size={13} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* KPI CARDS */}
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
+        {metrics.map(item => (
+          <PremiumMetric
+            key={item.label}
+            item={item}
+            onClick={() => navigate(item.section)}
+          />
+        ))}
+      </section>
+
+      {/* ACTIVITY + INFRASTRUCTURE */}
+
+      <section className="grid items-start gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <PremiumPanel
+          eyebrow="ANALÍTICA EN TIEMPO REAL"
+          title="Pulso de asistencia"
+          description="Actividad biométrica durante las 24 horas del día."
+          icon={<Activity size={21} />}
+          action={
+            <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              {(['area', 'bar'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setActivityMode(mode)}
+                  aria-pressed={activityMode === mode}
+                  className={
+                    'rounded-lg px-3 py-1.5 text-[11px] font-bold transition ' +
+                    (activityMode === mode
+                      ? 'bg-white text-rose-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800')
+                  }
+                >
+                  {mode === 'area' ? 'Tendencia' : 'Columnas'}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <div>
+              <span className="block text-[11px] text-slate-500">
+                Hora pico
+              </span>
+              <strong className="text-lg text-slate-900">
+                {peakHour.hour}
+              </strong>
+            </div>
+
+            <div>
+              <span className="block text-[11px] text-slate-500">
+                Registros en hora pico
+              </span>
+              <strong className="text-lg text-slate-900">
+                {fmt(peakHour.total)}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('records')}
+              className="inline-flex items-center gap-1 text-xs font-bold text-rose-600"
+            >
+              Ver registros <ArrowRight size={15} />
+            </button>
+          </div>
+
+          {hasHourlyData ? (
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                {activityMode === 'area' ? (
+                  <AreaChart
+                    data={hourly}
+                    margin={{ top: 12, right: 14, left: -22, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="ponchesPremiumGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor={PALETTE.red}
+                          stopOpacity={0.34}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor={PALETTE.red}
+                          stopOpacity={0.015}
+                        />
+                      </linearGradient>
+                    </defs>
+
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="#edf1f8"
+                      strokeDasharray="4 6"
+                    />
+                    <XAxis
+                      dataKey="hour"
+                      interval={3}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={value => [
+                        fmt(Number(value)),
+                        'Ponches',
+                      ]}
+                    />
+                    <Area
+                      dataKey="total"
+                      type="monotone"
+                      stroke={PALETTE.red}
+                      strokeWidth={3.5}
+                      fill="url(#ponchesPremiumGradient)"
+                      dot={false}
+                      activeDot={{ r: 5, strokeWidth: 0 }}
+                      isAnimationActive={!reducedMotion}
+                    />
+                  </AreaChart>
+                ) : (
+                  <BarChart
+                    data={hourly}
+                    margin={{ top: 12, right: 14, left: -22, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="#edf1f8"
+                      strokeDasharray="4 6"
+                    />
+                    <XAxis
+                      dataKey="hour"
+                      interval={3}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={value => [
+                        fmt(Number(value)),
+                        'Ponches',
+                      ]}
+                    />
+                    <Bar
+                      dataKey="total"
+                      fill={PALETTE.red}
+                      radius={[7, 7, 0, 0]}
+                      maxBarSize={21}
+                      isAnimationActive={!reducedMotion}
+                    />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <EmptyChart message="No existen registros horarios en el período consultado." />
+          )}
+        </PremiumPanel>
+
+        <PremiumPanel
+          eyebrow="CENTRO DE OPERACIONES"
+          title="Salud de infraestructura"
+          description="Conectividad y disponibilidad biométrica."
+          icon={<ShieldCheck size={21} />}
+        >
+          <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+            <div className="relative mx-auto h-[205px] w-[205px]">
+              {snapshot.devicesTotal > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={67}
+                      outerRadius={86}
+                      strokeWidth={0}
+                      paddingAngle={3}
+                      isAnimationActive={!reducedMotion}
+                    >
+                      {pieData.map(item => (
+                        <Cell
+                          key={item.name}
+                          fill={item.color}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="absolute inset-4 rounded-full border-[18px] border-slate-100" />
+              )}
+
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <strong className="text-3xl font-black tracking-tight text-slate-900">
+                  {availability}%
+                </strong>
+                <span className="text-[11px] text-slate-500">
+                  disponibilidad
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                {
+                  label: 'Registrados',
+                  value: snapshot.devicesTotal,
+                  color: 'text-slate-900',
+                },
+                {
+                  label: 'Conectados',
+                  value: snapshot.devicesOnline,
+                  color: 'text-emerald-600',
+                },
+                {
+                  label: 'Desconectados',
+                  value: snapshot.devicesOffline,
+                  color: 'text-rose-600',
+                },
+              ].map(item => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5"
+                >
+                  <span className="text-xs text-slate-500">
+                    {item.label}
+                  </span>
+                  <strong className={`text-lg ${item.color}`}>
+                    {fmt(item.value)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2.5">
+            <ServiceRow
+              name="Gateway Python"
+              detail="Bridge interno"
+              online={snapshot.serviceOnline}
+              icon={<Server size={17} />}
+            />
+            <ServiceRow
+              name="BioTime SQL"
+              detail="Datos biométricos"
+              online={snapshot.databaseOnline}
+              icon={<Database size={17} />}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate('sync-history')}
+            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-rose-600 hover:text-rose-800"
+          >
+            Historial de sincronización
+            <ArrowRight size={15} />
+          </button>
+        </PremiumPanel>
+      </section>
+
+      {/* DEPARTMENT DISTRIBUTION */}
+
+      <PremiumPanel
+        eyebrow="INTELIGENCIA ORGANIZACIONAL"
+        title="Distribución por departamento"
+        description="Departamentos con mayor volumen de registros biométricos."
+        icon={<Building2 size={21} />}
+        action={
+          <button
+            type="button"
+            onClick={() => navigate('records')}
+            className="inline-flex items-center gap-2 text-xs font-bold text-rose-600"
+          >
+            Ver registros <ArrowRight size={15} />
+          </button>
+        }
+      >
+        {byDepartment.length > 0 ? (
+          <div
+            className="w-full"
+            style={{
+              height: Math.max(275, byDepartment.length * 49),
+            }}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={byDepartment}
+                layout="vertical"
+                margin={{ top: 5, right: 25, left: 8, bottom: 5 }}
+              >
+                <CartesianGrid
+                  horizontal={false}
+                  stroke="#edf1f8"
+                  strokeDasharray="4 6"
+                />
+                <XAxis
+                  type="number"
+                  allowDecimals={false}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={120}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={value => [
+                    fmt(Number(value)),
+                    'Ponches',
+                  ]}
+                />
+                <Bar
+                  dataKey="total"
+                  radius={[0, 9, 9, 0]}
+                  maxBarSize={24}
+                  isAnimationActive={!reducedMotion}
+                >
+                  {byDepartment.map((item, index) => (
+                    <Cell
+                      key={item.name}
+                      fill={
+                        DEPARTMENT_COLORS[
+                          index % DEPARTMENT_COLORS.length
+                        ]
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <EmptyChart message="No hay estadísticas departamentales disponibles." />
+        )}
+      </PremiumPanel>
+
+      {/* CLOCK ATTENTION CENTER: FULL WIDTH */}
+
+      <PunchClockAttentionCenter
+        devices={snapshot.healthItems}
+        onViewAll={() => navigate('devices')}
+      />
+
+      {/* HISTORICAL TREND */}
+
+      {dailyTrend.length > 1 && (
+        <PremiumPanel
+          eyebrow="BUSINESS INTELLIGENCE"
+          title="Tendencia histórica de asistencia"
+          description="Evolución del volumen de marcaciones durante los últimos días disponibles."
+          icon={<Activity size={21} />}
+        >
+          <div className="h-[270px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={dailyTrend}
+                margin={{ top: 12, right: 12, left: -15, bottom: 0 }}
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke="#edf1f8"
+                  strokeDasharray="4 6"
+                />
+                <XAxis
+                  dataKey="day"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: '#94a3b8' }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={value => [
+                    fmt(Number(value)),
+                    'Ponches',
+                  ]}
+                />
+                <Bar
+                  dataKey="total"
+                  fill={PALETTE.red}
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={37}
+                  isAnimationActive={!reducedMotion}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </PremiumPanel>
+      )}
+
+      {/* RECENT PUNCHES */}
+
+      <PremiumPanel
+        eyebrow="ACTIVIDAD RECIENTE"
+        title="Últimas marcaciones"
+        description="Registros recientes enviados por la infraestructura biométrica."
+        icon={<Fingerprint size={21} />}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Buscar..."
+                aria-label="Buscar marcaciones recientes"
+                className="w-40 rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-700 outline-none focus:border-rose-400 sm:w-56"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('records')}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Historial completo
+            </button>
+          </div>
+        }
+      >
+        {recent.length === 0 ? (
+          <EmptyChart message="No hay registros que coincidan con la búsqueda." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[750px] text-left text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  <th className="rounded-l-xl px-4 py-3">Código</th>
+                  <th className="px-4 py-3">Colaborador</th>
+                  <th className="px-4 py-3">Departamento</th>
+                  <th className="px-4 py-3">Entrada</th>
+                  <th className="px-4 py-3">Salida</th>
+                  <th className="rounded-r-xl px-4 py-3">Reloj</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recent.map((row, index) => (
+                  <tr
+                    key={`${row.id ?? row.codigo ?? 'row'}-${index}`}
+                    className="transition-colors hover:bg-rose-50/40"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                      {row.codigo ?? '—'}
+                    </td>
+
+                    <td className="px-4 py-3 font-semibold text-slate-800">
+                      {usableEmployeeName(row.nombre, row.codigo)}
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-600">
+                      {row.departamento || '—'}
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatPunchTime(row.entrada)}
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-600">
+                      {formatPunchTime(row.salida)}
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-500">
+                      {row.dispositivo_origen || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </PremiumPanel>
+
+      {/* QUICK ACTIONS */}
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          {
+            label: 'Consultar ponches',
+            section: 'records',
+            icon: <Activity size={20} />,
+          },
+          {
+            label: 'Administrar relojes',
+            section: 'devices',
+            icon: <Wifi size={20} />,
+          },
+          {
+            label: 'Colaboradores',
+            section: 'collaborators',
+            icon: <Users size={20} />,
+          },
+          {
+            label: 'Reportes avanzados',
+            section: 'advanced-reports',
+            icon: <Building2 size={20} />,
+          },
+        ].map(item => (
+          <motion.button
+            key={item.section}
+            type="button"
+            whileHover={
+              reducedMotion ? undefined : { y: -3 }
+            }
+            onClick={() => navigate(item.section)}
+            className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 text-left shadow-sm transition-colors hover:border-rose-200 hover:bg-rose-50/40"
+          >
+            <span className="inline-flex items-center gap-3 text-sm font-bold text-slate-700">
+              <span className="text-rose-600">
+                {item.icon}
+              </span>
+              {item.label}
+            </span>
+            <ArrowRight size={17} className="text-slate-400" />
+          </motion.button>
+        ))}
+      </section>
+
+      <footer className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
+        <span className="inline-flex items-center gap-2">
+          <CheckCircle2 size={14} />
+          Datos obtenidos mediante TitanMDM → Python → BioTime
+        </span>
+        <span>
+          Última actualización: {formatDate(snapshot.generatedAt)}
+        </span>
+      </footer>
+    </div>
   )
 }
