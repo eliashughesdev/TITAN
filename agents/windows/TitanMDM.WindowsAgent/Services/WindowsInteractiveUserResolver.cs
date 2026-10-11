@@ -102,6 +102,13 @@ public sealed class WindowsInteractiveUserResolver
             sessionId,
             WtsDomainName);
 
+        if (IsServiceAccount(
+                userName,
+                domainName))
+        {
+            return null;
+        }
+
         return new WindowsInteractiveUser(
             SessionId: sessionId,
             UserName: userName,
@@ -111,6 +118,41 @@ public sealed class WindowsInteractiveUserResolver
                     ? userName
                     : $"{domainName}\\{userName}",
             CollectedAtUtc: DateTime.UtcNow);
+    }
+
+    private static bool IsServiceAccount(
+        string userName,
+        string? domainName)
+    {
+        if (
+            string.Equals(
+                domainName,
+                "NT AUTHORITY",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return
+            userName.Equals(
+                "SYSTEM",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            userName.Equals(
+                "LOCAL SERVICE",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            userName.Equals(
+                "NETWORK SERVICE",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            userName.StartsWith(
+                "DWM-",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            userName.StartsWith(
+                "UMFD-",
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? QuerySessionString(
@@ -152,11 +194,12 @@ public sealed class WindowsInteractiveUserResolver
     [DllImport("kernel32.dll")]
     private static extern uint WTSGetActiveConsoleSessionId();
 
-   [DllImport(
-    "wtsapi32.dll",
-    EntryPoint = "WTSQuerySessionInformationW",
-    CharSet = CharSet.Unicode,
-    SetLastError = true)]
+    [DllImport(
+        "wtsapi32.dll",
+        EntryPoint = "WTSEnumerateSessionsW",
+        CharSet = CharSet.Unicode,
+        ExactSpelling = true,
+        SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSEnumerateSessions(
         IntPtr server,

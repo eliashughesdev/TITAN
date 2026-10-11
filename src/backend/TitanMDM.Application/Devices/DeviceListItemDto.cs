@@ -17,4 +17,7 @@ public sealed record DeviceListItemDto(
     int? BatteryLevel,
     bool IsManaged,
     DateTime? EnrolledAtUtc,
-    DateTime? LastSeenAtUtc);
+    DateTime? LastSeenAtUtc,
+    string? InteractiveUser,
+    int? InteractiveSessionId,
+    DateTime? InteractiveUserUpdatedAtUtc);

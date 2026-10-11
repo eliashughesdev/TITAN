@@ -463,7 +463,7 @@ export function RemoteSupportDirectoryPage() {
             <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-5 py-4">Equipo</th>
-                <th className="px-5 py-4">Usuario asignado</th>
+                <th className="px-5 py-4">Usuario conectado / asignado</th>
                 <th className="px-5 py-4">IP / Modelo</th>
                 <th className="px-5 py-4">Estado</th>
                 <th className="px-5 py-4">Último contacto</th>
@@ -498,10 +498,24 @@ export function RemoteSupportDirectoryPage() {
                     </td>
 
                     <td className="px-5 py-4 text-xs text-slate-700">
-                      <span className="inline-flex items-center gap-2">
-                        <Users size={14} className="text-slate-400" />
-                        {device.assignedUser || 'Sin asignar'}
-                      </span>
+                      <div className="flex items-start gap-2">
+                        <Users size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                        <div className="min-w-0">
+                          <strong className="block break-all font-bold text-slate-800">
+                            {device.interactiveUser || 'Sin sesión detectada'}
+                          </strong>
+
+                          <span className="mt-1 block text-[11px] text-slate-500">
+                            Asignado: {device.assignedUser || 'Sin asignar'}
+                          </span>
+
+                          {device.interactiveUserUpdatedAtUtc && (
+                            <span className="mt-1 block text-[10px] text-slate-400">
+                              Observado: {toDate(device.interactiveUserUpdatedAtUtc)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
                     <td className="px-5 py-4 text-xs text-slate-600">

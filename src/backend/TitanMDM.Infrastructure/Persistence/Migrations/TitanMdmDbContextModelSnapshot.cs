@@ -653,6 +653,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("InteractiveSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("InteractiveUser")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("InteractiveUserUpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
@@ -731,6 +741,8 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId", "SiteId");
 
                     b.HasIndex("OrganizationId", "SiteLocationId");
+
+                    b.HasIndex("OrganizationId", "Platform", "IsManaged", "LastSeenAtUtc");
 
                     b.ToTable("Devices", (string)null);
                 });
@@ -869,6 +881,7 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");

@@ -28,6 +28,13 @@ if (
             "artifacts\windows-installer"
 }
 
+$ConfigPath =
+    (Resolve-Path $ConfigPath).Path
+
+$OutputDirectory =
+    [IO.Path]::GetFullPath(
+        $OutputDirectory)
+
 $InstallerScript =
     Join-Path `
         $PSScriptRoot `
@@ -40,7 +47,7 @@ $IssPath =
 
 $InnoCompilerCandidates =
     @(
-        "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
         "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
     )
 

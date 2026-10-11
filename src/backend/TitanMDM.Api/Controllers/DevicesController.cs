@@ -93,6 +93,22 @@ public sealed class DevicesController
                 platform);
 
         if (
+            !string.IsNullOrWhiteSpace(
+                normalizedPlatform)
+            &&
+            normalizedPlatform != "Windows"
+            &&
+            normalizedPlatform != "Android")
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Platform debe ser Windows o Android."
+                });
+        }
+
+        if (
             normalizedPlatform ==
                 "Windows"
             &&

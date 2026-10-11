@@ -38,6 +38,9 @@ export interface DeviceListItem {
   isManaged: boolean
   enrolledAtUtc: string | null
   lastSeenAtUtc: string | null
+  interactiveUser: string | null
+  interactiveSessionId: number | null
+  interactiveUserUpdatedAtUtc: string | null
 }
 
 export interface DeviceDetails {
@@ -62,6 +65,9 @@ export interface DeviceDetails {
   isManaged: boolean
   enrolledAtUtc: string | null
   lastSeenAtUtc: string | null
+  interactiveUser: string | null
+  interactiveSessionId: number | null
+  interactiveUserUpdatedAtUtc: string | null
   createdAtUtc: string
   updatedAtUtc: string
 }

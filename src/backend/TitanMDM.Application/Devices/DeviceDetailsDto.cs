@@ -22,5 +22,8 @@ public sealed record DeviceDetailsDto(
     bool IsManaged,
     DateTime? EnrolledAtUtc,
     DateTime? LastSeenAtUtc,
+    string? InteractiveUser,
+    int? InteractiveSessionId,
+    DateTime? InteractiveUserUpdatedAtUtc,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);

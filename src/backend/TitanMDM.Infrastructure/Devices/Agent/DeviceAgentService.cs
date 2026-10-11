@@ -167,6 +167,23 @@ public sealed class DeviceAgentService
                 request.IpAddress),
             request.BatteryLevel);
 
+        if (request.InteractiveUserObserved == true)
+        {
+            var interactiveUser =
+                NormalizeInteractiveUser(
+                    request.InteractiveUser);
+
+            if (interactiveUser?.Length > 256)
+            {
+                interactiveUser = interactiveUser[..256];
+            }
+
+            device.UpdateInteractiveUser(
+                interactiveUser,
+                request.InteractiveSessionId >= 0
+                    ? request.InteractiveSessionId
+                    : null);
+        }
         // ============================================================
         // CORPORATE DEVICE NAMING
         // ============================================================
@@ -512,5 +529,41 @@ public sealed class DeviceAgentService
                 value)
             ? null
             : value.Trim();
+    }
+
+    private static string?
+        NormalizeInteractiveUser(
+            string? value)
+    {
+        var normalized =
+            Normalize(value);
+
+        if (normalized is null)
+        {
+            return null;
+        }
+
+        var accountName =
+            normalized.Contains('\\')
+                ? normalized[(normalized.LastIndexOf('\\') + 1)..]
+                : normalized;
+
+        if (
+            accountName.Equals(
+                "SYSTEM",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            accountName.Equals(
+                "LOCAL SERVICE",
+                StringComparison.OrdinalIgnoreCase)
+            ||
+            accountName.Equals(
+                "NETWORK SERVICE",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return normalized;
     }
 }

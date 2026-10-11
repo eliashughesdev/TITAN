@@ -32,6 +32,11 @@ $LogPath = Join-Path $LogDirectory "installer.log"
 $TempRoot = Join-Path $ProgramDataRoot "Temp"
 $ZipPath = Join-Path $TempRoot "TitanMDM-WindowsAgent.zip"
 $ExtractPath = Join-Path $TempRoot "Package"
+$BackupRoot = Join-Path $ProgramDataRoot "InstallerBackup"
+
+$script:InstallMode = "New"
+$script:InstallationChanged = $false
+$script:BackupCreated = $false
 
 # ============================================================
 # LOGGING
@@ -279,6 +284,10 @@ function Validate-Configuration {
         $script:PackageUrl =
             "$ServerUrl/api/enrollment/windows/package"
     }
+
+    if (![Environment]::Is64BitOperatingSystem) {
+        throw "TitanMDM Windows Agent requiere Windows x64."
+    }
 }
 
 # ============================================================
@@ -384,6 +393,15 @@ function Test-ExistingInstallation {
     return $false
 }
 
+function Test-RemoteSessionActive {
+    $remoteHost =
+        Get-Process `
+            -Name "TitanMDM.RemoteHost" `
+            -ErrorAction SilentlyContinue
+
+    return $null -ne $remoteHost
+}
+
 function Stop-ExistingInstallation {
     $service =
         Get-Service `
@@ -394,7 +412,7 @@ function Stop-ExistingInstallation {
         return
     }
 
-    Write-TitanLog "Instalación TitanMDM existente detectada."
+    Write-TitanLog "Deteniendo el servicio TitanMDM para actualizar binarios."
 
     if ($service.Status -ne "Stopped") {
         try {
@@ -409,16 +427,85 @@ function Stop-ExistingInstallation {
             )
         }
         catch {
-            Write-TitanLog `
-                "No fue posible detener completamente el servicio." `
-                "WARN"
+            throw "No fue posible detener el servicio TitanMDM de forma segura. $($_.Exception.Message)"
+        }
+    }
+}
+
+function Backup-ExistingInstallation {
+    if (Test-Path $BackupRoot) {
+        Remove-Item `
+            $BackupRoot `
+            -Recurse `
+            -Force
+    }
+
+    New-Item `
+        -ItemType Directory `
+        -Path $BackupRoot `
+        -Force |
+    Out-Null
+
+    foreach ($directory in @("Agent", "RemoteHost")) {
+        $source = Join-Path $InstallRoot $directory
+
+        if (Test-Path $source) {
+            Copy-Item `
+                $source `
+                (Join-Path $BackupRoot $directory) `
+                -Recurse `
+                -Force
         }
     }
 
-    sc.exe delete $ServiceName |
-        Out-Null
+    foreach ($file in @($SettingsPath, $IdentityPath)) {
+        if (Test-Path $file) {
+            Copy-Item `
+                $file `
+                (Join-Path $BackupRoot ([IO.Path]::GetFileName($file))) `
+                -Force
+        }
+    }
 
-    Start-Sleep -Seconds 2
+    $script:BackupCreated = $true
+    Write-TitanLog "Copia de recuperación creada antes de actualizar."
+}
+
+function Restore-ExistingInstallation {
+    if (!$script:BackupCreated) {
+        return
+    }
+
+    Write-TitanLog "Restaurando la versión anterior de TitanMDM." "WARN"
+
+    Stop-ExistingInstallation
+
+    foreach ($directory in @("Agent", "RemoteHost")) {
+        $destination = Join-Path $InstallRoot $directory
+        $source = Join-Path $BackupRoot $directory
+
+        if (Test-Path $destination) {
+            Remove-Item $destination -Recurse -Force
+        }
+
+        if (Test-Path $source) {
+            Copy-Item $source $destination -Recurse -Force
+        }
+    }
+
+    foreach ($fileName in @("agentsettings.json", "device.json")) {
+        $source = Join-Path $BackupRoot $fileName
+
+        if (Test-Path $source) {
+            Copy-Item `
+                $source `
+                (Join-Path $ProgramDataRoot $fileName) `
+                -Force
+        }
+    }
+
+    Start-TitanAgent
+    Write-TitanLog "Versión anterior restaurada y servicio iniciado." "WARN"
 }
 
 # ============================================================
@@ -440,7 +527,7 @@ function Download-Package {
         -Force |
     Out-Null
 
-    Write-TitanLog "Descargando paquete desde $PackageUrl"
+    Write-TitanLog "Descargando el paquete firmado por hash de TitanMDM."
 
     Invoke-WebRequest `
         -Uri $PackageUrl `
@@ -531,17 +618,20 @@ function Install-Binaries {
             $ExtractPath `
             "RemoteHost"
 
-    New-Item `
-        -ItemType Directory `
-        -Path $AgentInstallPath `
-        -Force |
-    Out-Null
+    foreach ($destination in @($AgentInstallPath, $RemoteHostInstallPath)) {
+        if (Test-Path $destination) {
+            Remove-Item `
+                $destination `
+                -Recurse `
+                -Force
+        }
 
-    New-Item `
-        -ItemType Directory `
-        -Path $RemoteHostInstallPath `
-        -Force |
-    Out-Null
+        New-Item `
+            -ItemType Directory `
+            -Path $destination `
+            -Force |
+        Out-Null
+    }
 
     Write-TitanLog "Instalando Windows Agent."
 
@@ -578,6 +668,7 @@ function Install-Binaries {
     }
 
     Write-TitanLog "Agent y RemoteHost instalados."
+    $script:InstallationChanged = $true
 }
 
 # ============================================================
@@ -627,15 +718,33 @@ function Install-WindowsService {
     $quotedBinary =
         "`"$agentExe`""
 
-    Write-TitanLog "Creando servicio Windows."
+    $service =
+        Get-Service `
+            -Name $ServiceName `
+            -ErrorAction SilentlyContinue
 
-    sc.exe create `
-        $ServiceName `
-        binPath= $quotedBinary `
-        start= auto `
-        obj= LocalSystem `
-        DisplayName= $ServiceDisplayName |
-    Out-Null
+    if ($null -eq $service) {
+        Write-TitanLog "Creando servicio Windows."
+
+        sc.exe create `
+            $ServiceName `
+            binPath= $quotedBinary `
+            start= auto `
+            obj= LocalSystem `
+            DisplayName= $ServiceDisplayName |
+        Out-Null
+    }
+    else {
+        Write-TitanLog "Conservando y actualizando el registro del servicio Windows."
+
+        sc.exe config `
+            $ServiceName `
+            binPath= $quotedBinary `
+            start= auto `
+            obj= LocalSystem `
+            DisplayName= $ServiceDisplayName |
+        Out-Null
+    }
 
     if ($LASTEXITCODE -ne 0) {
         throw "No fue posible crear $ServiceName. Código=$LASTEXITCODE"
@@ -683,6 +792,32 @@ function Start-TitanAgent {
     }
 
     Write-TitanLog "TitanMDMWindowsAgent está Running."
+}
+
+function Test-AgentHealth {
+    Start-Sleep -Seconds 10
+
+    $service =
+        Get-Service `
+            -Name $ServiceName `
+            -ErrorAction Stop
+
+    $service.Refresh()
+
+    if ($service.Status -ne "Running") {
+        throw "TitanMDM Windows Agent se detuvo durante el health check."
+    }
+
+    $agentProcess =
+        Get-Process `
+            -Name "TitanMDM.WindowsAgent" `
+            -ErrorAction SilentlyContinue
+
+    if ($null -eq $agentProcess) {
+        throw "El proceso TitanMDM.WindowsAgent no está activo después de iniciar el servicio."
+    }
+
+    Write-TitanLog "Health check local del agente completado."
 }
 
 # ============================================================
@@ -751,43 +886,73 @@ try {
 
     Write-SecurityReadiness
 
-    if (
-        (Test-ExistingInstallation) -and
-        (!$ForceReinstall)
-    ) {
-        Write-TitanLog "TitanMDM ya está instalado y enrolado."
-        exit 0
+    $existingInstallation = Test-ExistingInstallation
+    $existingIdentity = Test-Path $IdentityPath
+
+    if ($existingInstallation -or $existingIdentity) {
+        $script:InstallMode = "Update"
+        Write-TitanLog "Modo=Update. Se preservarán identidad y configuración corporativa."
+    }
+    else {
+        Write-TitanLog "Modo=New. Se realizará un enrolamiento nuevo."
     }
 
     Test-TitanServer
-
-    Stop-ExistingInstallation
 
     Download-Package
 
     Expand-Package
 
+    if (
+        $script:InstallMode -eq "Update" -and
+        (Test-RemoteSessionActive)
+    ) {
+        throw "La actualización fue pospuesta porque hay una sesión remota activa."
+    }
+
+    if ($script:InstallMode -eq "Update") {
+        Backup-ExistingInstallation
+    }
+
+    Stop-ExistingInstallation
+
     Install-Binaries
 
-    Write-AgentSettings
+    if ($script:InstallMode -eq "New") {
+        Write-AgentSettings
+    }
+    else {
+        Write-TitanLog "Identidad y configuración existentes preservadas."
+    }
 
     Install-WindowsService
 
     Start-TitanAgent
 
-    $enrolled =
-        Wait-Enrollment
+    Test-AgentHealth
+
+    if ($script:InstallMode -eq "New") {
+        $enrolled = Wait-Enrollment
+
+        if (!$enrolled) {
+            throw "El agente no confirmó el enrolamiento dentro del tiempo esperado."
+        }
+    }
+    elseif (!(Test-Path $IdentityPath)) {
+        throw "La identidad del dispositivo no está disponible después de actualizar."
+    }
 
     Cleanup-Installation
 
-    if ($enrolled) {
-        Write-TitanLog "Instalación TitanMDM completada correctamente."
+    if (Test-Path $BackupRoot) {
+        Remove-Item `
+            $BackupRoot `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
     }
-    else {
-        Write-TitanLog `
-            "Instalación completada, pero el enrolamiento continúa pendiente." `
-            "WARN"
-    }
+
+    Write-TitanLog "$script:InstallMode TitanMDM completado correctamente."
 
     if (!$Silent) {
         Write-Host ""
@@ -813,6 +978,23 @@ catch {
         Write-TitanLog `
             $message `
             "ERROR"
+
+        if (
+            $script:InstallMode -eq "Update" -and
+            $script:InstallationChanged -and
+            $script:BackupCreated
+        ) {
+            try {
+                Restore-ExistingInstallation
+            }
+            catch {
+                Write-TitanLog `
+                    "La recuperación automática falló: $($_.Exception.Message)" `
+                    "ERROR"
+            }
+        }
+
+        Cleanup-Installation
     }
     catch {
         Write-Host `

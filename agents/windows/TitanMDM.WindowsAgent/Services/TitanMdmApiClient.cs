@@ -53,6 +53,9 @@ public sealed class TitanMdmApiClient
         var ipAddress =
             GetPrimaryIpAddress();
 
+        var interactiveUser =
+            new WindowsInteractiveUserResolver().GetActiveUser();
+
         using var request =
             await CreateAuthenticatedRequestAsync(
                 HttpMethod.Post,
@@ -86,8 +89,24 @@ public sealed class TitanMdmApiClient
                         Environment
                             .OSVersion
                             .Version
-                            .ToString()
+                            .ToString(),
+
+                    interactiveUserObserved = true,
+
+                    interactiveUser =
+                        interactiveUser?.QualifiedName,
+
+                    interactiveSessionId =
+                        interactiveUser is null
+                            ? (int?)null
+                            : checked((int)interactiveUser.SessionId)
                 });
+
+        _logger.LogDebug(
+            "Heartbeat identity resolved. InteractiveSession={SessionId}, HasInteractiveUser={HasInteractiveUser}, PrimaryIp={PrimaryIp}.",
+            interactiveUser?.SessionId,
+            interactiveUser is not null,
+            ipAddress);
 
         using var response =
             await _httpClient
@@ -330,11 +349,19 @@ public sealed class TitanMdmApiClient
     // PRIMARY IP
     // ============================================================
 
-    private static string?
+    private string?
         GetPrimaryIpAddress()
     {
         try
         {
+            var routedAddress =
+                GetRouteSourceAddress();
+
+            if (routedAddress is not null)
+            {
+                return routedAddress.ToString();
+            }
+
             var candidates =
                 NetworkInterface
                     .GetAllNetworkInterfaces()
@@ -347,7 +374,10 @@ public sealed class TitanMdmApiClient
                                 NetworkInterfaceType.Loopback
                             &&
                             nic.NetworkInterfaceType !=
-                                NetworkInterfaceType.Tunnel)
+                                NetworkInterfaceType.Tunnel
+                            &&
+                            !IsVirtualInterface(
+                                nic))
                     .SelectMany(
                         nic =>
                         {
@@ -381,7 +411,10 @@ public sealed class TitanMdmApiClient
                                             &&
                                             !IPAddress
                                                 .IsLoopback(
-                                                    address.Address))
+                                                    address.Address)
+                                            &&
+                                            !IsAutomaticPrivateAddress(
+                                                address.Address))
                                     .Select(
                                         address =>
                                             new
@@ -390,7 +423,16 @@ public sealed class TitanMdmApiClient
                                                     address.Address,
 
                                                 HasGateway =
-                                                    hasGateway
+                                                    hasGateway,
+
+                                                IsPhysical =
+                                                    nic.NetworkInterfaceType ==
+                                                        NetworkInterfaceType.Ethernet
+                                                    ||
+                                                    nic.NetworkInterfaceType ==
+                                                        NetworkInterfaceType.Wireless80211,
+
+                                                nic.Speed
                                             });
                             }
                             catch
@@ -401,6 +443,12 @@ public sealed class TitanMdmApiClient
                     .OrderByDescending(
                         x =>
                             x.HasGateway)
+                    .ThenByDescending(
+                        x =>
+                            x.IsPhysical)
+                    .ThenByDescending(
+                        x =>
+                            x.Speed)
                     .ToList();
 
             return candidates
@@ -408,10 +456,116 @@ public sealed class TitanMdmApiClient
                 ?.Address
                 .ToString();
         }
-        catch
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "No fue posible resolver una IPv4 principal para el heartbeat.");
+
+            return null;
+        }
+    }
+
+    private IPAddress? GetRouteSourceAddress()
+    {
+        var server =
+            _httpClient.BaseAddress;
+
+        if (server is null)
         {
             return null;
         }
+
+        try
+        {
+            var destination =
+                Dns.GetHostAddresses(
+                        server.DnsSafeHost)
+                    .FirstOrDefault(
+                        address =>
+                            address.AddressFamily ==
+                                AddressFamily.InterNetwork);
+
+            if (destination is null)
+            {
+                return null;
+            }
+
+            using var socket =
+                new Socket(
+                    AddressFamily.InterNetwork,
+                    SocketType.Dgram,
+                    ProtocolType.Udp);
+
+            socket.Connect(
+                new IPEndPoint(
+                    destination,
+                    server.Port));
+
+            var localAddress =
+                (socket.LocalEndPoint as IPEndPoint)
+                    ?.Address;
+
+            return localAddress is not null
+                &&
+                !IPAddress.IsLoopback(
+                    localAddress)
+                &&
+                !localAddress.Equals(
+                    IPAddress.Any)
+                &&
+                !IsAutomaticPrivateAddress(
+                    localAddress)
+                    ? localAddress
+                    : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "No fue posible resolver la interfaz usada para llegar a TitanMDM.");
+
+            return null;
+        }
+    }
+
+    private static bool IsAutomaticPrivateAddress(
+        IPAddress address)
+    {
+        var bytes =
+            address.GetAddressBytes();
+
+        return bytes.Length == 4
+            &&
+            bytes[0] == 169
+            &&
+            bytes[1] == 254;
+    }
+
+    private static bool IsVirtualInterface(
+        NetworkInterface networkInterface)
+    {
+        var identity =
+            $"{networkInterface.Name} {networkInterface.Description}";
+
+        string[] virtualMarkers =
+        [
+            "virtual",
+            "hyper-v",
+            "vmware",
+            "vethernet",
+            "docker",
+            "wsl",
+            "loopback",
+            "npcap",
+            "bluetooth"
+        ];
+
+        return virtualMarkers.Any(
+            marker =>
+                identity.Contains(
+                    marker,
+                    StringComparison.OrdinalIgnoreCase));
     }
 
     // ============================================================

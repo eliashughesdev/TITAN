@@ -108,6 +108,14 @@ export function extractRequestError(
   fallback: string,
 ): string {
   if (
+    error instanceof Error
+    &&
+    error.message.trim()
+  ) {
+    return error.message
+  }
+
+  if (
     typeof error === 'object' &&
     error !== null &&
     'response' in error

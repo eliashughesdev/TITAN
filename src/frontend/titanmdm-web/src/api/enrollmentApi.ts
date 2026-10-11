@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 import apiClient from './apiClient'
 
 import type {
@@ -78,74 +80,111 @@ export const enrollmentApi = {
     return response.data
   },
 
-async downloadWindowsInstaller(
-  request:
-    CreateWindowsInstallerRequest,
-): Promise<Blob> {
-  const response =
-    await apiClient.post(
-      '/enrollment/windows/installer',
-      request,
-      {
-        responseType:
-          'blob',
-      },
-    )
-
-  const contentType =
-    String(
-      response.headers[
-        'content-type'
-      ] ?? '',
-    ).toLowerCase()
-
-  if (
-    contentType.includes(
-      'application/json',
-    )
-  ) {
-    const text =
-      await response.data.text()
-
-    let message =
-      'TitanMDM no pudo generar el instalador Windows.'
+  async downloadWindowsInstaller(
+    request:
+      CreateWindowsInstallerRequest,
+  ): Promise<Blob> {
+    let response
 
     try {
-      const payload =
-        JSON.parse(text)
-
+      response =
+        await apiClient.post<Blob>(
+          '/enrollment/windows/installer',
+          request,
+          {
+            responseType:
+              'blob',
+          },
+        )
+    } catch (error) {
       if (
-        typeof payload?.message ===
-          'string'
+        axios.isAxiosError(error)
         &&
-        payload.message.trim()
+        error.response?.data instanceof Blob
       ) {
-        message =
-          payload.message
+        const text =
+          await error.response.data.text()
+
+        let message = ''
+
+        try {
+          const payload =
+            JSON.parse(text) as {
+              code?: string
+              message?: string
+            }
+
+          if (payload.message?.trim()) {
+            message = payload.message
+          }
+        } catch {
+          message = ''
+        }
+
+        if (message) {
+          throw new Error(
+            message,
+          )
+        }
       }
-    } catch {
-      if (text.trim()) {
-        message =
-          text
-      }
+
+      throw error
     }
 
-    throw new Error(
-      message,
-    )
-  }
+    const contentType =
+      String(
+        response.headers[
+          'content-type'
+        ] ?? '',
+      ).toLowerCase()
 
-  if (
-    !response.data
-    ||
-    response.data.size ===
-      0
-  ) {
-    throw new Error(
-      'TitanMDM generó una respuesta vacía para el instalador Windows.',
-    )
-  }
+    if (
+      contentType.includes(
+        'application/json',
+      )
+    ) {
+      const text =
+        await response.data.text()
 
-  return response.data
-}
+      let message =
+        'TitanMDM no pudo generar el instalador Windows.'
+
+      try {
+        const payload =
+          JSON.parse(text)
+
+        if (
+          typeof payload?.message ===
+            'string'
+          &&
+          payload.message.trim()
+        ) {
+          message =
+            payload.message
+        }
+      } catch {
+        if (text.trim()) {
+          message =
+            text
+        }
+      }
+
+      throw new Error(
+        message,
+      )
+    }
+
+    if (
+      !response.data
+      ||
+      response.data.size ===
+        0
+    ) {
+      throw new Error(
+        'TitanMDM generó una respuesta vacía para el instalador Windows.',
+      )
+    }
+
+    return response.data
+  },
 }

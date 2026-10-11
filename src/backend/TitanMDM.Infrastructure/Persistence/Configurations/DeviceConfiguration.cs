@@ -77,6 +77,11 @@ public sealed class DeviceConfiguration
 
         builder.Property(
                 x =>
+                    x.InteractiveUser)
+            .HasMaxLength(256);
+
+        builder.Property(
+                x =>
                     x.Department)
             .HasMaxLength(150);
 
@@ -122,6 +127,16 @@ public sealed class DeviceConfiguration
         builder.HasIndex(
             x =>
                 x.ComplianceStatus);
+
+        builder.HasIndex(
+            x =>
+                new
+                {
+                    x.OrganizationId,
+                    x.Platform,
+                    x.IsManaged,
+                    x.LastSeenAtUtc
+                });
 
         builder.HasIndex(
             x =>

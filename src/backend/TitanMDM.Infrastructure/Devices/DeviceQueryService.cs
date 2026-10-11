@@ -55,9 +55,10 @@ public sealed class DeviceQueryService
         organizationId);
 
     page =
-        Math.Max(
+        Math.Clamp(
             page,
-            1);
+            1,
+            1_000_000);
 
     pageSize =
         Math.Clamp(
@@ -129,6 +130,11 @@ public sealed class DeviceQueryService
         var term =
             search.Trim();
 
+        if (term.Length > 200)
+        {
+            term = term[..200];
+        }
+
         query =
             query.Where(
                 device =>
@@ -157,6 +163,12 @@ public sealed class DeviceQueryService
                         &&
                         device.AssignedUser.Contains(
                             term)
+                    )
+
+                    ||
+                    (
+                        device.InteractiveUser != null &&
+                        device.InteractiveUser.Contains(term)
                     )
                     ||
                     (
@@ -280,7 +292,10 @@ public sealed class DeviceQueryService
                         device.BatteryLevel,
                         device.IsManaged,
                         device.EnrolledAtUtc,
-                        device.LastSeenAtUtc))
+                        device.LastSeenAtUtc,
+                        device.InteractiveUser,
+                        device.InteractiveSessionId,
+                        device.InteractiveUserUpdatedAtUtc))
             .ToListAsync(
                 cancellationToken);
 
@@ -345,6 +360,9 @@ public sealed class DeviceQueryService
                             device.IsManaged,
                             device.EnrolledAtUtc,
                             device.LastSeenAtUtc,
+                            device.InteractiveUser,
+                            device.InteractiveSessionId,
+                            device.InteractiveUserUpdatedAtUtc,
                             device.CreatedAtUtc,
                             device.UpdatedAtUtc))
                 .FirstOrDefaultAsync(
@@ -624,10 +642,16 @@ public sealed class DeviceQueryService
                             .OrderByDescending(
                                 x =>
                                     x.DeviceName)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
                         : query
                             .OrderBy(
                                 x =>
-                                    x.DeviceName),
+                                    x.DeviceName)
+                            .ThenBy(
+                                x =>
+                                    x.Id),
 
                 "platform" =>
                     descending
@@ -635,10 +659,16 @@ public sealed class DeviceQueryService
                             .OrderByDescending(
                                 x =>
                                     x.Platform)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
                         : query
                             .OrderBy(
                                 x =>
-                                    x.Platform),
+                                    x.Platform)
+                            .ThenBy(
+                                x =>
+                                    x.Id),
 
                 "status" =>
                     descending
@@ -646,10 +676,16 @@ public sealed class DeviceQueryService
                             .OrderByDescending(
                                 x =>
                                     x.Status)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
                         : query
                             .OrderBy(
                                 x =>
-                                    x.Status),
+                                    x.Status)
+                            .ThenBy(
+                                x =>
+                                    x.Id),
 
                 "compliance" =>
                     descending
@@ -657,10 +693,16 @@ public sealed class DeviceQueryService
                             .OrderByDescending(
                                 x =>
                                     x.ComplianceStatus)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
                         : query
                             .OrderBy(
                                 x =>
-                                    x.ComplianceStatus),
+                                    x.ComplianceStatus)
+                            .ThenBy(
+                                x =>
+                                    x.Id),
 
                 "enrolled" =>
                     descending
@@ -668,25 +710,37 @@ public sealed class DeviceQueryService
                             .OrderByDescending(
                                 x =>
                                     x.EnrolledAtUtc)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
                         : query
                             .OrderBy(
                                 x =>
-                                    x.EnrolledAtUtc),
+                                    x.EnrolledAtUtc)
+                            .ThenBy(
+                                x =>
+                                    x.Id),
 
                 _ =>
                     descending
                         ? query
                             .OrderByDescending(
                                 x =>
-                                    x.LastSeenAtUtc
-                                    ??
-                                    x.CreatedAtUtc)
-                        : query
-                            .OrderBy(
+                                     x.LastSeenAtUtc
+                                     ??
+                                     x.CreatedAtUtc)
+                            .ThenBy(
                                 x =>
-                                    x.LastSeenAtUtc
-                                    ??
-                                    x.CreatedAtUtc)
+                                    x.Id)
+                         : query
+                             .OrderBy(
+                                 x =>
+                                     x.LastSeenAtUtc
+                                     ??
+                                     x.CreatedAtUtc)
+                            .ThenBy(
+                                x =>
+                                    x.Id)
             };
     }
 

@@ -6,4 +6,7 @@ public sealed record DeviceHeartbeatRequest(
     string? IpAddress,
     int? BatteryLevel,
     string? AgentVersion,
-    string? OperatingSystemVersion);
+    string? OperatingSystemVersion,
+    bool? InteractiveUserObserved = null,
+    string? InteractiveUser = null,
+    int? InteractiveSessionId = null);

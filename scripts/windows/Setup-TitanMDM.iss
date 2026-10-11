@@ -12,7 +12,7 @@
 
 [Setup]
 
-AppId={{3D681C48-1D8C-47A0-9A20-TITANMDM00001}
+AppId={{3D681C48-1D8C-47A0-9A20-0A710D000001}
 
 AppName=TitanMDM Windows Agent
 AppVersion=1.0.0
@@ -23,7 +23,6 @@ DefaultDirName={autopf}\TitanMDM
 DefaultGroupName=TitanMDM
 
 PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
 
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -40,11 +39,8 @@ OutputBaseFilename={#OutputName}
 
 SetupLogging=yes
 
-/*
- * La desinstalación real se implementará de manera
- * controlada por TitanMDM y no mediante eliminación
- * ciega del directorio ProgramData.
- */
+; La desinstalación real se implementará de manera controlada por
+; TitanMDM y no mediante eliminación ciega del directorio ProgramData.
 
 Uninstallable=no
 
@@ -63,9 +59,45 @@ Source: "{#SourceRoot}\config.json"; \
 DestDir: "{tmp}\TitanMDM"; \
 Flags: ignoreversion
 
-[Run]
+[Code]
 
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-Parameters: "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{tmp}\TitanMDM\Install-TitanMDMAgent.ps1"" -ConfigPath ""{tmp}\TitanMDM\config.json"""; \
-StatusMsg: "Instalando o reparando TitanMDM Windows Agent..."; \
-Flags: runhidden waituntilterminated
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  PowerShellPath: String;
+  InstallerPath: String;
+  ConfigPath: String;
+  Parameters: String;
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  InstallerPath := ExpandConstant('{tmp}\TitanMDM\Install-TitanMDMAgent.ps1');
+  ConfigPath := ExpandConstant('{tmp}\TitanMDM\config.json');
+  Parameters := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass ' +
+    '-File "' + InstallerPath + '" -ConfigPath "' + ConfigPath + '" -Silent';
+
+  WizardForm.StatusLabel.Caption :=
+    'Instalando o actualizando TitanMDM Windows Agent...';
+
+  if not Exec(
+    PowerShellPath,
+    Parameters,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode) then
+  begin
+    RaiseException(
+      'No fue posible iniciar el instalador interno de TitanMDM.');
+  end;
+
+  if ResultCode <> 0 then
+  begin
+    RaiseException(
+      'El instalador interno de TitanMDM terminó con el código ' +
+      IntToStr(ResultCode) + '. Consulta ' +
+      'C:\ProgramData\TitanMDM\logs\installer.log.');
+  end;
+end;

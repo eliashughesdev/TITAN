@@ -79,12 +79,6 @@ public sealed class WindowsInventoryResultProcessor
             macAddress:
                 device.MacAddress);
 
-        device.AssignUser(
-            Normalize(
-                payload.UserName),
-
-            device.Department);
-
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
@@ -116,14 +110,6 @@ public sealed class WindowsInventoryResultProcessor
         var preferredAdapter =
             SelectPreferredNetworkAdapter(
                 payload.Network);
-
-        var ipAddress =
-            preferredAdapter is null
-                ? device.IpAddress
-                : SelectPreferredIpAddress(
-                    preferredAdapter.IpAddresses)
-                  ??
-                  device.IpAddress;
 
         var macAddress =
             preferredAdapter is null
@@ -171,16 +157,6 @@ public sealed class WindowsInventoryResultProcessor
             macAddress:
                 macAddress);
 
-        device.RegisterHeartbeat(
-            ipAddress,
-            device.BatteryLevel);
-
-        device.AssignUser(
-            Normalize(
-                payload.Device.UserName),
-
-            device.Department);
-
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
@@ -220,10 +196,6 @@ public sealed class WindowsInventoryResultProcessor
             return;
         }
 
-        var ipAddress =
-            SelectPreferredIpAddress(
-                preferredAdapter.IpAddresses);
-
         var macAddress =
             Normalize(
                 preferredAdapter.MacAddress);
@@ -238,12 +210,6 @@ public sealed class WindowsInventoryResultProcessor
             macAddress
             ??
             device.MacAddress);
-
-        device.RegisterHeartbeat(
-            ipAddress
-            ??
-            device.IpAddress,
-            device.BatteryLevel);
 
         await _dbContext
             .SaveChangesAsync(
@@ -325,15 +291,6 @@ public sealed class WindowsInventoryResultProcessor
                 x =>
                     x.Speed)
             .FirstOrDefault();
-    }
-
-    private static string?
-        SelectPreferredIpAddress(
-            IEnumerable<string> addresses)
-    {
-        return addresses
-            .FirstOrDefault(
-                IsUsableIpv4Address);
     }
 
     private static bool

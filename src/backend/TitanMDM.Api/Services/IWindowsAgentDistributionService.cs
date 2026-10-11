@@ -6,6 +6,9 @@ public interface IWindowsAgentDistributionService
 
     string GetPackageFileName();
 
+    void ValidateInstallerPrerequisites(
+        string deploymentMode);
+
     Task<string> GetPackageSha256Async(
         CancellationToken cancellationToken =
             default);

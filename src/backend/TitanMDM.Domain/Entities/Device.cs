@@ -91,6 +91,29 @@ public sealed class Device
 
     public string? AssignedUser { get; private set; }
 
+    public string? InteractiveUser { get; private set; }
+
+    public int? InteractiveSessionId { get; private set; }
+
+    public DateTime? InteractiveUserUpdatedAtUtc { get; private set; }
+
+    public void UpdateInteractiveUser(
+        string? userName,
+        int? sessionId)
+    {
+        InteractiveUser = Normalize(userName);
+
+        InteractiveSessionId =
+            string.IsNullOrWhiteSpace(InteractiveUser)
+            ||
+            sessionId < 0
+                ? null
+                : sessionId;
+
+        InteractiveUserUpdatedAtUtc = DateTime.UtcNow;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public string? Department { get; private set; }
 
     public int? BatteryLevel { get; private set; }
@@ -122,7 +145,18 @@ public sealed class Device
         string? ipAddress,
         int? batteryLevel)
     {
-        IpAddress = Normalize(ipAddress);
+        var normalizedIp = Normalize(ipAddress);
+
+        if (!string.IsNullOrWhiteSpace(normalizedIp) &&
+            System.Net.IPAddress.TryParse(normalizedIp, out var parsedIp) &&
+            !System.Net.IPAddress.IsLoopback(parsedIp) &&
+            !parsedIp.Equals(System.Net.IPAddress.Any) &&
+            !parsedIp.Equals(System.Net.IPAddress.IPv6Any) &&
+            !parsedIp.Equals(System.Net.IPAddress.Broadcast) &&
+            !parsedIp.IsIPv6Multicast)
+        {
+            IpAddress = normalizedIp;
+        }
 
         if (batteryLevel.HasValue)
         {

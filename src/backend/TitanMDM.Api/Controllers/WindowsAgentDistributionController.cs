@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TitanMDM.Api.Services;
 using TitanMDM.Application.Enrollment;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -19,15 +20,23 @@ public sealed class WindowsAgentDistributionController
         IEnrollmentService
         _enrollmentService;
 
+    private readonly
+        ILogger<WindowsAgentDistributionController>
+        _logger;
+
     public WindowsAgentDistributionController(
         IWindowsAgentDistributionService distributionService,
-        IEnrollmentService enrollmentService)
+        IEnrollmentService enrollmentService,
+        ILogger<WindowsAgentDistributionController> logger)
     {
         _distributionService =
             distributionService;
 
         _enrollmentService =
             enrollmentService;
+
+        _logger =
+            logger;
     }
 
     [AllowAnonymous]
@@ -139,6 +148,12 @@ public sealed class WindowsAgentDistributionController
             CancellationToken cancellationToken =
                 default)
     {
+        if (!HasPermission(
+                PermissionCodes.Enrollment.Manage))
+        {
+            return Forbid();
+        }
+
         var organizationId =
             GetOrganizationId();
 
@@ -203,6 +218,10 @@ public sealed class WindowsAgentDistributionController
 
         try
         {
+            _distributionService
+                .ValidateInstallerPrerequisites(
+                    deploymentMode);
+
             var enrollmentToken =
                 await _enrollmentService
                     .CreateTokenAsync(
@@ -216,24 +235,44 @@ public sealed class WindowsAgentDistributionController
 
             WindowsDistributionArtifact artifact;
 
-            if (
-                deploymentMode ==
-                "individual")
+            try
             {
-                artifact =
-                    await _distributionService
-                        .BuildIndividualInstallerAsync(
-                            enrollmentToken.Token,
-                            cancellationToken);
+                if (
+                    deploymentMode ==
+                    "individual")
+                {
+                    artifact =
+                        await _distributionService
+                            .BuildIndividualInstallerAsync(
+                                enrollmentToken.Token,
+                                cancellationToken);
+                }
+                else
+                {
+                    artifact =
+                        await _distributionService
+                            .BuildGpoPackageAsync(
+                                enrollmentToken.Token,
+                                cancellationToken);
+                }
             }
-            else
+            catch
             {
-                artifact =
-                    await _distributionService
-                        .BuildGpoPackageAsync(
-                            enrollmentToken.Token,
-                            cancellationToken);
+                await RevokeFailedInstallerTokenAsync(
+                    organizationId.Value,
+                    enrollmentToken.Id);
+
+                throw;
             }
+
+            Response.Headers.CacheControl =
+                "no-store, no-cache, must-revalidate";
+
+            _logger.LogInformation(
+                "Generated Windows {DeploymentMode} artifact for organization {OrganizationId} by user {UserId}.",
+                deploymentMode,
+                organizationId.Value,
+                userId.Value);
 
             return File(
                 artifact.Content,
@@ -260,24 +299,50 @@ public sealed class WindowsAgentDistributionController
         }
         catch (FileNotFoundException ex)
         {
-            return NotFound(
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
                 new
                 {
+                    code =
+                        "WINDOWS_INSTALLER_PREREQUISITE_MISSING",
+
                     message =
-                        ex.Message
+                        "El instalador Windows no está disponible porque falta un componente de distribución en el servidor."
                 });
         }
         catch (DirectoryNotFoundException ex)
         {
-            return NotFound(
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
                 new
                 {
+                    code =
+                        "WINDOWS_INSTALLER_PREREQUISITE_MISSING",
+
                     message =
-                        ex.Message
+                        "El instalador Windows no está disponible porque falta un componente de distribución en el servidor."
                 });
         }
         catch (UnauthorizedAccessException ex)
         {
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
             return StatusCode(
                 StatusCodes.Status500InternalServerError,
                 new
@@ -286,11 +351,17 @@ public sealed class WindowsAgentDistributionController
                         "WINDOWS_INSTALLER_ACCESS_DENIED",
 
                     message =
-                        ex.Message
+                        "El servidor no pudo acceder a los archivos necesarios para generar el instalador."
                 });
         }
         catch (IOException ex)
         {
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
             return StatusCode(
                 StatusCodes.Status500InternalServerError,
                 new
@@ -299,11 +370,36 @@ public sealed class WindowsAgentDistributionController
                         "WINDOWS_INSTALLER_IO_ERROR",
 
                     message =
-                        ex.Message
+                        "Ocurrió un error de archivos al generar el instalador Windows."
+                });
+        }
+        catch (TimeoutException ex)
+        {
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
+            return StatusCode(
+                StatusCodes.Status504GatewayTimeout,
+                new
+                {
+                    code =
+                        "WINDOWS_INSTALLER_TIMEOUT",
+
+                    message =
+                        "La generación del instalador excedió el tiempo permitido."
                 });
         }
         catch (InvalidOperationException ex)
         {
+            LogGenerationFailure(
+                ex,
+                organizationId.Value,
+                userId.Value,
+                deploymentMode);
+
             return StatusCode(
                 StatusCodes.Status500InternalServerError,
                 new
@@ -312,7 +408,7 @@ public sealed class WindowsAgentDistributionController
                         "WINDOWS_INSTALLER_GENERATION_FAILED",
 
                     message =
-                        ex.Message
+                        "TitanMDM no pudo generar el instalador Windows. Revisa el registro del servidor."
                 });
         }
     }
@@ -353,6 +449,55 @@ public sealed class WindowsAgentDistributionController
             out userId)
             ? userId
             : null;
+    }
+
+    private bool HasPermission(
+        string permission)
+    {
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                string.Equals(
+                    claim.Value,
+                    permission,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task RevokeFailedInstallerTokenAsync(
+        Guid organizationId,
+        Guid enrollmentTokenId)
+    {
+        try
+        {
+            await _enrollmentService
+                .RevokeTokenAsync(
+                    organizationId,
+                    enrollmentTokenId,
+                    CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Could not revoke enrollment token {EnrollmentTokenId} after Windows installer generation failed.",
+                enrollmentTokenId);
+        }
+    }
+
+    private void LogGenerationFailure(
+        Exception exception,
+        Guid organizationId,
+        Guid userId,
+        string deploymentMode)
+    {
+        _logger.LogError(
+            exception,
+            "Windows installer generation failed for organization {OrganizationId}, user {UserId}, mode {DeploymentMode}.",
+            organizationId,
+            userId,
+            deploymentMode);
     }
 }
 

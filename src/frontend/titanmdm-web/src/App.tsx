@@ -200,6 +200,7 @@ interface ApplicationRoute {
   path: string
   page: ReactNode
   permissions: string[]
+  allPermissions?: string[]
   helpdeskConsole?: boolean
 }
 
@@ -751,10 +752,11 @@ const applicationRoutes:
       ],
     },
 
-   {
+    {
       path: 'remote',
       page: <RemoteSupportDirectoryPage />,
       permissions: ['remote.view'],
+      allPermissions: ['devices.view'],
     },
     {
       path: 'remote/viewer',
@@ -941,6 +943,9 @@ function App() {
                 <PermissionRoute
                   anyOf={
                     route.permissions
+                  }
+                  allOf={
+                    route.allPermissions
                   }
                   helpdeskConsole={
                     route.helpdeskConsole

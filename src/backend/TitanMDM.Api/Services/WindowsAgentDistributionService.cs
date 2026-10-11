@@ -10,22 +10,35 @@ namespace TitanMDM.Api.Services;
 public sealed class WindowsAgentDistributionService
     : IWindowsAgentDistributionService
 {
+    private static readonly SemaphoreSlim
+        InstallerBuildLock = new(1, 1);
+
+    private static readonly TimeSpan
+        InstallerBuildTimeout = TimeSpan.FromMinutes(5);
+
     private readonly WindowsAgentDistributionOptions
         _options;
 
     private readonly IWebHostEnvironment
         _environment;
 
+    private readonly ILogger<WindowsAgentDistributionService>
+        _logger;
+
     public WindowsAgentDistributionService(
         IOptions<WindowsAgentDistributionOptions>
             options,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ILogger<WindowsAgentDistributionService> logger)
     {
         _options =
             options.Value;
 
         _environment =
             environment;
+
+        _logger =
+            logger;
     }
 
     public string GetPackagePath()
@@ -50,6 +63,53 @@ public sealed class WindowsAgentDistributionService
             _options.PackageFileName)
             ? "TitanMDM-WindowsAgent-x64.zip"
             : _options.PackageFileName.Trim();
+    }
+
+    public void ValidateInstallerPrerequisites(
+        string deploymentMode)
+    {
+        _ = GetPackagePath();
+        _ = NormalizeServerUrl(
+            _options.PublicServerUrl);
+
+        var scriptsPath =
+            GetScriptsPath();
+
+        EnsureFileExists(
+            Path.Combine(
+                scriptsPath,
+                "Install-TitanMDMAgent.ps1"),
+            "Install-TitanMDMAgent.ps1");
+
+        if (
+            deploymentMode.Equals(
+                "individual",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            EnsureFileExists(
+                Path.Combine(
+                    scriptsPath,
+                    "Setup-TitanMDM.iss"),
+                "Setup-TitanMDM.iss");
+
+            EnsureFileExists(
+                GetInnoSetupCompilerPath(),
+                "ISCC.exe");
+
+            return;
+        }
+
+        EnsureFileExists(
+            Path.Combine(
+                scriptsPath,
+                "Install-TitanMDMAgent-GPO.ps1"),
+            "Install-TitanMDMAgent-GPO.ps1");
+
+        EnsureFileExists(
+            Path.Combine(
+                scriptsPath,
+                "install-gpo.bat"),
+            "install-gpo.bat");
     }
 
     public async Task<string>
@@ -152,38 +212,40 @@ public sealed class WindowsAgentDistributionService
                 Path.GetFileNameWithoutExtension(
                     GetIndividualInstallerFileName());
 
-            var arguments =
-                string.Join(
-                    " ",
-                    new[]
-                    {
-                        Quote(
-                            $"/DSourceRoot={sourceRoot}"),
+            await InstallerBuildLock.WaitAsync(
+                cancellationToken);
 
-                        Quote(
-                            $"/DOutputDir={outputRoot}"),
+            ProcessResult result;
 
-                        Quote(
-                            $"/DOutputName={outputName}"),
-
-                        Quote(
-                            setupScript)
-                    });
-
-            var result =
-                await RunProcessAsync(
-                    compilerPath,
-                    arguments,
-                    cancellationToken);
+            try
+            {
+                result =
+                    await RunProcessAsync(
+                        compilerPath,
+                        new[]
+                        {
+                            $"/DSourceRoot={sourceRoot}",
+                            $"/DOutputDir={outputRoot}",
+                            $"/DOutputName={outputName}",
+                            setupScript
+                        },
+                        cancellationToken);
+            }
+            finally
+            {
+                InstallerBuildLock.Release();
+            }
 
             if (result.ExitCode != 0)
             {
+                _logger.LogError(
+                    "Inno Setup failed with exit code {ExitCode}. Output: {Output}. Error: {Error}",
+                    result.ExitCode,
+                    result.StandardOutput,
+                    result.StandardError);
+
                 throw new InvalidOperationException(
-                    "Inno Setup no pudo generar el instalador TitanMDM."
-                    + Environment.NewLine
-                    + result.StandardOutput
-                    + Environment.NewLine
-                    + result.StandardError);
+                    $"Inno Setup no pudo generar el instalador TitanMDM (código {result.ExitCode}).");
             }
 
             var generatedInstaller =
@@ -569,10 +631,10 @@ TitanMDMWindowsAgent
         return path;
     }
 
-    private static async Task<ProcessResult>
+    private async Task<ProcessResult>
         RunProcessAsync(
             string fileName,
-            string arguments,
+            IReadOnlyCollection<string> arguments,
             CancellationToken cancellationToken)
     {
         var startInfo =
@@ -580,9 +642,6 @@ TitanMDMWindowsAgent
             {
                 FileName =
                     fileName,
-
-                Arguments =
-                    arguments,
 
                 UseShellExecute =
                     false,
@@ -597,6 +656,12 @@ TitanMDMWindowsAgent
                     true
             };
 
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(
+                argument);
+        }
+
         using var process =
             new Process
             {
@@ -604,7 +669,11 @@ TitanMDMWindowsAgent
                     startInfo
             };
 
-        process.Start();
+        if (!process.Start())
+        {
+            throw new InvalidOperationException(
+                "No fue posible iniciar Inno Setup.");
+        }
 
         var outputTask =
             process.StandardOutput
@@ -614,19 +683,51 @@ TitanMDMWindowsAgent
             process.StandardError
                 .ReadToEndAsync();
 
-        await process.WaitForExitAsync(
-            cancellationToken);
+        using var timeoutSource =
+            new CancellationTokenSource(
+                InstallerBuildTimeout);
+
+        using var linkedSource =
+            CancellationTokenSource
+                .CreateLinkedTokenSource(
+                    cancellationToken,
+                    timeoutSource.Token);
+
+        try
+        {
+            await process.WaitForExitAsync(
+                linkedSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                process.Kill(
+                    entireProcessTree:
+                        true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not terminate the Inno Setup process after cancellation.");
+            }
+
+            await Task.WhenAll(
+                outputTask,
+                errorTask);
+
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            throw new TimeoutException(
+                "Inno Setup excedió el tiempo máximo de compilación.");
+        }
 
         return new ProcessResult(
             process.ExitCode,
             await outputTask,
             await errorTask);
-    }
-
-    private static string Quote(
-        string value)
-    {
-        return $"\"{value.Replace("\"", "\\\"")}\"";
     }
 
     private static void EnsureFileExists(
@@ -692,7 +793,7 @@ TitanMDMWindowsAgent
         return serverUrl;
     }
 
-    private static void DeleteDirectorySafe(
+    private void DeleteDirectorySafe(
         string path)
     {
         try
@@ -705,12 +806,16 @@ TitanMDMWindowsAgent
                         true);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(
+                ex,
+                "Could not remove temporary installer directory {Path}.",
+                path);
         }
     }
 
-    private static void DeleteFileSafe(
+    private void DeleteFileSafe(
         string path)
     {
         try
@@ -720,8 +825,12 @@ TitanMDMWindowsAgent
                 File.Delete(path);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(
+                ex,
+                "Could not remove temporary installer file {Path}.",
+                path);
         }
     }
 
