@@ -650,26 +650,37 @@ public sealed class HelpdeskMailWorker
                 // PROCESSING IDEMPOTENCY
                 // ====================================================
 
-                var alreadyProcessed =
-                    await db.HelpdeskMailProcessingLogs
-                        .AsNoTracking()
-                        .AnyAsync(
-                            x =>
-                                x.OrganizationId ==
-                                    organizationId
-                                &&
-                                x.Mailbox ==
-                                    mailbox
-                                &&
-                                x.InternetMessageId ==
-                                    inbound.Message
-                                        .InternetMessageId,
-                            cancellationToken);
+               // ============================================================
+// HD-F3 — IDEMPOTENCIA Y RECUPERACION
+//
+// accepted / ignored: resultados definitivos.
+// failed: puede volver a procesarse.
+// ============================================================
 
-                if (alreadyProcessed)
-                {
-                    continue;
-                }
+                    var alreadyProcessed =
+                        await db.HelpdeskMailProcessingLogs
+                            .AsNoTracking()
+                            .AnyAsync(
+                                x =>
+                                    x.OrganizationId == organizationId
+                                    &&
+                                    x.Mailbox == mailbox
+                                    &&
+                                    x.InternetMessageId ==
+                                        inbound.Message.InternetMessageId
+                                    &&
+                                    (
+                                        x.Decision == "accepted"
+                                        ||
+                                        x.Decision == "ignored"
+                                    ),
+                                cancellationToken);
+
+                    if (alreadyProcessed)
+                    {
+                        messagesIgnored++;
+                        continue;
+                    }
 
                 // ====================================================
                 // INTAKE POLICY
@@ -1755,68 +1766,87 @@ public sealed class HelpdeskMailWorker
     // PROCESSING LOG
     // ============================================================
 
-    private static async Task SaveProcessingLogAsync(
-        TitanMdmDbContext db,
-        HelpdeskMailProcessingLog log,
-        CancellationToken cancellationToken)
-    {
-        var exists =
-            await db.HelpdeskMailProcessingLogs
-                .AsNoTracking()
-                .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            log.OrganizationId
-                        &&
-                        x.Mailbox ==
-                            log.Mailbox
-                        &&
-                        x.InternetMessageId ==
-                            log.InternetMessageId,
-                    cancellationToken);
+   private static async Task SaveProcessingLogAsync(
+    TitanMdmDbContext db,
+    HelpdeskMailProcessingLog log,
+    CancellationToken cancellationToken)
+{
+    // Primero reutilizar el registro existente.
+    // La clave única es:
+    // OrganizationId + Mailbox + InternetMessageId.
 
-        if (exists)
+    var existing =
+        await db.HelpdeskMailProcessingLogs
+            .FirstOrDefaultAsync(
+                x =>
+                    x.OrganizationId == log.OrganizationId
+                    &&
+                    x.Mailbox == log.Mailbox
+                    &&
+                    x.InternetMessageId == log.InternetMessageId,
+                cancellationToken);
+
+    if (existing is not null)
+    {
+        if (existing.Decision is "accepted" or "ignored")
         {
             return;
         }
 
-        db.HelpdeskMailProcessingLogs
-            .Add(
-                log);
+        existing.UpdateOutcome(
+            log.Decision,
+            log.ReasonCode,
+            log.Reason,
+            log.TicketId);
 
-        try
-        {
-            await db.SaveChangesAsync(
-                cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            db.Entry(
-                    log)
-                .State =
-                    EntityState.Detached;
-
-            var winner =
-                await db.HelpdeskMailProcessingLogs
-                    .AsNoTracking()
-                    .AnyAsync(
-                        x =>
-                            x.OrganizationId ==
-                                log.OrganizationId
-                            &&
-                            x.Mailbox ==
-                                log.Mailbox
-                            &&
-                            x.InternetMessageId ==
-                                log.InternetMessageId,
-                        cancellationToken);
-
-            if (!winner)
-            {
-                throw;
-            }
-        }
+        await db.SaveChangesAsync(cancellationToken);
+        return;
     }
+
+    db.HelpdeskMailProcessingLogs.Add(log);
+
+    try
+    {
+        await db.SaveChangesAsync(cancellationToken);
+    }
+    catch (DbUpdateException)
+    {
+        db.Entry(log).State = EntityState.Detached;
+
+        // Otro worker puede haber insertado el registro
+        // entre la consulta y el INSERT.
+        // Buscar la fila ganadora. No ocultar otros errores.
+
+        var winner =
+            await db.HelpdeskMailProcessingLogs
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId == log.OrganizationId
+                        &&
+                        x.Mailbox == log.Mailbox
+                        &&
+                        x.InternetMessageId == log.InternetMessageId,
+                    cancellationToken);
+
+        if (winner is null)
+        {
+            throw;
+        }
+
+        if (winner.Decision is "accepted" or "ignored")
+        {
+            return;
+        }
+
+        winner.UpdateOutcome(
+            log.Decision,
+            log.ReasonCode,
+            log.Reason,
+            log.TicketId);
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+}
 
     // ============================================================
     // TOKEN

@@ -52,6 +52,9 @@ import apiClient
 import './HelpdeskPages.css'
 import './HelpdeskReportsPage.css'
 
+import { HelpdeskReportExportActions }
+  from './HelpdeskReportExportActions'
+
 interface Count {
   label: string
   count: number
@@ -1189,6 +1192,12 @@ export function HelpdeskReportsPage() {
             ? 'Exportando…'
             : 'Exportar CSV'}
         </button>
+
+        <HelpdeskReportExportActions
+            summary={summary}
+            from={from}
+            to={to}
+          />
       </section>
 
       {error && (

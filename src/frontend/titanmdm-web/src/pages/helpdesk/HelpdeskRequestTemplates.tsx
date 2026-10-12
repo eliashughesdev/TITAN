@@ -377,17 +377,88 @@ export function HelpdeskRequestTemplates({
     reset()
   }
 
-  if (
-    loading
-    ||
-    error
-    ||
-    items.length ===
-      0
-  ) {
-    return null
-  }
+  if (loading) {
+  return (
+    <section
+      className="hrt rounded-2xl border border-slate-200 bg-white p-5"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-3">
+        <span className="h-5 w-5 animate-pulse rounded-full bg-indigo-200" />
+        <div>
+          <strong className="text-sm text-slate-700">
+            Cargando plantillas
+          </strong>
+          <p className="text-xs text-slate-500">
+            Preparando formularios de solicitud...
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
 
+if (error) {
+  return (
+    <section
+      className="hrt rounded-2xl border border-red-200 bg-red-50 p-5"
+      role="alert"
+    >
+      <div className="flex items-start gap-3">
+        <span className="text-red-600">
+          <ClipboardList size={22} />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <strong className="text-sm text-red-800">
+            No se pudieron cargar las plantillas
+          </strong>
+
+          <p className="mt-1 text-xs text-red-700">
+            {error}
+          </p>
+
+          <p className="mt-2 text-xs text-red-700">
+            Puedes continuar creando una solicitud manualmente.
+            Las plantillas volverán a estar disponibles cuando
+            se restablezca la conexión.
+          </p>
+
+          <button
+            type="button"
+            className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100"
+            onClick={() => window.location.reload()}
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+if (items.length === 0) {
+  return (
+    <section className="hrt rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <div className="flex items-start gap-3">
+        <ClipboardList size={22} className="text-slate-500" />
+
+        <div>
+          <strong className="text-sm text-slate-700">
+            No hay plantillas activas
+          </strong>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Puedes crear tu solicitud manualmente.
+            El administrador TIC podrá publicar formularios
+            para agilizar futuras solicitudes.
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
   return (
     <section
       className="hrt"

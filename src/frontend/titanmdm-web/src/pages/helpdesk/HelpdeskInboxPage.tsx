@@ -47,6 +47,12 @@ import {
 import './HelpdeskPages.css'
 import './HelpdeskWorkPage.css'
 import './HelpdeskInboxWorkflow.css'
+import { HelpdeskOperationsOverview } from './HelpdeskOperationsOverview'
+
+import {
+  HelpdeskAssignmentDialog,
+  type HelpdeskAssignmentTicket,
+} from './HelpdeskAssignmentDialog'
 
 type View =
   | 'mine'
@@ -344,6 +350,11 @@ export function HelpdeskInboxPage() {
       null,
     )
 
+  const [
+    assigningTicket,
+    setAssigningTicket,
+  ] = useState<HelpdeskAssignmentTicket | null>(null)
+
   // ============================================================
   // PERMISSIONS
   // ============================================================
@@ -438,6 +449,13 @@ export function HelpdeskInboxPage() {
       legacyHelpdeskPermissions
         .manage,
     )
+
+  const canAssign =
+    hasPermission(helpdeskPermissions.ticketAssign) ||
+    hasPermission(helpdeskPermissions.ticketTake) ||
+    hasPermission(helpdeskPermissions.adminAccess) ||
+    hasPermission(legacyHelpdeskPermissions.ticketAssign) ||
+    hasPermission(legacyHelpdeskPermissions.manage)
 
   // ============================================================
   // URL STATE
@@ -894,6 +912,16 @@ export function HelpdeskInboxPage() {
         'helpdesk-work'
       }
     >
+      <HelpdeskOperationsOverview
+        workload={workload}
+        tickets={tickets}
+        loading={loading}
+        onView={changeView}
+        onOpen={openTicket}
+        canSeeUnassigned={canViewUnassigned}
+        canSeeAll={canViewAll}
+        canSeeKanban={canViewKanban}
+      />
       <header
         className="helpdesk-inbox__header"
       >
@@ -1513,6 +1541,23 @@ export function HelpdeskInboxPage() {
                             </td>
 
                             <td>
+                              {canAssign && (
+                                <button
+                                  type="button"
+                                  className="helpdesk-ui-button helpdesk-ui-button--secondary"
+                                  disabled={loading || assigningTicket !== null}
+                                  title={`Asignar ${item.number}`}
+                                  onClick={() => setAssigningTicket({
+                                    id: item.id,
+                                    number: item.number,
+                                    subject: item.subject,
+                                    assigneeName: item.assigneeName,
+                                  })}
+                                >
+                                  <Users size={15} />
+                                  Asignar
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="helpdesk-inbox__open"
@@ -1696,6 +1741,23 @@ export function HelpdeskInboxPage() {
               )
             }
           }
+        />
+      )}
+      {canAssign && (
+        <HelpdeskAssignmentDialog
+          ticket={assigningTicket}
+          agents={workload?.agents ?? []}
+          onClose={() => setAssigningTicket(null)}
+          onAssigned={async (ticketId, _agentId, agentName) => {
+            setTickets(current => current.map(item =>
+              item.id === ticketId
+                ? { ...item, assigneeName: agentName }
+                : item,
+            ))
+            setNotice(`Ticket asignado correctamente a ${agentName}.`)
+            // El ticket puede salir de la bandeja "Sin asignar".
+            await Promise.allSettled([load(), loadWorkload()])
+          }}
         />
       )}
     </main>

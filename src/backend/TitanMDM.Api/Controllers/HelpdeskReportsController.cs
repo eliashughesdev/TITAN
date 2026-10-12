@@ -33,7 +33,7 @@ public sealed class HelpdeskReportsController
         [FromQuery] DateOnly? to,
         CancellationToken cancellationToken)
     {
-        if (!CanViewReports())
+        if (!CanExportReports())
         {
             return Forbid();
         }
@@ -1294,28 +1294,67 @@ public sealed class HelpdeskReportsController
             1);
     }
 
-    private bool CanViewReports()
-    {
-        return User.Claims
-            .Any(
-                claim =>
-                    claim.Type ==
-                        "permission"
-                    &&
-                    (
-                        string.Equals(
-                            claim.Value,
-                            "helpdesk.view",
-                            StringComparison
-                                .OrdinalIgnoreCase)
-                        ||
-                        string.Equals(
-                            claim.Value,
-                            "tickets.view",
-                            StringComparison
-                                .OrdinalIgnoreCase)
-                    ));
-    }
+// ============================================================
+// HD-F6 — PERMISOS DE REPORTES
+// ============================================================
+
+private bool CanViewReports()
+{
+    return User.Claims.Any(
+        claim =>
+            claim.Type == "permission"
+            &&
+            (
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.reports.view",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.reports.export",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.admin.access",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.view",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "tickets.view",
+                    StringComparison.OrdinalIgnoreCase)
+            ));
+}
+
+private bool CanExportReports()
+{
+    return User.Claims.Any(
+        claim =>
+            claim.Type == "permission"
+            &&
+            (
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.reports.export",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.admin.access",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.manage",
+                    StringComparison.OrdinalIgnoreCase)
+            ));
+}
 
     private bool TryGetOrganization(
         out Guid organizationId)

@@ -195,6 +195,9 @@ import {
 } from './pages/helpdesk/HelpdeskTemplatesAdminPage'
 
 import { RemoteSupportDirectoryPage } from './pages/remote/RemoteSupportDirectoryPage'
+import {
+  HelpdeskExperience,
+} from './pages/helpdesk/HelpdeskExperience'
 
 interface ApplicationRoute {
   path: string
@@ -951,7 +954,13 @@ function App() {
                     route.helpdeskConsole
                   }
                 >
-                  {route.page}
+                 {route.helpdeskConsole ? (
+                  <HelpdeskExperience variant="console">
+                    {route.page}
+                  </HelpdeskExperience>
+                ) : (
+                  route.page
+                )}
                 </PermissionRoute>
               }
             />

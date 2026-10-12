@@ -173,6 +173,69 @@ public sealed class HelpdeskMailProcessingLog
         private set;
     }
 
+    public void UpdateOutcome(
+    string decision,
+    string reasonCode,
+    string reason,
+    Guid? ticketId = null)
+{
+    var normalizedDecision =
+        NormalizeRequired(
+            decision,
+            30,
+            nameof(decision))
+        .ToLowerInvariant();
+
+    if (normalizedDecision is not
+        ("accepted" or "ignored" or "failed"))
+    {
+        throw new ArgumentException(
+            "Decisión de procesamiento no válida.",
+            nameof(decision));
+    }
+
+    // Un resultado definitivo nunca debe retroceder a fallo.
+    if (Decision is "accepted" or "ignored")
+    {
+        throw new InvalidOperationException(
+            "El mensaje ya tiene un resultado definitivo.");
+    }
+
+    if (normalizedDecision == "accepted" &&
+        !ticketId.HasValue)
+    {
+        throw new ArgumentException(
+            "El mensaje aceptado debe estar asociado a un ticket.",
+            nameof(ticketId));
+    }
+
+    if (ticketId == Guid.Empty)
+    {
+        throw new ArgumentException(
+            "TicketId inválido.",
+            nameof(ticketId));
+    }
+
+    Decision = normalizedDecision;
+
+    ReasonCode =
+        NormalizeRequired(
+            reasonCode,
+            80,
+            nameof(reasonCode))
+        .ToLowerInvariant();
+
+    Reason =
+        NormalizeRequired(
+            reason,
+            1000,
+            nameof(reason));
+
+    TicketId = ticketId ?? TicketId;
+
+    ProcessedAtUtc = DateTime.UtcNow;
+}
+
     public void LinkTicket(
         Guid ticketId)
     {
