@@ -446,11 +446,9 @@ export default function WindowsEnrollmentPanel({
             Instalar TitanMDM Windows Agent
           </h2>
 
-          <p>
-            Descarga un instalador preparado
-            automáticamente para conectar el
-            equipo con este servidor TitanMDM.
-          </p>
+         <span>
+          ✓ Hasta {maxUses} equipos por instalador
+        </span>
         </div>
 
         <div className="windows-deployment-grid">
@@ -523,7 +521,7 @@ export default function WindowsEnrollmentPanel({
                 ? 'Sin permiso para descargar'
                 : downloadingIndividual
                   ? 'Generando instalador...'
-                  : 'Descargar instalador Windows'}
+                  : `Descargar instalador · ${maxUses} equipos`}
             </button>
 
             <small className="windows-deployment-note">

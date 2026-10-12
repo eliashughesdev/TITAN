@@ -319,8 +319,8 @@ export function useWindowsEnrollment() {
 
                 expirationMinutes,
 
-                maxUses:
-                  1,
+                maxUses,
+
               })
 
           downloadBlob(
@@ -329,7 +329,10 @@ export function useWindowsEnrollment() {
           )
 
           setSuccess(
-             'Instalador TitanMDM generado correctamente. La credencial incluida permite un solo enrolamiento.',
+  'Instalador TitanMDM generado correctamente. ' +
+  'Permite hasta ${maxUses} inscripción(es) antes de vencer ' +
+  'la credencial o alcanzar su límite.',
+
           )
 
           await loadTokens()
@@ -350,6 +353,8 @@ export function useWindowsEnrollment() {
       },
       [
         expirationMinutes,
+          maxUses,
+
         loadTokens,
       ],
     )

@@ -39,6 +39,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
     public event Action<string>? StatusChanged;
     public event Action? ConnectionLost;
+    private readonly RemoteVideoPerformanceProfile _videoProfile = new();
 
     public RemoteTransportClient(RemoteHostSession session)
     {
@@ -556,13 +557,16 @@ private async Task StreamLoopAsync(
 
         if (connection?.State != HubConnectionState.Connected)
         {
-            if (!channelPaused)
-            {
-                channelPaused = true;
+          if (channelPaused)
+        {
+            channelPaused = false;
+            channelStateNeedsSync = true;
 
-                StatusChanged?.Invoke(
-                    "Canal SignalR temporalmente desconectado");
-            }
+            _videoProfile.Reset();
+
+            StatusChanged?.Invoke(
+                "SignalR recuperado; verificando escritorio activo");
+        }
 
             await DelaySafeAsync(
                 DisconnectedRetryMilliseconds,
@@ -679,9 +683,9 @@ private async Task StreamLoopAsync(
 
         try
         {
-            var frame = _captureService.Capture(
-                jpegQuality: 40,
-                maxWidth: 1440);
+          var frame = _captureService.Capture(
+            jpegQuality: _videoProfile.JpegQuality,
+            maxWidth: _videoProfile.MaximumWidth);
 
             if (frame.Data.Length == 0)
             {
@@ -734,11 +738,16 @@ private async Task StreamLoopAsync(
                 StatusChanged?.Invoke(
                     $"Transmitiendo · {frame.DisplayLabel} · " +
                     $"{published} frames");
+
+                _videoProfile.ReportFrameCompleted(
+                     Stopwatch.GetElapsedTime(cycleStarted));
             }
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
+
         {
+             _videoProfile.ReportCongestion();
             break;
         }
         catch (OperationCanceledException)
@@ -756,6 +765,7 @@ private async Task StreamLoopAsync(
         {
             StatusChanged?.Invoke(
                 $"Error de captura o transmisión: {ex.Message}");
+                _videoProfile.ReportCaptureFailure();
 
             await DelaySafeAsync(
                 CaptureFailureRetryMilliseconds,
@@ -763,13 +773,12 @@ private async Task StreamLoopAsync(
 
             continue;
         }
-
         var elapsed = Stopwatch.GetElapsedTime(cycleStarted);
 
-        var delay = Math.Max(
-            0,
-            TargetFrameIntervalMilliseconds -
-            (int)elapsed.TotalMilliseconds);
+       var delay = Math.Max(
+                0,
+                _videoProfile.FrameIntervalMilliseconds -
+                (int)elapsed.TotalMilliseconds);
 
         if (delay > 0)
         {

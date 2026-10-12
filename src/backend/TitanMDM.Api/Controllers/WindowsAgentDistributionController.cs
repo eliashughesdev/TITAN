@@ -210,11 +210,16 @@ public sealed class WindowsAgentDistributionController
                 });
         }
 
-        var maxUses =
-            deploymentMode ==
-                "individual"
-                ? 1
-                : request.MaxUses;
+        if (request.MaxUses is < 1 or > 1000)
+            {
+                return BadRequest(new
+                {
+                    code = "INVALID_ENROLLMENT_LIMIT",
+                    message = "La cantidad de equipos debe estar entre 1 y 1000."
+                });
+            }
+
+            var maxUses = request.MaxUses;
 
         try
         {

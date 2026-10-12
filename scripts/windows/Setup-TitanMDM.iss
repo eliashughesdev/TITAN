@@ -1,3 +1,4 @@
+
 #ifndef SourceRoot
   #define SourceRoot "."
 #endif
@@ -11,19 +12,16 @@
 #endif
 
 [Setup]
-
 AppId={{3D681C48-1D8C-47A0-9A20-0A710D000001}
-
 AppName=TitanMDM Windows Agent
 AppVersion=1.0.0
 AppPublisher=TitanMDM
-AppPublisherURL=https://github.com/EliasHughes/mdmTitan
+AppPublisherURL=https://github.com/eliashughesdev/TITAN
 
 DefaultDirName={autopf}\TitanMDM
 DefaultGroupName=TitanMDM
 
 PrivilegesRequired=admin
-
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -38,29 +36,17 @@ OutputDir={#OutputDir}
 OutputBaseFilename={#OutputName}
 
 SetupLogging=yes
-
-; La desinstalación real se implementará de manera controlada por
-; TitanMDM y no mediante eliminación ciega del directorio ProgramData.
-
 Uninstallable=no
-
 WizardStyle=modern
 
 CloseApplications=no
 RestartApplications=no
 
 [Files]
-
-Source: "{#SourceRoot}\Install-TitanMDMAgent.ps1"; \
-DestDir: "{tmp}\TitanMDM"; \
-Flags: ignoreversion
-
-Source: "{#SourceRoot}\config.json"; \
-DestDir: "{tmp}\TitanMDM"; \
-Flags: ignoreversion
+Source: "{#SourceRoot}\Install-TitanMDMAgent.ps1"; DestDir: "{tmp}\TitanMDM"; Flags: ignoreversion
+Source: "{#SourceRoot}\config.json"; DestDir: "{tmp}\TitanMDM"; Flags: ignoreversion
 
 [Code]
-
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -72,11 +58,31 @@ begin
   if CurStep <> ssPostInstall then
     Exit;
 
-  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  InstallerPath := ExpandConstant('{tmp}\TitanMDM\Install-TitanMDMAgent.ps1');
-  ConfigPath := ExpandConstant('{tmp}\TitanMDM\config.json');
-  Parameters := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass ' +
-    '-File "' + InstallerPath + '" -ConfigPath "' + ConfigPath + '" -Silent';
+  PowerShellPath :=
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+
+  InstallerPath :=
+    ExpandConstant('{tmp}\TitanMDM\Install-TitanMDMAgent.ps1');
+
+  ConfigPath :=
+    ExpandConstant('{tmp}\TitanMDM\config.json');
+
+  if not FileExists(InstallerPath) then
+  begin
+    RaiseException(
+      'No se encontró el script interno de instalación TitanMDM.');
+  end;
+
+  if not FileExists(ConfigPath) then
+  begin
+    RaiseException(
+      'No se encontró la configuración de instalación TitanMDM.');
+  end;
+
+  Parameters :=
+    '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass ' +
+    '-File "' + InstallerPath + '" ' +
+    '-ConfigPath "' + ConfigPath + '" -Silent';
 
   WizardForm.StatusLabel.Caption :=
     'Instalando o actualizando TitanMDM Windows Agent...';
@@ -96,8 +102,9 @@ begin
   if ResultCode <> 0 then
   begin
     RaiseException(
-      'El instalador interno de TitanMDM terminó con el código ' +
-      IntToStr(ResultCode) + '. Consulta ' +
+      'La instalación del agente TitanMDM falló. Código: ' +
+      IntToStr(ResultCode) +
+      '. Revisa el registro de instalación en ' +
       'C:\ProgramData\TitanMDM\logs\installer.log.');
   end;
 end;
