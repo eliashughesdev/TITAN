@@ -492,7 +492,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
         }
     }
 
-    
+
     // ============================================================
     // DESKTOP STATE PUBLISHING — RS-H3.2
     // ============================================================
@@ -532,7 +532,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
     // STREAM LOOP
     // ============================================================
 
-   
+
 private async Task StreamLoopAsync(
     CancellationToken cancellationToken)
 {
@@ -614,7 +614,7 @@ private async Task StreamLoopAsync(
             continue;
         }
 
-       
+
         // Publicar al cambiar el estado del escritorio.
         // También publicar tras restablecer SignalR para
         // sincronizar el estado del visor del técnico.
@@ -729,38 +729,48 @@ private async Task StreamLoopAsync(
                 frame.DisplayCount,
                 frame.DisplayLabel,
                 sendCancellation.Token);
+var elapsedFrame = Stopwatch.GetElapsedTime(cycleStarted);
 
-            var published =
-                Interlocked.Increment(ref _framesPublished);
+// Medir TODOS los frames publicados, no solamente
+// uno de cada treinta. De esta forma, el perfil
+// adaptativo recibe la carga real de captura + red.
+_videoProfile.ReportFrameCompleted(elapsedFrame);
 
-            if (published == 1 || published % 30 == 0)
-            {
-                StatusChanged?.Invoke(
-                    $"Transmitiendo · {frame.DisplayLabel} · " +
-                    $"{published} frames");
+var published = Interlocked.Increment(
+    ref _framesPublished);
 
-                _videoProfile.ReportFrameCompleted(
-                     Stopwatch.GetElapsedTime(cycleStarted));
-            }
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
+// Evitar registrar continuamente en pantalla o logs.
+// Este contador es informativo, no controla el rendimiento.
+if (published == 1 || published % 120 == 0)
+{
+    StatusChanged?.Invoke(
+        $"Transmitiendo · {frame.DisplayLabel} · " +
+        $"{published} frames · " +
+        $"{elapsedFrame.TotalMilliseconds:F0} ms/frame · " +
+        $"objetivo {_videoProfile.TargetFps} FPS");
+}}
 
-        {
-             _videoProfile.ReportCongestion();
-            break;
-        }
-        catch (OperationCanceledException)
-        {
-            StatusChanged?.Invoke(
-                "Frame descartado por congestión del canal");
+catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
+{
+    // Cancelación normal: el técnico terminó la sesión
+    // o se detuvo el transporte remoto.
+    break;
+}
+catch (OperationCanceledException){
+    // El envío del frame agotó su tiempo de espera.
+    // Reducimos carga y continuamos intentando.
+    _videoProfile.ReportCongestion();
 
-            await DelaySafeAsync(
-                DisconnectedRetryMilliseconds,
-                cancellationToken);
+    StatusChanged?.Invoke(
+        "Frame descartado por congestión del canal");
 
-            continue;
-        }
+    await DelaySafeAsync(
+        DisconnectedRetryMilliseconds,
+        cancellationToken);
+
+    continue;
+}
+
         catch (Exception ex)
         {
             StatusChanged?.Invoke(
