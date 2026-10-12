@@ -10,31 +10,27 @@ public sealed class WindowsInteractiveUserResolver
     private const int WtsActive = 0;
     private const int WtsUserName = 5;
     private const int WtsDomainName = 7;
-
     private const uint InvalidSessionId = 0xFFFFFFFF;
 
     public WindowsInteractiveUser? GetActiveUser()
     {
-        // Priorizamos el usuario de la consola física.
-        var consoleSession = WTSGetActiveConsoleSessionId();
+        // Preferir la consola interactiva del equipo.
+        var consoleId = WTSGetActiveConsoleSessionId();
 
-        if (consoleSession != InvalidSessionId)
+        if (consoleId != InvalidSessionId)
         {
-            var consoleUser = ReadUser(consoleSession);
+            var consoleUser = ReadUser(consoleId);
 
             if (consoleUser is not null)
-            {
                 return consoleUser;
-            }
         }
 
-        // Si el equipo se utiliza mediante RDP, buscar
-        // una sesión interactiva activa alternativa.
-        if (!WTSEnumerateSessions(
+        // Fallback: una sesion RDP activa.
+        if (!WTSEnumerateSessionsW(
                 IntPtr.Zero,
                 0,
                 1,
-                out var sessionsPointer,
+                out var sessions,
                 out var count))
         {
             return null;
@@ -42,45 +38,37 @@ public sealed class WindowsInteractiveUserResolver
 
         try
         {
-            var size = Marshal.SizeOf<WtsSessionInfo>();
+            var structureSize =
+                Marshal.SizeOf<WtsSessionInfo>();
 
-            for (var index = 0; index < count; index++)
+            for (var i = 0; i < count; i++)
             {
-                var pointer = IntPtr.Add(
-                    sessionsPointer,
-                    index * size);
+                var entryPointer = IntPtr.Add(
+                    sessions,
+                    checked(i * structureSize));
 
-                var session = Marshal
-                    .PtrToStructure<WtsSessionInfo>(pointer);
+                var entry =
+                    Marshal.PtrToStructure<WtsSessionInfo>(
+                        entryPointer);
 
-                if (session.State != WtsActive)
+                if (entry.State != WtsActive ||
+                    entry.SessionId < 0 ||
+                    (uint)entry.SessionId == consoleId)
                 {
                     continue;
                 }
 
-                if (session.SessionId < 0)
-                {
-                    continue;
-                }
-
-                var sessionId = (uint)session.SessionId;
-
-                if (sessionId == consoleSession)
-                {
-                    continue;
-                }
-
-                var user = ReadUser(sessionId);
+                var user = ReadUser(
+                    (uint)entry.SessionId);
 
                 if (user is not null)
-                {
                     return user;
-                }
             }
         }
         finally
         {
-            WTSFreeMemory(sessionsPointer);
+            if (sessions != IntPtr.Zero)
+                WTSFreeMemory(sessions);
         }
 
         return null;
@@ -94,29 +82,25 @@ public sealed class WindowsInteractiveUserResolver
             WtsUserName);
 
         if (string.IsNullOrWhiteSpace(userName))
-        {
             return null;
-        }
 
-        var domainName = QuerySessionString(
+        var domain = QuerySessionString(
             sessionId,
             WtsDomainName);
 
-        if (IsServiceAccount(
-                userName,
-                domainName))
-        {
+        if (IsServiceAccount(userName, domain))
             return null;
-        }
+
+        var qualifiedName =
+            string.IsNullOrWhiteSpace(domain)
+                ? userName
+                : $"{domain}\\{userName}";
 
         return new WindowsInteractiveUser(
             SessionId: sessionId,
             UserName: userName,
-            DomainName: domainName,
-            QualifiedName:
-                string.IsNullOrWhiteSpace(domainName)
-                    ? userName
-                    : $"{domainName}\\{userName}",
+            DomainName: domain,
+            QualifiedName: qualifiedName,
             CollectedAtUtc: DateTime.UtcNow);
     }
 
@@ -124,45 +108,42 @@ public sealed class WindowsInteractiveUserResolver
         string userName,
         string? domainName)
     {
-        if (
-            string.Equals(
-                domainName,
+        if (domainName?.Equals(
                 "NT AUTHORITY",
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) == true)
         {
             return true;
         }
 
-        return
-            userName.Equals(
-                "SYSTEM",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            userName.Equals(
-                "LOCAL SERVICE",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            userName.Equals(
-                "NETWORK SERVICE",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            userName.StartsWith(
-                "DWM-",
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            userName.StartsWith(
-                "UMFD-",
-                StringComparison.OrdinalIgnoreCase);
+        return userName.Equals(
+                   "SYSTEM",
+                   StringComparison.OrdinalIgnoreCase)
+               || userName.Equals(
+                   "LOCAL SERVICE",
+                   StringComparison.OrdinalIgnoreCase)
+               || userName.Equals(
+                   "NETWORK SERVICE",
+                   StringComparison.OrdinalIgnoreCase)
+               || userName.StartsWith(
+                   "DWM-",
+                   StringComparison.OrdinalIgnoreCase)
+               || userName.StartsWith(
+                   "UMFD-",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? QuerySessionString(
         uint sessionId,
-        int informationClass)
+        int infoClass)
     {
-        if (!WTSQuerySessionInformation(
+        // IMPORTANTE:
+        // Invocar explicitamente la API Unicode (W).
+        // La variante ANSI interpretada como UTF-16
+        // produce nombres corruptos.
+        if (!WTSQuerySessionInformationW(
                 IntPtr.Zero,
                 sessionId,
-                informationClass,
+                infoClass,
                 out var buffer,
                 out var byteCount))
         {
@@ -171,28 +152,48 @@ public sealed class WindowsInteractiveUserResolver
 
         try
         {
-            if (buffer == IntPtr.Zero || byteCount <= 1)
+            if (buffer == IntPtr.Zero ||
+                byteCount < sizeof(char) ||
+                byteCount % sizeof(char) != 0)
             {
                 return null;
             }
 
-            var value = Marshal.PtrToStringUni(buffer);
+            // WTS devuelve el tamano en bytes.
+            // Limitar la lectura al buffer real.
+            var charCount = byteCount / sizeof(char);
+
+            if (charCount > 32768)
+                return null;
+
+            var value = Marshal.PtrToStringUni(
+                buffer,
+                charCount);
+
+            if (value is null)
+                return null;
+
+            var terminator = value.IndexOf('\0');
+
+            if (terminator >= 0)
+                value = value[..terminator];
+
+            value = value.Trim();
 
             return string.IsNullOrWhiteSpace(value)
                 ? null
-                : value.Trim();
+                : value;
         }
         finally
         {
             if (buffer != IntPtr.Zero)
-            {
                 WTSFreeMemory(buffer);
-            }
         }
     }
 
     [DllImport("kernel32.dll")]
-    private static extern uint WTSGetActiveConsoleSessionId();
+    private static extern uint
+        WTSGetActiveConsoleSessionId();
 
     [DllImport(
         "wtsapi32.dll",
@@ -201,7 +202,7 @@ public sealed class WindowsInteractiveUserResolver
         ExactSpelling = true,
         SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSEnumerateSessions(
+    private static extern bool WTSEnumerateSessionsW(
         IntPtr server,
         int reserved,
         int version,
@@ -210,14 +211,18 @@ public sealed class WindowsInteractiveUserResolver
 
     [DllImport(
         "wtsapi32.dll",
+        EntryPoint = "WTSQuerySessionInformationW",
+        CharSet = CharSet.Unicode,
+        ExactSpelling = true,
         SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSQuerySessionInformation(
-        IntPtr server,
-        uint sessionId,
-        int informationClass,
-        out IntPtr buffer,
-        out int bytesReturned);
+    private static extern bool
+        WTSQuerySessionInformationW(
+            IntPtr server,
+            uint sessionId,
+            int informationClass,
+            out IntPtr buffer,
+            out int bytesReturned);
 
     [DllImport("wtsapi32.dll")]
     private static extern void WTSFreeMemory(

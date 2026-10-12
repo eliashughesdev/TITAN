@@ -1,8 +1,10 @@
+
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-
+using System.Text;
+using System.Text.Json;
 using Microsoft.Win32;
 
 namespace TitanMDM.WindowsAgent.Services;
@@ -10,426 +12,172 @@ namespace TitanMDM.WindowsAgent.Services;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsDeviceInfoProvider
 {
-    private const int PowerShellTimeoutMilliseconds =
-        8_000;
+    private static readonly TimeSpan QueryTimeout =
+        TimeSpan.FromSeconds(15);
 
-    public WindowsDeviceInformation
-        GetDeviceInformation()
+    private const string WindowsVersionKey =
+        @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+
+    private const string HardwareScript = """
+        $ErrorActionPreference = 'Stop'
+        $computer = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+        $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction SilentlyContinue
+        $processor = Get-CimInstance -ClassName Win32_Processor -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        $result = @{
+            Manufacturer = [string]$computer.Manufacturer
+            Model = [string]$computer.Model
+            TotalMemoryBytes = [long]$computer.TotalPhysicalMemory
+            SerialNumber = [string]$bios.SerialNumber
+            BiosVersion = [string]$bios.SMBIOSBIOSVersion
+            CpuName = [string]$processor.Name
+        }
+        $result | ConvertTo-Json -Compress -Depth 3
+        """;
+
+    public WindowsDeviceInformation GetDeviceInformation()
     {
-        var agentVersion =
-            typeof(WindowsDeviceInfoProvider)
-                .Assembly
-                .GetName()
-                .Version?
-                .ToString()
-            ??
-            "1.0.0";
+        var hardware = QueryHardware();
 
-        var manufacturer =
-            QueryCimString(
-                "Win32_ComputerSystem",
-                "Manufacturer");
+        var version = typeof(WindowsDeviceInfoProvider)
+            .Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
-        var model =
-            QueryCimString(
-                "Win32_ComputerSystem",
-                "Model");
+        var productName = ReadRegistry(
+            WindowsVersionKey, "ProductName");
 
-        var serialNumber =
-            QueryCimString(
-                "Win32_BIOS",
-                "SerialNumber");
+        var displayVersion = ReadRegistry(
+            WindowsVersionKey, "DisplayVersion");
 
-        var biosVersion =
-            QueryCimString(
-                "Win32_BIOS",
-                "SMBIOSBIOSVersion");
+        var currentBuild = ReadRegistry(
+            WindowsVersionKey, "CurrentBuildNumber")
+            ?? ReadRegistry(WindowsVersionKey, "CurrentBuild");
 
-        var cpuName =
-            QueryCimString(
-                "Win32_Processor",
-                "Name");
-
-        var totalMemoryBytes =
-            QueryCimInt64(
-                "Win32_ComputerSystem",
-                "TotalPhysicalMemory");
-
-        var productName =
-            ReadRegistryString(
-                Registry.LocalMachine,
-                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-                "ProductName");
-
-        var displayVersion =
-            ReadRegistryString(
-                Registry.LocalMachine,
-                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-                "DisplayVersion");
-
-        var currentBuild =
-            ReadRegistryString(
-                Registry.LocalMachine,
-                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-                "CurrentBuildNumber")
-            ??
-            ReadRegistryString(
-                Registry.LocalMachine,
-                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-                "CurrentBuild");
-
-        var machineGuid =
-            ReadRegistryString(
-                Registry.LocalMachine,
-                @"SOFTWARE\Microsoft\Cryptography",
-                "MachineGuid");
-
-        var operatingSystem =
-            Normalize(
-                productName)
-            ??
-            RuntimeInformation
-                .OSDescription;
-
-        var operatingSystemVersion =
-            BuildOperatingSystemVersion(
-                displayVersion,
-                currentBuild);
+        var machineGuid = ReadRegistry(
+            @"SOFTWARE\Microsoft\Cryptography", "MachineGuid");
 
         var interactiveUser =
             new WindowsInteractiveUserResolver().GetActiveUser();
 
+        var operatingSystem =
+            Normalize(productName) ?? RuntimeInformation.OSDescription;
+
         return new WindowsDeviceInformation(
-            DeviceName:
-                Environment.MachineName,
-
-            SerialNumber:
-                Normalize(
-                    serialNumber)
-                ??
-                Normalize(
-                    machineGuid)
-                ??
-                Environment.MachineName,
-
-            Manufacturer:
-                Normalize(
-                    manufacturer),
-
-            Model:
-                Normalize(
-                    model),
-
-            OperatingSystem:
-                operatingSystem,
-
-            OperatingSystemVersion:
-                operatingSystemVersion,
-
-            AgentVersion:
-                agentVersion,
-
-            UserName:
-                interactiveUser?.UserName,
-
-            DomainName:
-               interactiveUser?.DomainName,
-
-            Architecture:
-                RuntimeInformation
-                    .OSArchitecture
-                    .ToString(),
-
-            BiosVersion:
-                Normalize(
-                    biosVersion),
-
-            CpuName:
-                Normalize(
-                    cpuName),
-
-            TotalMemoryBytes:
-                totalMemoryBytes,
-
-            MachineGuid:
-                Normalize(
-                    machineGuid),
-
-            CollectedAtUtc:
-                DateTime.UtcNow);
+            DeviceName: Environment.MachineName,
+            SerialNumber: Normalize(hardware?.SerialNumber)
+                ?? Normalize(machineGuid)
+                ?? Environment.MachineName,
+            Manufacturer: Normalize(hardware?.Manufacturer),
+            Model: Normalize(hardware?.Model),
+            OperatingSystem: operatingSystem,
+            OperatingSystemVersion: BuildWindowsVersion(
+                displayVersion, currentBuild),
+            AgentVersion: version,
+            UserName: interactiveUser?.UserName,
+            DomainName: interactiveUser?.DomainName,
+            Architecture: RuntimeInformation.OSArchitecture.ToString(),
+            BiosVersion: Normalize(hardware?.BiosVersion),
+            CpuName: Normalize(hardware?.CpuName),
+            TotalMemoryBytes: hardware?.TotalMemoryBytes is > 0
+                ? hardware.TotalMemoryBytes
+                : null,
+            MachineGuid: Normalize(machineGuid),
+            CollectedAtUtc: DateTime.UtcNow);
     }
 
-    // ============================================================
-    // CIM - STRING
-    // ============================================================
-
-    private static string?
-        QueryCimString(
-            string className,
-            string propertyName)
+    private static HardwareSnapshot? QueryHardware()
     {
-        if (
-            string.IsNullOrWhiteSpace(
-                className)
-            ||
-            string.IsNullOrWhiteSpace(
-                propertyName))
-        {
-            return null;
-        }
-
-        /*
-         * Importante:
-         *
-         * No usamos raw interpolated strings aquí.
-         *
-         * PowerShell utiliza llaves, $, comillas y expresiones que
-         * pueden entrar en conflicto con la interpolación C#.
-         *
-         * ArgumentList evita tener que escapar manualmente todo
-         * el comando.
-         */
-
-        var script =
-            string.Concat(
-                "$ErrorActionPreference='Stop'; ",
-                "$item=Get-CimInstance -ClassName '",
-                EscapePowerShellSingleQuoted(
-                    className),
-                "' | Select-Object -First 1; ",
-                "if($null -ne $item){ ",
-                "$value=$item.'",
-                EscapePowerShellSingleQuoted(
-                    propertyName),
-                "'; ",
-                "if($null -ne $value){ ",
-                "[Console]::Out.Write([string]$value); ",
-                "} ",
-                "}");
-
-        return RunPowerShell(
-            script);
-    }
-
-    // ============================================================
-    // CIM - INT64
-    // ============================================================
-
-    private static long?
-        QueryCimInt64(
-            string className,
-            string propertyName)
-    {
-        var raw =
-            QueryCimString(
-                className,
-                propertyName);
-
-        if (
-            string.IsNullOrWhiteSpace(
-                raw))
-        {
-            return null;
-        }
-
-        if (
-            long.TryParse(
-                raw,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var value))
-        {
-            return value;
-        }
-
-        return null;
-    }
-
-    // ============================================================
-    // POWERSHELL EXECUTION
-    // ============================================================
-
-    private static string?
-        RunPowerShell(
-            string script)
-    {
-        if (
-            string.IsNullOrWhiteSpace(
-                script))
-        {
-            return null;
-        }
+        Process? process = null;
 
         try
         {
-            using var process =
-                new Process();
+            // EncodedCommand transporta el script en UTF-16LE;
+            // no utiliza interpolación de entradas del usuario.
+            var encoded = Convert.ToBase64String(
+                Encoding.Unicode.GetBytes(HardwareScript));
 
-            process.StartInfo =
-                new ProcessStartInfo
-                {
-                    FileName =
-                        "powershell.exe",
-
-                    UseShellExecute =
-                        false,
-
-                    RedirectStandardOutput =
-                        true,
-
-                    RedirectStandardError =
-                        true,
-
-                    CreateNoWindow =
-                        true
-                };
-
-            /*
-             * ArgumentList evita problemas con:
-             *
-             * - comillas
-             * - $
-             * - {
-             * - }
-             * - espacios
-             * - interpolación
-             */
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    "-NoProfile");
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    "-NonInteractive");
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    "-ExecutionPolicy");
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    "Bypass");
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    "-Command");
-
-            process.StartInfo
-                .ArgumentList
-                .Add(
-                    script);
-
-            if (
-                !process.Start())
+            process = new Process
             {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = Path.Combine(
+                        Environment.GetFolderPath(
+                            Environment.SpecialFolder.System),
+                        @"WindowsPowerShell\v1.0\powershell.exe"),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
+                }
+            };
+
+            process.StartInfo.ArgumentList.Add("-NoLogo");
+            process.StartInfo.ArgumentList.Add("-NoProfile");
+            process.StartInfo.ArgumentList.Add("-NonInteractive");
+            process.StartInfo.ArgumentList.Add("-EncodedCommand");
+            process.StartInfo.ArgumentList.Add(encoded);
+
+            if (!process.Start())
                 return null;
-            }
 
-            var standardOutputTask =
-                process
-                    .StandardOutput
-                    .ReadToEndAsync();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
 
-            var standardErrorTask =
-                process
-                    .StandardError
-                    .ReadToEndAsync();
-
-            if (
-                !process.WaitForExit(
-                    PowerShellTimeoutMilliseconds))
+            if (!process.WaitForExit((int)QueryTimeout.TotalMilliseconds))
             {
                 try
                 {
-                    process.Kill(
-                        entireProcessTree:
-                            true);
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(2000);
                 }
                 catch
                 {
-                    // Limpieza best-effort.
+                    // Fallo de consulta: mantener el agente disponible.
                 }
 
                 return null;
             }
 
-            var standardOutput =
-                standardOutputTask
-                    .GetAwaiter()
-                    .GetResult();
+            var output = outputTask.GetAwaiter().GetResult();
+            _ = errorTask.GetAwaiter().GetResult();
 
-            _ =
-                standardErrorTask
-                    .GetAwaiter()
-                    .GetResult();
-
-            if (
-                process.ExitCode !=
-                    0)
-            {
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
                 return null;
-            }
 
-            return Normalize(
-                standardOutput);
+            return JsonSerializer.Deserialize<HardwareSnapshot>(
+                output,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    NumberHandling =
+                        System.Text.Json.Serialization.JsonNumberHandling
+                            .AllowReadingFromString
+                });
         }
-        catch
+        catch (Exception ex) when (
+            ex is InvalidOperationException
+            or System.ComponentModel.Win32Exception
+            or IOException
+            or JsonException
+            or UnauthorizedAccessException
+            or ArgumentException)
         {
-            /*
-             * El inventario nunca debe provocar la caída
-             * del servicio del agente por una consulta CIM.
-             */
-
+            // El inventario no debe cerrar el servicio del agente.
             return null;
         }
+        finally
+        {
+            process?.Dispose();
+        }
     }
 
-    // ============================================================
-    // POWERSHELL ESCAPING
-    // ============================================================
-
-    private static string
-        EscapePowerShellSingleQuoted(
-            string value)
-    {
-        /*
-         * Dentro de una cadena PowerShell delimitada por '
-         * una comilla simple se representa duplicándola.
-         */
-
-        return value.Replace(
-            "'",
-            "''",
-            StringComparison.Ordinal);
-    }
-
-    // ============================================================
-    // WINDOWS REGISTRY
-    // ============================================================
-
-    private static string?
-        ReadRegistryString(
-            RegistryKey root,
-            string path,
-            string valueName)
+    private static string? ReadRegistry(string keyPath, string value)
     {
         try
         {
-            using var key =
-                root.OpenSubKey(
-                    path);
-
-            return Normalize(
-                key?
-                    .GetValue(
-                        valueName)
-                    ?.ToString());
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+            return Normalize(key?.GetValue(value)?.ToString());
         }
         catch
         {
@@ -437,68 +185,52 @@ public sealed class WindowsDeviceInfoProvider
         }
     }
 
-    // ============================================================
-    // OPERATING SYSTEM VERSION
-    // ============================================================
-
-    private static string
-        BuildOperatingSystemVersion(
-            string? displayVersion,
-            string? currentBuild)
+    private static string BuildWindowsVersion(
+        string? displayVersion,
+        string? build)
     {
-        var normalizedDisplayVersion =
-            Normalize(
-                displayVersion);
-
-        var normalizedBuild =
-            Normalize(
-                currentBuild);
-
-        if (
-            normalizedDisplayVersion is not null
-            &&
-            normalizedBuild is not null)
+        if (!string.IsNullOrWhiteSpace(displayVersion)
+            && !string.IsNullOrWhiteSpace(build))
         {
-            return
-                $"{normalizedDisplayVersion} " +
-                $"(Build {normalizedBuild})";
+            return $"{displayVersion} (Build {build})";
         }
 
-        if (
-            normalizedBuild is not null)
-        {
-            return
-                $"Build {normalizedBuild}";
-        }
+        if (!string.IsNullOrWhiteSpace(build))
+            return $"Build {build}";
 
-        return Environment
-            .OSVersion
-            .Version
-            .ToString();
+        return Environment.OSVersion.Version.ToString();
     }
 
-    // ============================================================
-    // NORMALIZATION
-    // ============================================================
-
-    private static string?
-        Normalize(
-            string? value)
+    private static string? Normalize(string? value)
     {
-        if (
-            string.IsNullOrWhiteSpace(
-                value))
-        {
+        if (string.IsNullOrWhiteSpace(value))
             return null;
-        }
 
-        return value.Trim();
+        var normalized = value.Trim();
+
+        return normalized.Equals(
+            "To Be Filled By O.E.M.",
+            StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals(
+                "System Product Name",
+                StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals(
+                "Default string",
+                StringComparison.OrdinalIgnoreCase)
+            ? null
+            : normalized;
+    }
+
+    private sealed class HardwareSnapshot
+    {
+        public string? Manufacturer { get; set; }
+        public string? Model { get; set; }
+        public string? SerialNumber { get; set; }
+        public string? BiosVersion { get; set; }
+        public string? CpuName { get; set; }
+        public long? TotalMemoryBytes { get; set; }
     }
 }
-
-// ================================================================
-// CONTRACT
-// ================================================================
 
 public sealed record WindowsDeviceInformation(
     string DeviceName,
