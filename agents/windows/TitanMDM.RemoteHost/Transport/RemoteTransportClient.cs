@@ -22,7 +22,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
         TimeSpan.FromSeconds(5);
 
     private readonly RemoteHostSession _session;
-    private readonly DesktopCaptureService _captureService;
+    private readonly HybridDesktopCaptureService _captureService;
     private readonly RemoteInputController _inputController;
     private readonly WindowsDesktopStateProbe _desktopProbe = new();
 
@@ -46,7 +46,7 @@ public sealed class RemoteTransportClient : IAsyncDisposable
         _session = session ??
             throw new ArgumentNullException(nameof(session));
 
-        _captureService = new DesktopCaptureService();
+        _captureService = new HybridDesktopCaptureService();
         _inputController = new RemoteInputController();
     }
 
