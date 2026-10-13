@@ -522,61 +522,66 @@ public sealed partial class HelpdeskService
             candidates);
     }
 
-    public async Task<HelpdeskRoutingQueueResult> RetryAutomaticAssignmentForOpenTicketsAsync(
+
+public async Task<HelpdeskRoutingQueueResult>
+    RetryAutomaticAssignmentForOpenTicketsAsync(
         Guid organizationId,
         int maxTickets,
         bool dryRun,
         CancellationToken cancellationToken = default)
-    {
-        maxTickets = Math.Clamp(maxTickets, 1, 200);
+{
+    maxTickets = Math.Clamp(maxTickets, 1, 200);
 
-        var tickets =
-            await _db.HelpdeskTickets
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.AssigneeUserId == null &&
-                        x.Status != "closed" &&
-                        x.Status != "resolved" &&
-                        x.Status != "pendinguser")
-                .OrderBy(x => x.CreatedAtUtc)
-                .Take(maxTickets)
-                .Select(
-                    x =>
-                        new
-                        {
-                            x.Id,
-                            x.Number,
-                            x.Category,
-                            x.Status,
-                            x.RequesterUserId,
-                            x.RequestedTeamId,
-                            x.SiteId,
-                            x.SiteLocationId
-                        })
-                .ToListAsync(cancellationToken);
-
-        var items = new List<HelpdeskRoutingQueueItemResult>();
-        var assigned = 0;
-        var skipped = 0;
-        var failed = 0;
-
-        foreach (var ticket in tickets)
+    var tickets = await _db.HelpdeskTickets
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.AssigneeUserId == null &&
+            x.Status != "closed" &&
+            x.Status != "resolved" &&
+            x.Status != "pendinguser")
+        .OrderBy(x => x.CreatedAtUtc)
+        .Take(maxTickets)
+        .Select(x => new
         {
-            try
-            {
-                var routing =
-                    await EvaluateRoutingAsync(
-                        organizationId,
-                        ticket.RequesterUserId,
-                        ticket.Category,
-                        cancellationToken,
-                        ticket.RequestedTeamId,
-                        ticket.SiteId,
-                        ticket.SiteLocationId);
+            x.Id,
+            x.Number,
+            x.Category,
+            x.Status,
+            x.RequesterUserId,
+            x.RequestedTeamId,
+            x.SiteId,
+            x.SiteLocationId
+        })
+        .ToListAsync(cancellationToken);
 
-                if (routing.Candidate is null)
+    var items = new List<HelpdeskRoutingQueueItemResult>();
+
+    var assigned = 0;
+    var skipped = 0;
+    var failed = 0;
+
+    foreach (var ticket in tickets)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            if (dryRun)
+            {
+                // La simulación no escribe en la base de datos
+                // ni enriquece campos del ticket.
+
+                var preview = await EvaluateRoutingAsync(
+                    organizationId,
+                    ticket.RequesterUserId,
+                    ticket.Category,
+                    cancellationToken,
+                    ticket.RequestedTeamId,
+                    ticket.SiteId,
+                    ticket.SiteLocationId);
+
+                if (preview.Candidate is null)
                 {
                     skipped++;
 
@@ -587,65 +592,15 @@ public sealed partial class HelpdeskService
                             ticket.Category,
                             ticket.Status,
                             "skipped",
-                            string.IsNullOrWhiteSpace(routing.Reason)
-                                ? "Sin candidato vÃ¡lido."
-                                : routing.Reason));
+                            string.IsNullOrWhiteSpace(
+                                preview.Reason)
+                                ? "Sin técnico elegible."
+                                : preview.Reason));
 
                     continue;
                 }
 
-                if (dryRun)
-                {
-                    skipped++;
-
-                    items.Add(
-                        new HelpdeskRoutingQueueItemResult(
-                            ticket.Id,
-                            ticket.Number,
-                            ticket.Category,
-                            ticket.Status,
-                            "dry-run",
-                           $"Asignable a {routing.Candidate.UserName} / {routing.Candidate.TeamName}."));
-
-                    continue;
-                }
-
-                var ok =
-                    await RetryAutomaticAssignmentEnterpriseAsync(
-                        organizationId,
-                        ticket.Id,
-                        cancellationToken);
-
-                if (ok)
-                {
-                    assigned++;
-
-                    items.Add(
-                        new HelpdeskRoutingQueueItemResult(
-                            ticket.Id,
-                            ticket.Number,
-                            ticket.Category,
-                            ticket.Status,
-                            "assigned",
-                           $"Asignado automÃ¡ticamente a {routing.Candidate.UserName} / {routing.Candidate.TeamName}."));
-                }
-                else
-                {
-                    failed++;
-
-                    items.Add(
-                        new HelpdeskRoutingQueueItemResult(
-                            ticket.Id,
-                            ticket.Number,
-                            ticket.Category,
-                            ticket.Status,
-                            "failed",
-                            "El candidato existÃ­a, pero la asignaciÃ³n fallÃ³ durante la revalidaciÃ³n transaccional."));
-                }
-            }
-            catch (Exception exception)
-            {
-                failed++;
+                skipped++;
 
                 items.Add(
                     new HelpdeskRoutingQueueItemResult(
@@ -653,19 +608,138 @@ public sealed partial class HelpdeskService
                         ticket.Number,
                         ticket.Category,
                         ticket.Status,
-                        "failed",
-                        Limit(exception.Message, 300)));
-            }
-        }
+                        "dry-run",
+                        $"Asignable a " +
+                        $"{preview.Candidate.UserName} / " +
+                        $"{preview.Candidate.TeamName}."));
 
-        return new HelpdeskRoutingQueueResult(
-            tickets.Count,
-            assigned,
-            skipped,
-            failed,
-            dryRun,
-            items);
+                continue;
+            }
+
+            // El mismo camino que utiliza el worker:
+            // validación de identidad,
+            // enriquecimiento contextual y
+            // asignación empresarial transaccional.
+
+            var success =
+                await RetryAutomaticAssignmentWithFallbackAsync(
+                    organizationId,
+                    ticket.Id,
+                    cancellationToken);
+
+            // Evitar leer datos obsoletos después de
+            // ExecuteUpdateAsync y otros contextos de trabajo.
+            _db.ChangeTracker.Clear();
+
+            var current = await _db.HelpdeskTickets
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == ticket.Id)
+                .Select(x => new
+                {
+                    x.AssigneeUserId,
+                    x.Status
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (success &&
+                current?.AssigneeUserId is not null)
+            {
+                assigned++;
+
+                items.Add(
+                    new HelpdeskRoutingQueueItemResult(
+                        ticket.Id,
+                        ticket.Number,
+                        ticket.Category,
+                        ticket.Status,
+                        "assigned",
+                        "Asignación automática completada " +
+                        "mediante el motor empresarial."));
+
+                continue;
+            }
+
+            if (current is null ||
+                current.Status is "closed" or "resolved" ||
+                current.AssigneeUserId is not null)
+            {
+                skipped++;
+
+                items.Add(
+                    new HelpdeskRoutingQueueItemResult(
+                        ticket.Id,
+                        ticket.Number,
+                        ticket.Category,
+                        ticket.Status,
+                        "skipped",
+                        "El ticket cambió durante el procesamiento."));
+
+                continue;
+            }
+
+            // Evaluar nuevamente para obtener el motivo real
+            // después del enriquecimiento contextual.
+            var diagnosis = await EvaluateRoutingAsync(
+                organizationId,
+                ticket.RequesterUserId,
+                ticket.Category,
+                cancellationToken,
+                ticket.RequestedTeamId,
+                ticket.SiteId,
+                ticket.SiteLocationId);
+
+            skipped++;
+
+            items.Add(
+                new HelpdeskRoutingQueueItemResult(
+                    ticket.Id,
+                    ticket.Number,
+                    ticket.Category,
+                    ticket.Status,
+                    "skipped",
+                    diagnosis.Candidate is null
+                        ? (
+                            string.IsNullOrWhiteSpace(
+                                diagnosis.Reason)
+                                ? "No existe técnico elegible."
+                                : diagnosis.Reason
+                          )
+                        : "Se encontró un candidato, pero " +
+                          "no se confirmó la asignación. " +
+                          "Revisar capacidad, concurrencia " +
+                          "y cobertura."));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            failed++;
+
+            items.Add(
+                new HelpdeskRoutingQueueItemResult(
+                    ticket.Id,
+                    ticket.Number,
+                    ticket.Category,
+                    ticket.Status,
+                    "failed",
+                    Limit(exception.Message, 300)));
+        }
     }
+
+    return new HelpdeskRoutingQueueResult(
+        tickets.Count,
+        assigned,
+        skipped,
+        failed,
+        dryRun,
+        items);
+}
+
 
     private static string Limit(string? value, int maxLength)
     {

@@ -471,3 +471,1168 @@
     transition-duration: .01ms !important;
   }
 }
+/* ============================================================
+   TITANMDM HELPDESK — UX ENTERPRISE V3
+   HD-F5 / F6 / F7
+   Solo dentro del workspace Helpdesk
+   ============================================================ */
+
+.titan-helpdesk-experience {
+  --hd-primary: #5267e8;
+  --hd-primary-deep: #394bc3;
+  --hd-text: #1c2a43;
+  --hd-subtext: #71809b;
+  --hd-stroke: #dfe6f3;
+  --hd-elevated: #fff;
+  --hd-soft-bg: #f7f9fe;
+  --hd-focus: rgba(82, 103, 232, .20);
+
+  color: var(--hd-text);
+  font-feature-settings: "cv11", "ss01";
+}
+
+.titan-helpdesk-experience .helpdesk-page {
+  max-width: 1600px;
+  margin-inline: auto;
+  padding: clamp(12px, 1.8vw, 26px);
+  gap: 22px;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .helpdesk-inbox__panel,
+  .helpdesk-work__agents,
+  .helpdesk-detail__card,
+  .helpdesk-metric,
+  .hdc-card,
+  .hrt,
+  .helpdesk-kanban__column
+) {
+  border: 1px solid var(--hd-stroke);
+  border-radius: 19px;
+  box-shadow:
+    0 3px 6px rgba(27, 43, 83, .018),
+    0 13px 38px rgba(27, 43, 83, .055);
+}
+
+/* Cabeceras */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hdc-header
+) {
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(107, 123, 244, .13),
+      transparent 54%
+    ),
+    linear-gradient(125deg, #fff, #f7f9ff);
+  box-shadow:
+    0 12px 30px rgba(38, 53, 111, .055);
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hdc-header
+) h1 {
+  color: #1c2a43;
+  font-size: clamp(25px, 2.6vw, 36px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -.045em;
+}
+
+/* Paneles: pequeña entrada progresiva */
+
+@keyframes hd-v3-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__panel,
+  .helpdesk-work__agents,
+  .hdc-card,
+  .helpdesk-metric
+) {
+  animation: hd-v3-enter .36s ease both;
+}
+
+/* Métricas */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric
+) {
+  background:
+    linear-gradient(
+      145deg,
+      #fff 66%,
+      #f8faff
+    );
+  transition:
+    transform .23s cubic-bezier(.2,.8,.2,1),
+    box-shadow .23s ease,
+    border-color .23s ease;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric
+):hover {
+  transform: translateY(-3px);
+  border-color: #bfcaf7;
+  box-shadow:
+    0 15px 34px rgba(53, 72, 150, .11);
+}
+
+/* Botones */
+
+.titan-helpdesk-experience .helpdesk-ui-button {
+  border-radius: 12px;
+  font-weight: 750;
+  letter-spacing: -.01em;
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    background-color .18s ease,
+    border-color .18s ease;
+}
+
+.titan-helpdesk-experience
+.helpdesk-ui-button--primary {
+  background: linear-gradient(
+    135deg,
+    #6073f0,
+    #465bd8
+  );
+  border: 1px solid #465bd8;
+  box-shadow:
+    0 7px 19px rgba(76, 96, 222, .19);
+}
+
+.titan-helpdesk-experience
+.helpdesk-ui-button--primary:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    #5266df,
+    #3549bf
+  );
+  box-shadow:
+    0 12px 25px rgba(76, 96, 222, .24);
+}
+
+.titan-helpdesk-experience
+.helpdesk-ui-button:not(:disabled):active {
+  transform: translateY(0) scale(.98);
+}
+
+/* Formularios */
+
+.titan-helpdesk-experience :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select
+) {
+  min-height: 40px;
+  border-radius: 11px;
+  border-color: #d8e1f1;
+  background: #fff;
+  color: #273855;
+  transition:
+    border-color .2s ease,
+    box-shadow .2s ease,
+    background-color .2s ease;
+}
+
+.titan-helpdesk-experience :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select
+):focus-visible {
+  outline: 2px solid #91a3f6;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--hd-focus);
+}
+
+/* Tablas */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .hdc-table
+) {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .hdc-table
+) thead th {
+  background: #f5f7fd;
+  color: #66768f;
+  font-weight: 800;
+  letter-spacing: .045em;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .hdc-table
+) tbody tr {
+  transition: background .15s ease;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .hdc-table
+) tbody tr:hover {
+  background: #f6f8ff;
+}
+
+/* Estados y chips */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__badge,
+  .helpdesk-inbox__total
+) {
+  border-radius: 999px;
+  font-weight: 750;
+}
+
+.titan-helpdesk-experience
+.helpdesk-inbox__badge--pendinguser {
+  background: #fff2dc;
+  color: #935e18;
+}
+
+.titan-helpdesk-experience
+.helpdesk-inbox__badge--inprogress {
+  background: #eaf0ff;
+  color: #3954bb;
+}
+
+.titan-helpdesk-experience
+.helpdesk-inbox__badge--resolved {
+  background: #e5f8ef;
+  color: #15744f;
+}
+
+/* Kanban */
+
+.titan-helpdesk-experience
+.helpdesk-kanban__column {
+  background: linear-gradient(
+    180deg,
+    #f8faff,
+    #f3f6fc
+  );
+  border-radius: 18px;
+}
+
+.titan-helpdesk-experience
+.helpdesk-kanban__card {
+  border: 1px solid #e2e8f5;
+  border-radius: 14px;
+  background: #fff;
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.titan-helpdesk-experience
+.helpdesk-kanban__card:hover {
+  transform: translateY(-3px);
+  border-color: #bdcaf8;
+  box-shadow: 0 13px 28px rgba(31, 50, 112, .12);
+}
+
+/* Conversación */
+
+.titan-helpdesk-experience
+.helpdesk-detail__message {
+  border-radius: 14px;
+  transition:
+    background-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.titan-helpdesk-experience
+.helpdesk-detail__composer textarea {
+  min-height: 112px;
+  border-radius: 13px;
+  background: #fbfcff;
+}
+
+/* Formularios de plantillas */
+
+.titan-helpdesk-experience .hrt {
+  padding: 20px;
+  background: linear-gradient(
+    135deg,
+    #fff,
+    #f7f8ff
+  );
+  border: 1px solid #dce3f6;
+}
+
+.titan-helpdesk-experience
+.hrt-template-panel {
+  border-radius: 14px;
+  background: #fff;
+  border-color: #dfe5f5;
+}
+
+.titan-helpdesk-experience
+.hrt__title strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.titan-helpdesk-experience
+.hrt__title span {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Barra de trabajo */
+
+.titan-helpdesk-experience
+.helpdesk-work__tabs {
+  background: rgba(255, 255, 255, .92);
+  border-color: #dfe6f3;
+  border-radius: 15px;
+  padding: 7px;
+}
+
+.titan-helpdesk-experience
+.helpdesk-work__tabs button {
+  border-radius: 11px;
+  white-space: nowrap;
+}
+
+.titan-helpdesk-experience
+.helpdesk-work__tabs button.is-active {
+  background: #ebefff;
+  color: #334ac5;
+}
+
+/* Administración, SLA y reportes */
+
+.titan-helpdesk-experience .hdc-card {
+  background: #fff;
+  border-radius: 20px;
+}
+
+.titan-helpdesk-experience .hdc-nav a {
+  border-radius: 12px;
+  transition:
+    transform .18s ease,
+    background-color .18s ease;
+}
+
+.titan-helpdesk-experience .hdc-nav a:hover {
+  transform: translateX(2px);
+  background: #f1f4ff;
+}
+
+/* Accesibilidad y responsive */
+
+@media (max-width: 900px) {
+  .titan-helpdesk-experience
+  .helpdesk-page {
+    padding: 12px;
+  }
+
+  .titan-helpdesk-experience :is(
+    .helpdesk-inbox__header,
+    .hdc-header
+  ) {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .titan-helpdesk-experience
+  .helpdesk-inbox__header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .titan-helpdesk-experience
+  .helpdesk-work__tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .titan-helpdesk-experience
+  .helpdesk-inbox__table-wrap {
+    overflow-x: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-helpdesk-experience *,
+  .titan-helpdesk-experience *::before,
+  .titan-helpdesk-experience *::after {
+    animation: none !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* ==========================================================
+   TITANMDM · SERVICE DESK V4
+   Rediseño visual global
+   No modifica lógica ni permisos.
+   ========================================================== */
+
+.titan-helpdesk-experience {
+  --hd-v4-navy: #111f42;
+  --hd-v4-indigo: #5268e9;
+  --hd-v4-cyan: #44c0ec;
+  --hd-v4-text: #1c2c4d;
+  --hd-v4-muted: #697a9b;
+  --hd-v4-border: #e0e7f4;
+
+  background:
+    radial-gradient(
+      ellipse 58% 440px at 94% 0%,
+      rgba(88, 117, 255, .10),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 50% 420px at 3% 20%,
+      rgba(50, 179, 225, .07),
+      transparent 75%
+    ),
+    #f5f7fd;
+
+  border-radius: 20px;
+  padding: clamp(12px, 1.4vw, 24px);
+  min-height: calc(100vh - 115px);
+}
+
+.titan-helpdesk-experience
+.hd-experience__ambient {
+  opacity: .65;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox,
+  .helpdesk-page,
+  .hd-kpi,
+  .hdc,
+  .hd-template-admin,
+  .entra-settings,
+  .helpdesk-mail-page
+) {
+  width: 100%;
+  max-width: 1660px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+/* ==========================================================
+   CABECERAS PREMIUM
+   ========================================================== */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(24px, 2.6vw, 38px);
+  border: 1px solid #294371;
+  border-radius: 24px;
+
+  background:
+    radial-gradient(
+      circle at 87% 15%,
+      rgba(83, 118, 255, .45),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 60% 115%,
+      rgba(26, 193, 225, .21),
+      transparent 40%
+    ),
+    linear-gradient(
+      120deg,
+      #101d3c 0%,
+      #192c58 60%,
+      #233c77 100%
+    );
+
+  box-shadow:
+    0 18px 38px rgba(22, 40, 89, .20);
+
+  color: #fff;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+)::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  top: -180px;
+  right: -30px;
+  border: 1px solid rgba(255,255,255,.15);
+  box-shadow:
+    0 0 0 36px rgba(255,255,255,.025),
+    0 0 0 80px rgba(255,255,255,.016);
+  pointer-events: none;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) :is(h1, h2, strong) {
+  color: #fff;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) p {
+  color: #c8d8f8;
+  line-height: 1.65;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__eyebrow,
+  .hd-kpi__eyebrow,
+  .helpdesk-mail-eyebrow
+) {
+  color: #94e9ff;
+  letter-spacing: .13em;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) .helpdesk-ui-button--secondary {
+  color: #ecf3ff;
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.26);
+  backdrop-filter: blur(12px);
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) .helpdesk-ui-button--secondary:hover {
+  background: rgba(255,255,255,.19);
+  color: #fff;
+}
+
+/* ==========================================================
+   METRICAS
+   ========================================================== */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric,
+  .hd-kpi__metric,
+  .hd-template-admin__summary article,
+  .helpdesk-mail-metrics > *,
+  .hdc-metrics > *
+) {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e0e7f5;
+  border-radius: 19px;
+
+  background:
+    linear-gradient(145deg, #fff 60%, #f5f7ff);
+
+  box-shadow:
+    0 7px 22px rgba(31, 50, 99, .055);
+
+  transition:
+    transform .22s ease,
+    box-shadow .22s ease,
+    border-color .22s ease;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric,
+  .hd-kpi__metric,
+  .hd-template-admin__summary article
+)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    #556bef,
+    #54c3ed,
+    #ad8dff
+  );
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric,
+  .hd-kpi__metric
+):hover {
+  transform: translateY(-4px);
+  border-color: #b9c7fa;
+  box-shadow:
+    0 17px 35px rgba(35, 56, 120, .12);
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-metric,
+  .hd-overview__metric,
+  .hd-kpi__metric
+) strong {
+  color: #17294e;
+  font-weight: 850;
+}
+
+/* ==========================================================
+   PANELES PRINCIPALES
+   ========================================================== */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__panel,
+  .hd-kpi__panel,
+  .hd-kpi__sla-card,
+  .hdc-card,
+  .hd-template-admin__catalog,
+  .hd-template-admin__editor,
+  .entra-settings__card,
+  .helpdesk-mail-card,
+  .helpdesk-detail__card
+) {
+  background: #fff;
+  border: 1px solid #e0e7f4;
+  border-radius: 22px;
+  box-shadow:
+    0 5px 10px rgba(30, 48, 93, .02),
+    0 18px 42px rgba(30, 48, 93, .055);
+}
+
+.titan-helpdesk-experience :is(
+  .hd-kpi__panel,
+  .hdc-card,
+  .hd-template-admin__catalog,
+  .hd-template-admin__editor,
+  .entra-settings__card,
+  .helpdesk-mail-card
+) {
+  overflow: hidden;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__panel-heading,
+  .hd-kpi__panel h2,
+  .hd-template-admin__catalog h2,
+  .hd-template-admin__editor h2,
+  .entra-settings__card-header h2,
+  .helpdesk-mail-card__header h2
+) {
+  color: #203154;
+  font-weight: 800;
+  letter-spacing: -.035em;
+}
+
+/* ==========================================================
+   BOTONES
+   ========================================================== */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-ui-button--primary,
+  .entra-settings__button:not(.entra-settings__button--light)
+) {
+  background: linear-gradient(
+    135deg,
+    #6175f2,
+    #3e50ca
+  );
+  border: 1px solid #4e61d8;
+  color: #fff;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 9px 21px rgba(73, 91, 209, .21);
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-ui-button--primary,
+  .entra-settings__button
+):hover:not(:disabled) {
+  filter: brightness(1.045);
+  box-shadow:
+    0 13px 26px rgba(73,91,209,.23);
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-ui-button,
+  .helpdesk-mail-refresh,
+  .hdc-refresh,
+  .hd-template-admin__toggle
+):focus-visible {
+  outline: 3px solid #95a9ff;
+  outline-offset: 3px;
+}
+
+/* ==========================================================
+   TABLAS / BANDEJAS
+   ========================================================== */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .helpdesk-mail-table,
+  .entra-settings__table
+) thead th {
+  color: #53658a;
+  background: #edf2ff;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: .045em;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .helpdesk-mail-table,
+  .entra-settings__table
+) tbody tr {
+  transition:
+    background-color .17s ease,
+    box-shadow .17s ease;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table,
+  .helpdesk-mail-table,
+  .entra-settings__table
+) tbody tr:hover {
+  background: #f1f5ff;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__table-wrap,
+  .helpdesk-mail-table-wrap,
+  .entra-settings__table-wrap
+) {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* ==========================================================
+   KANBAN
+   ========================================================== */
+
+.titan-helpdesk-experience
+.helpdesk-kanban__column {
+  background:
+    linear-gradient(#f1f5ff, #f8faff);
+  border: 1px solid #dce4f7;
+  border-radius: 19px;
+  box-shadow: 0 9px 24px rgba(38,57,108,.04);
+}
+
+.titan-helpdesk-experience
+.helpdesk-kanban__card {
+  background: #fff;
+  border: 1px solid #e0e7f3;
+  border-radius: 15px;
+  box-shadow:
+    0 5px 15px rgba(28,45,91,.05);
+}
+
+.titan-helpdesk-experience
+.helpdesk-kanban__card:hover {
+  border-color: #9eaff4;
+  transform: translateY(-3px);
+  box-shadow:
+    0 13px 27px rgba(28,45,91,.12);
+}
+
+/* ==========================================================
+   NAVEGACION INTERNA
+   ========================================================== */
+
+.titan-helpdesk-experience
+.hdc-nav {
+  padding: 8px;
+  border: 1px solid #e0e7f5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 23px rgba(30,50,90,.04);
+}
+
+.titan-helpdesk-experience
+.hdc-nav a {
+  border-radius: 11px;
+  font-weight: 750;
+  transition:
+    color .2s ease,
+    background .2s ease,
+    transform .2s ease;
+}
+
+.titan-helpdesk-experience
+.hdc-nav a:hover {
+  background: #ecf1ff;
+  color: #354cc0;
+  transform: translateY(-2px);
+}
+
+/* ==========================================================
+   PLANTILLAS Y ENTRA
+   ========================================================== */
+
+.titan-helpdesk-experience
+.hd-template-admin__layout {
+  gap: 20px;
+}
+
+.titan-helpdesk-experience
+.hd-template-admin__select.is-active {
+  background: #eef2ff;
+  border-color: #a6b7fa;
+  box-shadow: inset 3px 0 #5268e9;
+}
+
+.titan-helpdesk-experience
+.entra-settings__icon {
+  border-radius: 15px;
+  background: linear-gradient(
+    135deg,
+    #e4ecff,
+    #edf5ff
+  );
+  color: #4d63d4;
+}
+
+.titan-helpdesk-experience :is(
+  .entra-settings__diagnostic,
+  .helpdesk-mail-diagnostic
+) {
+  border-radius: 16px;
+  border: 1px solid #dfe7f5;
+  background: #f7f9ff;
+}
+
+/* ==========================================================
+   RESPONSIVE Y ACCESIBILIDAD
+   ========================================================== */
+
+@media (max-width: 800px) {
+  .titan-helpdesk-experience {
+    padding: 10px;
+  }
+
+  .titan-helpdesk-experience :is(
+    .helpdesk-inbox__header,
+    .hd-kpi__hero,
+    .helpdesk-mail-hero
+  ) {
+    padding: 22px;
+    border-radius: 18px;
+  }
+
+  .titan-helpdesk-experience :is(
+    .helpdesk-inbox__metrics,
+    .hd-kpi__metrics
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .titan-helpdesk-experience :is(
+    .helpdesk-inbox__metrics,
+    .hd-kpi__metrics,
+    .hd-template-admin__summary
+  ) {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-helpdesk-experience *,
+  .titan-helpdesk-experience *::before,
+  .titan-helpdesk-experience *::after {
+    animation: none !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================
+   TITAN SERVICE DESK — SHELL V5
+   ========================================================== */
+
+.titan-helpdesk-experience .hd-shell-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  overflow: hidden;
+  margin-bottom: 22px;
+  padding: clamp(24px, 2.5vw, 36px);
+  color: #fff;
+
+  background:
+    radial-gradient(
+      ellipse at 82% 12%,
+      rgba(92, 125, 255, .50),
+      transparent 45%
+    ),
+    linear-gradient(
+      115deg,
+      #111e40 0%,
+      #192d5d 55%,
+      #284887 100%
+    );
+
+  border: 1px solid #314778;
+  border-radius: 24px;
+
+  box-shadow:
+    0 22px 52px rgba(17, 35, 83, .18);
+}
+
+.titan-helpdesk-experience .hd-shell-hero__main {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 19px;
+  min-width: 0;
+  flex: 1;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 60px;
+  width: 60px;
+  height: 60px;
+  color: #fff;
+  background:
+    linear-gradient(
+      140deg,
+      #6e82ff,
+      #445acb
+    );
+  border: 1px solid rgba(255, 255, 255, .30);
+  border-radius: 19px;
+  box-shadow:
+    0 10px 25px rgba(4, 9, 26, .20);
+}
+
+.titan-helpdesk-experience .hd-shell-hero__copy {
+  max-width: 750px;
+  min-width: 0;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+  color: #97e8ff;
+  font-size: 10px;
+  letter-spacing: .15em;
+  font-weight: 800;
+}
+
+.titan-helpdesk-experience .hd-shell-hero h1 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: clamp(24px, 2.65vw, 36px);
+  line-height: 1.12;
+  letter-spacing: -.045em;
+  font-weight: 850;
+}
+
+.titan-helpdesk-experience .hd-shell-hero p {
+  max-width: 690px;
+  margin: 0;
+  color: #c9d8f5;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 13px;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__security {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: #dfebff;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 11px;
+  background: rgba(255,255,255,.12);
+  backdrop-filter: blur(8px);
+  transition:
+    transform .17s ease,
+    background-color .17s ease;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__back:hover {
+  transform: translateY(-2px);
+  color: #fff;
+  background: rgba(255,255,255,.21);
+}
+
+.titan-helpdesk-experience .hd-shell-hero__orb {
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+}
+
+.titan-helpdesk-experience .hd-shell-hero__orb--one {
+  right: -95px;
+  top: -150px;
+  width: 370px;
+  height: 370px;
+  border: 1px solid rgba(255,255,255,.13);
+  box-shadow:
+    0 0 0 50px rgba(255,255,255,.025),
+    0 0 0 105px rgba(255,255,255,.012);
+}
+
+.titan-helpdesk-experience .hd-shell-hero__orb--two {
+  width: 260px;
+  height: 260px;
+  left: 46%;
+  bottom: -230px;
+  background: rgba(42, 194, 232, .10);
+  filter: blur(8px);
+}
+
+.titan-helpdesk-experience .hd-shell-content {
+  min-width: 0;
+}
+
+/* Compactar las cabeceras internas,
+   conservando sus botones y funcionalidades. */
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) {
+  padding: 18px 22px;
+  border-radius: 17px;
+  background: #fff;
+  border: 1px solid #e1e8f4;
+  box-shadow: 0 5px 18px rgba(31, 48, 90, .04);
+  color: #1c2d4b;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) :is(h1, h2, strong) {
+  color: #203252;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) p {
+  color: #6b7b96;
+}
+
+.titan-helpdesk-experience :is(
+  .helpdesk-inbox__header,
+  .hd-kpi__hero,
+  .helpdesk-mail-hero
+) .helpdesk-ui-button--secondary {
+  background: #fff;
+  color: #354a83;
+  border-color: #d8e1f1;
+}
+
+@media (max-width: 720px) {
+  .titan-helpdesk-experience .hd-shell-hero {
+    align-items: stretch;
+    padding: 22px;
+  }
+
+  .titan-helpdesk-experience .hd-shell-hero__main {
+    gap: 12px;
+  }
+
+  .titan-helpdesk-experience .hd-shell-hero__mark {
+    width: 46px;
+    height: 46px;
+    flex-basis: 46px;
+  }
+
+  .titan-helpdesk-experience .hd-shell-hero__actions {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-helpdesk-experience .hd-shell-hero__back {
+    transition: none;
+  }
+}

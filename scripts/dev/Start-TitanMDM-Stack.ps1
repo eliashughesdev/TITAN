@@ -3,16 +3,18 @@
 
 <#
 .SYNOPSIS
-    TitanMDM - Inicio unificado de desarrollo.
+    TitanMDM - Stack unificado de desarrollo.
 
 .DESCRIPTION
-    Inicia frontend Vite, Python Ponches y API .NET
-    desde una sola consola PowerShell.
+    Inicia y supervisa:
+      Frontend Vite     :3020
+      Backend .NET      :8020
+      Python / Ponches  :8127
 
-    WindowsAgent del equipo B permanece como servicio
-    Windows independiente; nunca se ejecuta en el servidor.
+    Python y .NET comparten una clave temporal.
+    BioTimeDB no bloquea la disponibilidad de Helpdesk.
 
-    Para desarrollo local, no para producción/IIS.
+    Uso exclusivo de desarrollo.
 #>
 
 [CmdletBinding()]
@@ -23,120 +25,168 @@ param(
     [switch]$EnableEntra
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath(
-    (Join-Path $PSScriptRoot '..\..')
+    (Join-Path $PSScriptRoot "..\..")
 )
 
-$frontendDir = Join-Path $root 'src\frontend\titanmdm-web'
-$frontendPackage = Join-Path $frontendDir 'package.json'
-$nodeModules = Join-Path $frontendDir 'node_modules'
+$frontendDir = Join-Path $root `
+    "src\frontend\titanmdm-web"
 
-$ponchesLauncher = Join-Path $root 'scripts\ponches\Start-TitanLocal.ps1'
+$pythonDir = Join-Path $root `
+    "integrations\ponches\backend"
 
-$logDir = Join-Path $root '.titan-local'
-$frontendOut = Join-Path $logDir 'frontend.stdout.log'
-$frontendErr = Join-Path $logDir 'frontend.stderr.log'
+$pythonExe = Join-Path $pythonDir `
+    ".venv\Scripts\python.exe"
 
-$frontendProcess = $null
+$apiProject = Join-Path $root `
+    "src\backend\TitanMDM.Api\TitanMDM.Api.csproj"
 
-function Test-TitanPort {
+$logDir = Join-Path $root ".titan-local"
+
+$front = $null
+$api = $null
+$python = $null
+
+$previousLocation = Get-Location
+$environmentBackup = @{}
+
+function Test-TitanListener {
     param([int]$Port)
 
-    $client = New-Object Net.Sockets.TcpClient
+    return [bool](
+        Get-NetTCPConnection `
+            -LocalPort $Port `
+            -State Listen `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    )
+}
 
-    try {
-        $task = $client.ConnectAsync('127.0.0.1', $Port)
-        if (!$task.Wait(500)) {
-            return $false
-        }
-        return $client.Connected
+function Assert-TitanPortAvailable {
+    param([int]$Port)
+
+    if ($Port -lt 1024 -or $Port -gt 65535) {
+        throw "Puerto invalido: $Port"
     }
-    catch {
-        return $false
-    }
-    finally {
-        $client.Dispose()
+
+    if (Test-TitanListener $Port) {
+        $listener = Get-NetTCPConnection `
+            -LocalPort $Port `
+            -State Listen `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+        throw "Puerto ${Port} ocupado por PID $($listener.OwningProcess). Cierra esa instancia primero."
     }
 }
 
-function Wait-TitanHttp {
+function Stop-TitanChild {
     param(
-        [string]$Url,
-        [int]$Seconds = 45
+        [System.Diagnostics.Process]$Process,
+        [switch]$Tree
     )
 
-    $limit = [DateTime]::UtcNow.AddSeconds($Seconds)
-
-    while ([DateTime]::UtcNow -lt $limit) {
-        if ($null -ne $script:frontendProcess) {
-            $script:frontendProcess.Refresh()
-
-            if ($script:frontendProcess.HasExited) {
-                throw "El frontend se detuvo. Revisa $frontendErr"
-            }
-        }
-
-        try {
-            $response = Invoke-WebRequest `
-                -Uri $Url `
-                -UseBasicParsing `
-                -TimeoutSec 3
-
-            if ($response.StatusCode -ge 200 -and
-                $response.StatusCode -lt 400) {
-                return
-            }
-        }
-        catch {
-            Start-Sleep -Milliseconds 500
-        }
+    if ($null -eq $Process) {
+        return
     }
 
-    throw "El frontend no respondió en $Seconds segundos: $Url"
+    try {
+        $Process.Refresh()
+
+        if ($Process.HasExited) {
+            return
+        }
+
+        if ($Tree) {
+            & taskkill.exe `
+                /PID $Process.Id `
+                /T `
+                /F 2>$null | Out-Null
+        }
+        else {
+            Stop-Process `
+                -Id $Process.Id `
+                -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Warning "No se pudo detener PID $($Process.Id)"
+    }
 }
 
-function Stop-TitanFrontend {
-    if ($null -eq $script:frontendProcess) {
-        return
+function Show-TitanLog {
+    param(
+        [string]$Name,
+        [int]$Lines = 25
+    )
+
+    $path = Join-Path $logDir $Name
+
+    if (Test-Path $path) {
+        Write-Host "`n=== $Name ===" -ForegroundColor Yellow
+        Get-Content $path -Tail $Lines
+    }
+}
+
+function Wait-TitanService {
+    param(
+        [string]$Name,
+        [int]$Port,
+        [System.Diagnostics.Process]$Process,
+        [int]$Seconds = 90
+    )
+
+    $deadline = (Get-Date).AddSeconds($Seconds)
+
+    while ((Get-Date) -lt $deadline) {
+        $Process.Refresh()
+
+        if ($Process.HasExited) {
+            throw "$Name finalizo antes de iniciar. ExitCode=$($Process.ExitCode)"
+        }
+
+        if (Test-TitanListener $Port) {
+            Write-Host "[OK] ${Name}:$Port" -ForegroundColor Green
+            return $true
+        }
+
+        Start-Sleep -Milliseconds 800
     }
 
-    $script:frontendProcess.Refresh()
+    throw "$Name no escucho en $Port durante $Seconds segundos."
+}
 
-    if ($script:frontendProcess.HasExited) {
-        return
-    }
+function Set-TitanEnvironment {
+    param(
+        [string]$Name,
+        [string]$Value
+    )
 
-    # cmd.exe puede crear procesos hijos de Vite.
-    # Terminamos únicamente el árbol del proceso
-    # iniciado por este launcher.
-    & taskkill.exe /PID $script:frontendProcess.Id /T /F 2>$null |
-        Out-Null
+    $environmentBackup[$Name] =
+        [Environment]::GetEnvironmentVariable(
+            $Name, "Process"
+        )
+
+    [Environment]::SetEnvironmentVariable(
+        $Name, $Value, "Process"
+    )
 }
 
 try {
     Set-Location $root
 
-    foreach ($item in @(
-        $frontendPackage,
-        $nodeModules,
-        $ponchesLauncher
-    )) {
-        if (!(Test-Path $item)) {
-            throw "Falta un requisito del entorno: $item"
-        }
-    }
+    # ========================================================
+    # 1. PRECHECK
+    # ========================================================
 
-    foreach ($port in @(
-        $FrontendPort,
-        $ApiPort,
-        $PythonPort
-    )) {
-        if ($port -lt 1024 -or $port -gt 65535) {
-            throw "Puerto inválido: $port"
-        }
-    }
+    Write-Host "`n======================================" `
+        -ForegroundColor Cyan
+    Write-Host " TITANMDM - STACK UNIFICADO" `
+        -ForegroundColor Cyan
+    Write-Host "======================================" `
+        -ForegroundColor Cyan
 
     if (@(
         $FrontendPort,
@@ -145,7 +195,7 @@ try {
     ) | Select-Object -Unique |
         Measure-Object |
         Select-Object -ExpandProperty Count) {
-        # La validación efectiva de duplicados aparece abajo.
+        # Validacion de unicidad explicita abajo.
     }
 
     if (
@@ -153,113 +203,312 @@ try {
         $FrontendPort -eq $PythonPort -or
         $ApiPort -eq $PythonPort
     ) {
-        throw 'Los puertos frontend, API y Python deben ser distintos.'
+        throw "Los tres puertos deben ser distintos."
     }
 
-    if (
-        (Test-TitanPort $FrontendPort) -or
-        (Test-TitanPort $ApiPort) -or
-        (Test-TitanPort $PythonPort)
-    ) {
-        throw @'
-Uno de los puertos solicitados ya está ocupado.
-
-Cierra las instancias antiguas de Vite, .NET o Python
-antes de iniciar el stack unificado.
-
-No terminaremos procesos ajenos automáticamente.
-'@
+    foreach ($port in @(
+        $FrontendPort,
+        $ApiPort,
+        $PythonPort
+    )) {
+        Assert-TitanPortAvailable $port
     }
 
-    Get-Command npm.cmd -ErrorAction Stop |
-        Out-Null
+    foreach ($path in @(
+        $pythonExe,
+        $apiProject,
+        (Join-Path $frontendDir "package.json"),
+        (Join-Path $frontendDir "node_modules")
+    )) {
+        if (!(Test-Path $path)) {
+            throw "Requisito no encontrado: $path"
+        }
+    }
 
-    Get-Command dotnet -ErrorAction Stop |
-        Out-Null
+    $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
+    Get-Command npm.cmd -ErrorAction Stop | Out-Null
 
-    New-Item `
-        -ItemType Directory `
-        -Path $logDir `
-        -Force |
-        Out-Null
+    New-Item -ItemType Directory `
+        -Path $logDir -Force | Out-Null
 
-    Write-Host ''
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ' TITANMDM - STACK UNIFICADO' -ForegroundColor Cyan
-    Write-Host '==========================================' -ForegroundColor Cyan
-    Write-Host ''
-    Write-Host "Repositorio: $root"
-    Write-Host "Frontend: http://localhost:$FrontendPort"
-    Write-Host "API:      http://localhost:$ApiPort"
-    Write-Host "Python:   http://127.0.0.1:$PythonPort"
-    Write-Host ''
+    # ========================================================
+    # 2. VALIDAR BACKEND ANTES DE INICIAR
+    # ========================================================
 
-    # ============================================================
-    # FRONTEND: proceso hijo sin otra consola visible
-    # ============================================================
+    Write-Host "`n[PRECHECK] Compilando API..." `
+        -ForegroundColor Yellow
 
-    Write-Host '[1/3] Iniciando frontend...' -ForegroundColor Yellow
+    & $dotnet build $apiProject --nologo
 
-    $command = (
-        "npm run dev -- --host 0.0.0.0 " +
-        "--port $FrontendPort --strictPort"
-    )
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build backend fallido. No se iniciaron servicios."
+    }
 
-    $frontendProcess = Start-Process `
-        -FilePath $env:ComSpec `
+    # ========================================================
+    # 3. CLAVE TEMPORAL COMPARTIDA
+    # ========================================================
+
+    $keyBytes = New-Object byte[] 32
+
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+
+    try {
+        $rng.GetBytes($keyBytes)
+    }
+    finally {
+        $rng.Dispose()
+    }
+
+    $integrationKey =
+        [Convert]::ToBase64String($keyBytes)
+
+    Set-TitanEnvironment `
+        "ASPNETCORE_ENVIRONMENT" "Development"
+
+    Set-TitanEnvironment `
+        "DOTNET_ENVIRONMENT" "Development"
+
+    Set-TitanEnvironment `
+        "EntraLogin__Enabled" $(if ($EnableEntra) {
+            "true"
+        } else {
+            "false"
+        })
+
+    Set-TitanEnvironment `
+        "Ponches__BaseUrl" "http://127.0.0.1:$PythonPort"
+
+    Set-TitanEnvironment `
+        "Ponches__IntegrationKey" $integrationKey
+
+    Set-TitanEnvironment `
+        "TITAN_PONCHES_INTEGRATION_KEY" $integrationKey
+
+    Set-TitanEnvironment `
+        "Ponches__TimeoutSeconds" "180"
+
+    # ========================================================
+    # 4. INICIAR PYTHON
+    # ========================================================
+
+    Write-Host "`n[1/3] Iniciando Python / Ponches..." `
+        -ForegroundColor Cyan
+
+    $python = Start-Process `
+        -FilePath $pythonExe `
         -ArgumentList @(
-            '/d',
-            '/s',
-            '/c',
-            $command
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "$PythonPort"
         ) `
-        -WorkingDirectory $frontendDir `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput $frontendOut `
-        -RedirectStandardError $frontendErr `
+        -WorkingDirectory $pythonDir `
+        -RedirectStandardOutput (
+            Join-Path $logDir "ponches.stdout.log"
+        ) `
+        -RedirectStandardError (
+            Join-Path $logDir "ponches.stderr.log"
+        ) `
         -PassThru
 
-    Wait-TitanHttp `
-        -Url "http://127.0.0.1:$FrontendPort" `
-        -Seconds 45
+    try {
+        Wait-TitanService `
+            -Name "Python" `
+            -Port $PythonPort `
+            -Process $python `
+            -Seconds 90 | Out-Null
 
-    Write-Host '[OK] Frontend funcionando.' -ForegroundColor Green
+        try {
+            $health = Invoke-RestMethod `
+                -Uri "http://127.0.0.1:$PythonPort/api/internal/titan/health" `
+                -Headers @{
+                    "X-Titan-Integration-Key" = $integrationKey
+                } `
+                -TimeoutSec 15
 
-    # ============================================================
-    # PONCHES + .NET: reutilizar launcher comprobado
-    # ============================================================
+            Write-Host "[OK] Bridge Python autenticado." `
+                -ForegroundColor Green
 
-    Write-Host '[2/3] Iniciando Python y verificando BioTime...' `
-        -ForegroundColor Yellow
-
-    Write-Host '[3/3] Iniciando TitanMDM API...' `
-        -ForegroundColor Yellow
-
-    $startParams = @{
-        PythonPort = $PythonPort
-        ApiPort = $ApiPort
+            if ($health.database -ne "online") {
+                Write-Warning "BioTime no esta online. Helpdesk continuara."
+            }
+            else {
+                Write-Host "[OK] BioTimeDB online." `
+                    -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Warning (
+                "Python escucha, pero la prueba del bridge " +
+                "autenticado fallo: $($_.Exception.Message)"
+            )
+        }
+    }
+    catch {
+        Write-Warning $_.Exception.Message
+        Show-TitanLog "ponches.stderr.log"
+        Write-Warning "Continuando con API y Frontend."
     }
 
-    if ($EnableEntra) {
-        $startParams.EnableEntra = $true
+    # ========================================================
+    # 5. INICIAR API .NET
+    # ========================================================
+
+    Write-Host "`n[2/3] Iniciando Backend .NET..." `
+        -ForegroundColor Cyan
+
+    $api = Start-Process `
+        -FilePath $dotnet `
+        -ArgumentList @(
+            "run",
+            "--project",
+            "`"$apiProject`"",
+            "--no-build",
+            "--no-launch-profile",
+            "--urls",
+            "http://0.0.0.0:$ApiPort"
+        ) `
+        -WorkingDirectory $root `
+        -RedirectStandardOutput (
+            Join-Path $logDir "api.stdout.log"
+        ) `
+        -RedirectStandardError (
+            Join-Path $logDir "api.stderr.log"
+        ) `
+        -PassThru
+
+    try {
+        Wait-TitanService `
+            -Name "API" `
+            -Port $ApiPort `
+            -Process $api `
+            -Seconds 90 | Out-Null
+    }
+    catch {
+        Show-TitanLog "api.stderr.log"
+        Show-TitanLog "api.stdout.log"
+        throw
     }
 
-    # Este script queda ejecutándose hasta Ctrl+C.
-    # Gestiona Python, clave interna, BioTime y API .NET.
-    & $ponchesLauncher @startParams
+    # ========================================================
+    # 6. INICIAR FRONTEND
+    # ========================================================
 
-    if (!$?) {
-        throw 'El iniciador de Ponches/API informó un error.'
+    Write-Host "`n[3/3] Iniciando React / Vite..." `
+        -ForegroundColor Cyan
+
+    $viteCommand =
+        "npm.cmd run dev -- --host 0.0.0.0 " +
+        "--port $FrontendPort --strictPort"
+
+    $front = Start-Process `
+        -FilePath $env:ComSpec `
+        -ArgumentList @(
+            "/d",
+            "/s",
+            "/c",
+            $viteCommand
+        ) `
+        -WorkingDirectory $frontendDir `
+        -RedirectStandardOutput (
+            Join-Path $logDir "frontend.stdout.log"
+        ) `
+        -RedirectStandardError (
+            Join-Path $logDir "frontend.stderr.log"
+        ) `
+        -PassThru
+
+    try {
+        Wait-TitanService `
+            -Name "Frontend" `
+            -Port $FrontendPort `
+            -Process $front `
+            -Seconds 60 | Out-Null
+    }
+    catch {
+        Show-TitanLog "frontend.stderr.log"
+        throw
+    }
+
+    # ========================================================
+    # 7. RESULTADO
+    # ========================================================
+
+    Write-Host "`n======================================" `
+        -ForegroundColor Green
+
+    Write-Host " TITANMDM INICIADO" `
+        -ForegroundColor Green
+
+    Write-Host "======================================" `
+        -ForegroundColor Green
+
+    Write-Host "Frontend : http://localhost:$FrontendPort"
+    Write-Host "API      : http://localhost:$ApiPort"
+    Write-Host "Ponches  : http://127.0.0.1:$PythonPort"
+
+    Write-Host "`nPID Frontend: $($front.Id)"
+    Write-Host "PID Backend : $($api.Id)"
+    Write-Host "PID Python  : $($python.Id)"
+
+    Write-Host "`nMantener esta consola abierta."
+    Write-Host "Ctrl+C para cerrar el stack."
+
+    # ========================================================
+    # 8. SUPERVISION
+    # ========================================================
+
+    while ($true) {
+        Start-Sleep -Seconds 5
+
+        $api.Refresh()
+        $front.Refresh()
+
+        if ($api.HasExited) {
+            Show-TitanLog "api.stderr.log"
+            Show-TitanLog "api.stdout.log"
+            throw "La API termino inesperadamente."
+        }
+
+        if ($front.HasExited) {
+            Show-TitanLog "frontend.stderr.log"
+            throw "Frontend terminado inesperadamente."
+        }
+
+        if ($python) {
+            $python.Refresh()
+
+            if ($python.HasExited) {
+                Write-Warning (
+                    "Python termino. " +
+                    "Helpdesk y frontend continuaran."
+                )
+
+                $python = $null
+            }
+        }
     }
 }
 finally {
-    Write-Host ''
-    Write-Host 'Cerrando componentes iniciados por TitanMDM...' `
+    Write-Host "`nDeteniendo componentes de esta sesion..." `
         -ForegroundColor Yellow
 
-    Stop-TitanFrontend
+    Stop-TitanChild -Process $front -Tree
+    Stop-TitanChild -Process $api
+    Stop-TitanChild -Process $python
 
-    Set-Location $root
+    foreach ($name in $environmentBackup.Keys) {
+        [Environment]::SetEnvironmentVariable(
+            $name,
+            $environmentBackup[$name],
+            "Process"
+        )
+    }
 
-    Write-Host 'Launcher finalizado.' -ForegroundColor Cyan
+    Set-Location $previousLocation
+
+    Write-Host "Stack finalizado." -ForegroundColor Cyan
 }
