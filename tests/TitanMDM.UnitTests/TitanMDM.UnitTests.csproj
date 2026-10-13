@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\backend\TitanMDM.Domain\TitanMDM.Domain.csproj" />
     <ProjectReference Include="..\..\src\backend\TitanMDM.Application\TitanMDM.Application.csproj" />
+    <ProjectReference Include="..\..\src\backend\TitanMDM.Infrastructure\TitanMDM.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -12,6 +12,21 @@ export interface RoutingHealth {
   activeTeams: number
   activeMembers: number
   membersOnDutyNow: number
+  automaticRetriesPending: number
+  firstResponseSlaOverdue: number
+  resolutionSlaOverdue: number
+}
+
+export interface RoutingWorkerStatus {
+  running: boolean
+  startedAtUtc: string | null
+  lastCycleStartedAtUtc: string | null
+  lastCycleCompletedAtUtc: string | null
+  completedCycles: number
+  errors: number
+  lastSelectedTickets: number
+  lastError: string | null
+  aiAvailable: boolean
 }
 
 export interface RoutingCandidate {
@@ -46,7 +61,9 @@ export interface RoutingDiagnostic {
 
   requesterUserId?: string | null
   siteId?: string | null
+  siteName?: string | null
   siteLocationId?: string | null
+  siteLocationName?: string | null
   requestedTeamId?: string | null
   assigneeUserId?: string | null
 
@@ -54,6 +71,7 @@ export interface RoutingDiagnostic {
   pendingUser: boolean
 
   engineReason: string
+  requesterBlockReasons: string[]
 
   selectedCandidate?:
     RoutingCandidate | null
@@ -101,6 +119,17 @@ export async function getRoutingHealth():
       .get<RoutingHealth>(
         '/helpdesk/routing/health',
       )
+
+  return data
+}
+
+export async function getRoutingWorker():
+  Promise<RoutingWorkerStatus> {
+  const {
+    data,
+  } = await apiClient.get<RoutingWorkerStatus>(
+    '/helpdesk/routing/worker',
+  )
 
   return data
 }

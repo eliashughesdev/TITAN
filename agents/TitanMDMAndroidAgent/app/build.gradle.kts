@@ -22,11 +22,6 @@ android {
         testInstrumentationRunner =
             "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField(
-            "String",
-            "TITAN_API_BASE_URL",
-            "\"http://10.0.2.2:8020/\""
-        )
 
         buildConfigField(
             "String",
@@ -35,13 +30,57 @@ android {
         )
     }
 
+    val configuredReleaseEndpoint = providers.gradleProperty("titanApiBaseUrl")
+        .orElse(providers.environmentVariable("TITAN_API_BASE_URL"))
+        .map { it.trim() }
+        .orNull
+
+    /*
+     * La resolución del endpoint release es perezosa.
+     * Sólo se exige TITAN_API_BASE_URL cuando realmente se compila un
+     * build type release; así assembleDebug / testDebugUnitTest no se
+     * ven afectados por la configuración de release.
+     */
+    val isReleaseBuildRequested = gradle.startParameter.taskNames.any {
+        it.contains("release", ignoreCase = true)
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            buildConfigField("String", "TITAN_API_BASE_URL", "\"http://10.0.2.2:8020/\"")
         }
 
         release {
             isMinifyEnabled = true
+
+            if (configuredReleaseEndpoint.isNullOrEmpty()) {
+                if (isReleaseBuildRequested) {
+                    error("TITAN_API_BASE_URL is required for release builds")
+                }
+
+                // Placeholder inerte: nunca se usa porque el build release
+                // falla en configuración si no hay endpoint válido.
+                buildConfigField(
+                    "String",
+                    "TITAN_API_BASE_URL",
+                    "\"https://unconfigured.titanmdm.invalid/\""
+                )
+            } else {
+                require(
+                    configuredReleaseEndpoint.startsWith("https://") &&
+                        !configuredReleaseEndpoint.contains('"') &&
+                        !configuredReleaseEndpoint.contains('\\')
+                ) {
+                    "Release API URL must be valid HTTPS"
+                }
+
+                buildConfigField(
+                    "String",
+                    "TITAN_API_BASE_URL",
+                    "\"$configuredReleaseEndpoint\""
+                )
+            }
 
             proguardFiles(
                 getDefaultProguardFile(

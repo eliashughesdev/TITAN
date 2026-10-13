@@ -164,6 +164,12 @@ public sealed class UsersController
                             departmentId =
                                 x.DepartmentId,
 
+                            siteId =
+                                x.SiteId,
+
+                            siteLocationId =
+                                x.SiteLocationId,
+
                             isActive =
                                 x.IsActive,
 
@@ -289,6 +295,12 @@ public sealed class UsersController
 
                 departmentId =
                     user.DepartmentId,
+
+                siteId =
+                    user.SiteId,
+
+                siteLocationId =
+                    user.SiteLocationId,
 
                 isActive =
                     user.IsActive,

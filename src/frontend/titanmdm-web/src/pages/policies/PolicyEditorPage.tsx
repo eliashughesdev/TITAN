@@ -7,14 +7,17 @@ import {
   ExternalLink,
   KeyRound,
   Laptop,
+  LayoutGrid,
   Loader2,
   LockKeyhole,
   Network,
+  Plus,
   RefreshCw,
   Save,
   Shield,
   ShieldCheck,
   Smartphone,
+  Trash2,
   Usb,
   Wifi,
   XCircle,
@@ -129,6 +132,15 @@ interface AndroidPolicyConfiguration {
       | 'BLACKLIST'
       | 'UNSPECIFIED'
     permittedInputMethods: string
+    packages: Array<{
+      packageName: string
+      label: string
+      installType:
+        | 'AVAILABLE'
+        | 'FORCE_INSTALLED'
+        | 'REQUIRED_FOR_SETUP'
+        | 'BLOCKED'
+    }>
   }
 
   network: {
@@ -165,6 +177,16 @@ interface AndroidPolicyConfiguration {
     statusBar: boolean
     systemNavigation: boolean
     keyguard: boolean
+  }
+
+  launcher: {
+    enabled: boolean
+    packageName: string
+    activityName: string
+    companyName: string
+    welcomeMessage: string
+    requiredForSetup: boolean
+    schemaVersion: number
   }
 
   compliance: {
@@ -263,6 +285,7 @@ const defaultConfiguration =
         installMode: 'AVAILABLE',
         playStoreMode: 'UNSPECIFIED',
         permittedInputMethods: '',
+        packages: [],
       },
 
       network: {
@@ -289,6 +312,17 @@ const defaultConfiguration =
         statusBar: false,
         systemNavigation: false,
         keyguard: false,
+      },
+
+      launcher: {
+        enabled: false,
+        packageName: 'com.titanmdm.agent',
+        activityName:
+          'com.titanmdm.agent.launcher.TitanLauncherActivity',
+        companyName: 'TitanMDM Enterprise',
+        welcomeMessage: 'Dispositivo corporativo',
+        requiredForSetup: true,
+        schemaVersion: 1,
       },
 
       compliance: {
@@ -387,6 +421,11 @@ function parseConfiguration(
         kiosk: {
           ...defaults.android.kiosk,
           ...parsed.android?.kiosk,
+        },
+
+        launcher: {
+          ...defaults.android.launcher,
+          ...parsed.android?.launcher,
         },
 
         compliance: {
@@ -2669,6 +2708,25 @@ function AndroidPolicyEditor({
               )
             }
           />
+
+          <div className="policy-managed-apps">
+            <span className="policy-managed-apps-label">
+              Aplicaciones autorizadas
+            </span>
+
+            <ManagedAppsEditor
+              apps={
+                configuration.applications
+                  .packages
+              }
+              onChange={(apps) =>
+                updateAndroid(
+                  'applications',
+                  { packages: apps },
+                )
+              }
+            />
+          </div>
         </div>
       </section>
 
@@ -2793,14 +2851,19 @@ function AndroidPolicyEditor({
             checked={
               configuration.kiosk.enabled
             }
-            onChange={(value) =>
+            onChange={(value) => {
+              if (value) {
+                updateAndroid(
+                  'launcher',
+                  { enabled: false },
+                )
+              }
+
               updateAndroid(
                 'kiosk',
-                {
-                  enabled: value,
-                },
+                { enabled: value },
               )
-            }
+            }}
           />
         </div>
 
@@ -2882,6 +2945,159 @@ function AndroidPolicyEditor({
                 'kiosk',
                 {
                   keyguard: value,
+                },
+              )
+            }
+          />
+        </div>
+      </section>
+
+      {/* TITAN LAUNCHER */}
+
+      <section className="policy-setting-card">
+        <div className="policy-setting-heading">
+          <div>
+            <LayoutGrid size={18} />
+
+            <span>
+              <strong>
+                Titan Launcher
+              </strong>
+
+              <small>
+                Launcher empresarial
+                multiaplicación.
+              </small>
+            </span>
+          </div>
+
+          <Toggle
+            checked={
+              configuration.launcher
+                .enabled
+            }
+            onChange={(value) => {
+              if (value) {
+                updateAndroid(
+                  'kiosk',
+                  { enabled: false },
+                )
+              }
+
+              updateAndroid(
+                'launcher',
+                { enabled: value },
+              )
+            }}
+          />
+        </div>
+
+        <div className="policy-setting-body">
+          {configuration.kiosk
+            .enabled && (
+            <p className="policy-launcher-conflict">
+              El kiosk de una sola
+              aplicación y el Titan
+              Launcher no pueden estar
+              activos al mismo tiempo.
+            </p>
+          )}
+
+          <TextField
+            label="Nombre de la organización"
+            value={
+              configuration.launcher
+                .companyName
+            }
+            disabled={
+              !configuration.launcher
+                .enabled
+            }
+            onChange={(value) =>
+              updateAndroid(
+                'launcher',
+                {
+                  companyName: value,
+                },
+              )
+            }
+          />
+
+          <TextField
+            label="Mensaje corporativo"
+            value={
+              configuration.launcher
+                .welcomeMessage
+            }
+            disabled={
+              !configuration.launcher
+                .enabled
+            }
+            onChange={(value) =>
+              updateAndroid(
+                'launcher',
+                {
+                  welcomeMessage: value,
+                },
+              )
+            }
+          />
+
+          <CheckOption
+            label="Requerida durante el aprovisionamiento"
+            checked={
+              configuration.launcher
+                .requiredForSetup
+            }
+            disabled={
+              !configuration.launcher
+                .enabled
+            }
+            onChange={(value) =>
+              updateAndroid(
+                'launcher',
+                {
+                  requiredForSetup: value,
+                },
+              )
+            }
+          />
+
+          <TextField
+            label="Paquete del agente"
+            value={
+              configuration.launcher
+                .packageName
+            }
+            disabled={
+              !configuration.launcher
+                .enabled
+            }
+            onChange={(value) =>
+              updateAndroid(
+                'launcher',
+                {
+                  packageName: value,
+                },
+              )
+            }
+          />
+
+          <TextField
+            label="Actividad HOME del launcher"
+            value={
+              configuration.launcher
+                .activityName
+            }
+            disabled={
+              !configuration.launcher
+                .enabled
+            }
+            onChange={(value) =>
+              updateAndroid(
+                'launcher',
+                {
+                  activityName: value,
                 },
               )
             }
@@ -2995,6 +3211,154 @@ interface CheckOptionProps {
   checked: boolean
   disabled?: boolean
   onChange: (value: boolean) => void
+}
+
+interface ManagedAppsEditorProps {
+  apps: AndroidPolicyConfiguration['applications']['packages']
+  onChange: (
+    apps: AndroidPolicyConfiguration['applications']['packages'],
+  ) => void
+}
+
+function ManagedAppsEditor({
+  apps,
+  onChange,
+}: ManagedAppsEditorProps) {
+  const updateRow = (
+    index: number,
+    patch: Partial<
+      AndroidPolicyConfiguration['applications']['packages'][number]
+    >,
+  ) => {
+    onChange(
+      apps.map((app, current) =>
+        current === index
+          ? { ...app, ...patch }
+          : app,
+      ),
+    )
+  }
+
+  const removeRow = (index: number) => {
+    onChange(
+      apps.filter(
+        (_, current) => current !== index,
+      ),
+    )
+  }
+
+  const addRow = () => {
+    onChange([
+      ...apps,
+      {
+        packageName: '',
+        label: '',
+        installType: 'AVAILABLE',
+      },
+    ])
+  }
+
+  return (
+    <div className="policy-managed-apps-editor">
+      {apps.length === 0 ? (
+        <p className="policy-managed-apps-empty">
+          Todavía no hay aplicaciones
+          autorizadas.
+        </p>
+      ) : (
+        <div className="policy-managed-apps-rows">
+          {apps.map((app, index) => (
+            <div
+              key={index}
+              className="policy-managed-app-row"
+            >
+              <label>
+                Paquete
+
+                <input
+                  type="text"
+                  value={app.packageName}
+                  placeholder="com.empresa.app"
+                  onChange={(event) =>
+                    updateRow(index, {
+                      packageName:
+                        event.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Nombre
+
+                <input
+                  type="text"
+                  value={app.label}
+                  placeholder="Nombre visible"
+                  onChange={(event) =>
+                    updateRow(index, {
+                      label: event.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Instalación
+
+                <select
+                  value={app.installType}
+                  onChange={(event) =>
+                    updateRow(index, {
+                      installType:
+                        event.target
+                          .value as AndroidPolicyConfiguration['applications']['packages'][number]['installType'],
+                    })
+                  }
+                >
+                  <option value="AVAILABLE">
+                    Disponible
+                  </option>
+
+                  <option value="FORCE_INSTALLED">
+                    Forzada
+                  </option>
+
+                  <option value="REQUIRED_FOR_SETUP">
+                    Requerida en setup
+                  </option>
+
+                  <option value="BLOCKED">
+                    Bloqueada
+                  </option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className="policy-managed-app-remove"
+                aria-label="Quitar aplicación"
+                onClick={() =>
+                  removeRow(index)
+                }
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="policy-managed-apps-add"
+        onClick={addRow}
+      >
+        <Plus size={16} />
+        Añadir aplicación
+      </button>
+    </div>
+  )
 }
 
 function CheckOption({

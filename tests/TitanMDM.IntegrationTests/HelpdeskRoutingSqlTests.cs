@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Helpdesk;
 using TitanMDM.Infrastructure.Persistence;
+using TitanMDM.Infrastructure.Sites;
 
 namespace TitanMDM.IntegrationTests;
 
@@ -207,6 +208,95 @@ public sealed class HelpdeskRoutingSqlTests(RoutingSqlFixture fixture) : IClassF
         await using var db = fixture.Open();
         await db.UserRoles.Where(x => x.UserId == s.Technicians[0]).ExecuteDeleteAsync();
         Assert.False(await AssignAsync(s));
+    }
+
+    [SqlRoutingFact]
+    public async Task RequesterCanBeAssignedToSiteAndLocation()
+    {
+        var s = await SeedAsync();
+        await using var db = fixture.Open();
+        var location = new SiteLocation(s.Org, s.Site, "Floor 2");
+        db.Add(location);
+        await db.SaveChangesAsync();
+
+        var service = new SiteAssignmentService(db);
+        await service.AssignUserAsync(s.Org, s.Requester, s.Site, location.Id);
+
+        var assignment = await db.Users
+            .Where(x => x.Id == s.Requester)
+            .Select(x => new { x.SiteId, x.SiteLocationId })
+            .SingleAsync();
+        Assert.Equal(s.Site, assignment.SiteId);
+        Assert.Equal(location.Id, assignment.SiteLocationId);
+    }
+
+    [SqlRoutingFact]
+    public async Task TechnicianCanBeAssignedWithoutChangingGroupMembership()
+    {
+        var s = await SeedAsync();
+        await using var db = fixture.Open();
+        var service = new SiteAssignmentService(db);
+
+        await service.AssignUsersAsync(s.Org, s.Technicians, s.Site, null);
+
+        Assert.All(
+            await db.Users.Where(x => s.Technicians.Contains(x.Id)).ToListAsync(),
+            user => Assert.Equal(s.Site, user.SiteId));
+        Assert.Equal(s.Technicians.Length, await db.HelpdeskTeamMembers
+            .CountAsync(x => s.Technicians.Contains(x.UserId)));
+    }
+
+    [SqlRoutingFact]
+    public async Task SiteAssignmentRejectsUserFromAnotherOrganization()
+    {
+        var s = await SeedAsync();
+        await using var db = fixture.Open();
+        var otherOrg = new Organization("Other", Guid.NewGuid().ToString("N")[..12]);
+        var otherUser = new User(otherOrg.Id, "Other", "User", $"{Guid.NewGuid():N}@example.test");
+        db.AddRange(otherOrg, otherUser);
+        await db.SaveChangesAsync();
+
+        var service = new SiteAssignmentService(db);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AssignUserAsync(s.Org, otherUser.Id, s.Site, null));
+    }
+
+    [SqlRoutingFact]
+    public async Task SiteAssignmentRejectsLocationFromAnotherSite()
+    {
+        var s = await SeedAsync();
+        await using var db = fixture.Open();
+        var otherSite = new Site(s.Org, "OTHER", "Other");
+        var location = new SiteLocation(s.Org, otherSite.Id, "Floor 3");
+        db.AddRange(otherSite, location);
+        await db.SaveChangesAsync();
+
+        var service = new SiteAssignmentService(db);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AssignUserAsync(s.Org, s.Requester, s.Site, location.Id));
+    }
+
+    [SqlRoutingFact]
+    public async Task RetryOpenAssignsExistingTicketWithoutDuplicateEvent()
+    {
+        var s = await SeedAsync();
+        await using (var db = fixture.Open())
+        {
+            var service = new HelpdeskService(db, new HelpdeskTicketNumberGenerator(db));
+            var result = await service.RetryAutomaticAssignmentForOpenTicketsAsync(
+                s.Org, 50, false);
+            Assert.Equal(1, result.Assigned);
+        }
+
+        await using (var db = fixture.Open())
+        {
+            var service = new HelpdeskService(db, new HelpdeskTicketNumberGenerator(db));
+            var result = await service.RetryAutomaticAssignmentForOpenTicketsAsync(
+                s.Org, 50, false);
+            Assert.Equal(0, result.Assigned);
+            Assert.Equal(1, await db.HelpdeskTicketEvents.CountAsync(x =>
+                x.TicketId == s.TicketId && x.EventType == "auto_assigned"));
+        }
     }
 
     private async Task<bool> AssignAsync(Scenario s)

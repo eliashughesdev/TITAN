@@ -200,6 +200,9 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     HelpdeskAiRoutingEnrichmentService>();
 
+builder.Services.AddSingleton<
+    HelpdeskRoutingWorkerState>();
+
 builder.Services.AddHostedService<
     HelpdeskMonitoringService>();
 

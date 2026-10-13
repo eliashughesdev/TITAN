@@ -28,6 +28,10 @@ import {
 
 import './SitesPage.css'
 
+import {
+  SiteUserAssignmentsPanel,
+} from './SiteUserAssignmentsPanel'
+
 // ============================================================
 // INITIAL FORM
 // ============================================================
@@ -1115,6 +1119,11 @@ export function SitesPage() {
                   )
                 )}
               </section>
+
+              <SiteUserAssignmentsPanel
+                site={selectedSite}
+                locations={locations}
+              />
 
               {/* ==============================================
                   SITE STATUS

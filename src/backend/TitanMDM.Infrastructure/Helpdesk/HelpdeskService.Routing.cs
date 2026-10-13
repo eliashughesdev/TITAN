@@ -812,6 +812,9 @@ public sealed partial class HelpdeskService
                                 member.TeamId)
                     .OrderBy(
                         x =>
+                            x.Rank)
+                    .ThenBy(
+                        x =>
                             x.Coverage.Priority)
                     .FirstOrDefault();
 

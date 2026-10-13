@@ -26,6 +26,29 @@ public sealed class SiteAssignmentsController
             siteAssignmentService;
     }
 
+    [HttpGet("users")]
+    [RequirePermission(
+        PermissionCodes.Users.View)]
+    [RequirePermission(
+        PermissionCodes.Sites.View)]
+    public async Task<IActionResult> GetUsers(
+        [FromQuery] string? search = null,
+        [FromQuery] bool unassignedOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var organizationId = GetOrganizationId();
+        if (organizationId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        return Ok(await _siteAssignmentService.GetUsersAsync(
+            organizationId,
+            search,
+            unassignedOnly,
+            cancellationToken));
+    }
+
     [HttpPut("users/{userId:guid}")]
     [RequirePermission(
         PermissionCodes.Users.Manage)]
@@ -45,7 +68,25 @@ public sealed class SiteAssignmentsController
                         userId,
                         request.SiteId,
                         request.SiteLocationId,
-                        cancellationToken));
+                    cancellationToken));
+    }
+
+    [HttpPut("users")]
+    [RequirePermission(
+        PermissionCodes.Users.Manage)]
+    [RequirePermission(
+        PermissionCodes.Sites.Manage)]
+    public Task<IActionResult> AssignUsers(
+        [FromBody] AssignUsersToSiteRequest request,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
+            () => _siteAssignmentService.AssignUsersAsync(
+                GetOrganizationId(),
+                request.UserIds,
+                request.SiteId,
+                request.SiteLocationId,
+                cancellationToken));
     }
 
     [HttpPut("devices/{deviceId:guid}")]
@@ -136,5 +177,10 @@ public sealed class SiteAssignmentsController
 }
 
 public sealed record AssignSiteRequest(
+    Guid? SiteId,
+    Guid? SiteLocationId);
+
+public sealed record AssignUsersToSiteRequest(
+    IReadOnlyCollection<Guid> UserIds,
     Guid? SiteId,
     Guid? SiteLocationId);

@@ -26,6 +26,7 @@ import {
 } from '../../auth/helpdeskAccess'
 
 import './SettingsPage.css'
+import '../../styles/TitanEnterpriseUI.css'
 
 interface ConfigurationCard {
   title: string

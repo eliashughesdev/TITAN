@@ -80,6 +80,22 @@ export interface SaveSiteLocationRequest {
   description: string | null
 }
 
+export interface SiteAssignmentUser {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  jobTitle: string | null
+  isActive: boolean
+  siteId: string | null
+  siteName: string | null
+  siteLocationId: string | null
+  siteLocationName: string | null
+  isTechnician: boolean
+  groups: string[]
+}
+
 export const sitesApi = {
   async getSites(
     includeInactive = true,
@@ -214,5 +230,30 @@ export const sitesApi = {
       )
 
     return response.data
+  },
+
+  async getAssignmentUsers():
+    Promise<SiteAssignmentUser[]> {
+    const response =
+      await apiClient.get<SiteAssignmentUser[]>(
+        '/site-assignments/users',
+      )
+
+    return response.data
+  },
+
+  async assignUsers(
+    userIds: string[],
+    siteId: string | null,
+    siteLocationId: string | null,
+  ): Promise<void> {
+    await apiClient.put(
+      '/site-assignments/users',
+      {
+        userIds,
+        siteId,
+        siteLocationId,
+      },
+    )
   },
 }

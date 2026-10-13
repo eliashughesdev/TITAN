@@ -2,7 +2,10 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
+using TitanMDM.Api.AI;
+using TitanMDM.Api.Services;
 using TitanMDM.Application.Helpdesk;
 
 namespace TitanMDM.Api.Controllers;
@@ -15,12 +18,39 @@ public sealed class HelpdeskRoutingOperationsController
 {
     private readonly IHelpdeskService
         _helpdesk;
+    private readonly HelpdeskRoutingWorkerState _workerState;
+    private readonly OpenRouterOptions _aiOptions;
 
     public HelpdeskRoutingOperationsController(
-        IHelpdeskService helpdesk)
+        IHelpdeskService helpdesk,
+        HelpdeskRoutingWorkerState workerState,
+        IOptions<OpenRouterOptions> aiOptions)
     {
         _helpdesk =
             helpdesk;
+        _workerState = workerState;
+        _aiOptions = aiOptions.Value;
+    }
+
+    [HttpGet("worker")]
+    public ActionResult<HelpdeskRoutingWorkerSnapshot> GetWorker()
+    {
+        if (!CanView())
+        {
+            return Forbid();
+        }
+
+        if (!TryGetOrganization(out _))
+        {
+            return Unauthorized();
+        }
+
+        var aiAvailable =
+            _aiOptions.Enabled
+            && _aiOptions.EnableClassification
+            && !string.IsNullOrWhiteSpace(_aiOptions.ApiKey);
+
+        return Ok(_workerState.Snapshot(aiAvailable));
     }
 
     // ============================================================
@@ -181,7 +211,7 @@ public sealed class HelpdeskRoutingOperationsController
 
         var assigned =
             await _helpdesk
-                .RetryAutomaticAssignmentEnterpriseAsync(
+                .RetryAutomaticAssignmentWithFallbackAsync(
                     organizationId,
                     ticketId,
                     cancellationToken);
@@ -251,6 +281,8 @@ public sealed class HelpdeskRoutingOperationsController
         return HasAnyPermission(
             "helpdesk.routing.view",
             "helpdesk.routing.manage",
+            "helpdesk.automation.view",
+            "helpdesk.automation.manage",
             "helpdesk.technicians.view",
             "helpdesk.technicians.manage",
             "helpdesk.groups.view",
@@ -263,6 +295,7 @@ public sealed class HelpdeskRoutingOperationsController
     {
         return HasAnyPermission(
             "helpdesk.routing.manage",
+            "helpdesk.automation.manage",
             "helpdesk.technicians.manage",
             "helpdesk.groups.manage",
             "helpdesk.admin.access",

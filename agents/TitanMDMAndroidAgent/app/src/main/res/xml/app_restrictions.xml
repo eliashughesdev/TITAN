@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <restriction
+        android:key="titan_company_name"
+        android:title="Empresa"
+        android:restrictionType="string"
+        android:defaultValue="TitanMDM Enterprise" />
+
+    <restriction
+        android:key="titan_welcome_message"
+        android:title="Mensaje corporativo"
+        android:restrictionType="string"
+        android:defaultValue="Dispositivo corporativo" />
+
+    <restriction
+        android:key="titan_allowed_apps"
+        android:title="Aplicaciones autorizadas"
+        android:restrictionType="string"
+        android:defaultValue="[]" />
+
+    <restriction
+        android:key="titan_launcher_enabled"
+        android:title="Habilitar Titan Launcher"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="titan_launcher_schema_version"
+        android:title="Versión de esquema del launcher"
+        android:restrictionType="integer"
+        android:defaultValue="1" />
+
+</restrictions>

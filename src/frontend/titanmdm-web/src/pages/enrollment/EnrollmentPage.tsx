@@ -25,7 +25,7 @@ import {
 } from './hooks/useWindowsEnrollment'
 
 import './EnrollmentPage.css'
-
+import '../../styles/TitanEnterpriseUI.css'
 /*
  * ============================================================
  * TITANMDM ENROLLMENT CENTER
@@ -311,8 +311,11 @@ export default function EnrollmentPage() {
     permissions.windows.view
 
   if (!hasEnrollmentAccess) {
-    return (
-      <div className="enrollment-page">
+   return (
+  <div
+    className="enrollment-page"
+    data-platform={activePlatform}
+  >
         <section className="enrollment-heading">
           <div>
             <p className="enrollment-eyebrow">

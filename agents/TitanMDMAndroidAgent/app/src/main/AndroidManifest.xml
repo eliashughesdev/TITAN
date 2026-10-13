@@ -25,6 +25,13 @@
     <!-- Android 13+ notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TitanMdmApplication"
         android:allowBackup="false"
@@ -35,7 +42,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.TitanMDMAndroidAgent"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
+
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
 
         <activity
             android:name=".MainActivity"
@@ -49,6 +60,19 @@
                 <category
                     android:name="android.intent.category.LAUNCHER" />
 
+            </intent-filter>
+
+        </activity>
+
+        <activity
+            android:name=".launcher.TitanLauncherActivity"
+            android:exported="true"
+            android:label="Titan Launcher">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
         </activity>

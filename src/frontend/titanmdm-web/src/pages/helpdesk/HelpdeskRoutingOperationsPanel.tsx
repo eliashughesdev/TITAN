@@ -27,13 +27,19 @@ import {
 import {
   getRoutingDiagnostic,
   getRoutingHealth,
+  getRoutingWorker,
   retryOpenRouting,
   retryRoutingTicket,
 
   type RoutingDiagnostic,
   type RoutingHealth,
   type RoutingQueueResult,
+  type RoutingWorkerStatus,
 } from '../../api/helpdeskRoutingApi'
+
+import {
+  useAuth,
+} from '../../auth/AuthContext'
 
 import './HelpdeskRoutingOperationsPanel.css'
 
@@ -99,6 +105,30 @@ function statusClass(
 export function HelpdeskRoutingOperationsPanel({
   readOnly = false,
 }: Props) {
+  const {
+    hasPermission,
+  } = useAuth()
+
+  const canManage = [
+    'helpdesk.routing.manage',
+    'helpdesk.technicians.manage',
+    'helpdesk.groups.manage',
+    'helpdesk.admin.access',
+    'helpdesk.manage',
+    'settings.manage',
+  ].some(hasPermission)
+
+  const operationsReadOnly =
+    readOnly || !canManage
+
+  const [
+    worker,
+    setWorker,
+  ] =
+    useState<RoutingWorkerStatus | null>(
+      null,
+    )
+
   const [
     health,
     setHealth,
@@ -163,11 +193,17 @@ export function HelpdeskRoutingOperationsPanel({
             '',
           )
 
-          const value =
-            await getRoutingHealth()
+          const [value, workerValue] =
+            await Promise.all([
+              getRoutingHealth(),
+              getRoutingWorker(),
+            ])
 
           setHealth(
             value,
+          )
+          setWorker(
+            workerValue,
           )
         }
         catch (
@@ -190,7 +226,12 @@ export function HelpdeskRoutingOperationsPanel({
 
   useEffect(
     () => {
-      void loadHealth()
+      const timeoutId = window.setTimeout(
+        () => void loadHealth(),
+        0,
+      )
+
+      return () => window.clearTimeout(timeoutId)
     },
     [
       loadHealth,
@@ -346,11 +387,11 @@ export function HelpdeskRoutingOperationsPanel({
               size={15}
             />
 
-            ROUTING ENTERPRISE
+            AUTOMATIZACIONES
           </span>
 
           <h2>
-            Motor de autoasignación
+            Automatizaciones de Mesa de Ayuda
           </h2>
 
           <p>
@@ -422,6 +463,24 @@ export function HelpdeskRoutingOperationsPanel({
             />
 
             <Metric
+              icon={Activity}
+              label="Worker routing"
+              value={
+                worker?.running
+                  ? 'Activo'
+                  : 'Detenido'
+              }
+              warning={!worker?.running}
+            />
+
+            <Metric
+              icon={RefreshCcw}
+              label="Reintentos pendientes"
+              value={health?.automaticRetriesPending ?? 0}
+              warning={Boolean(health?.automaticRetriesPending)}
+            />
+
+            <Metric
               icon={
                 AlertTriangle
               }
@@ -438,6 +497,12 @@ export function HelpdeskRoutingOperationsPanel({
                     ?.unassignedTickets,
                 )
               }
+            />
+
+            <Metric
+              icon={Users}
+              label="Grupos activos"
+              value={health?.activeTeams ?? 0}
             />
 
             <Metric
@@ -525,9 +590,55 @@ export function HelpdeskRoutingOperationsPanel({
                 } min`
               }
             />
+
+            <Metric
+              icon={AlertTriangle}
+              label="SLA respuesta vencido"
+              value={health?.firstResponseSlaOverdue ?? 0}
+              warning={Boolean(health?.firstResponseSlaOverdue)}
+            />
+
+            <Metric
+              icon={AlertTriangle}
+              label="SLA resolución vencido"
+              value={health?.resolutionSlaOverdue ?? 0}
+              warning={Boolean(health?.resolutionSlaOverdue)}
+            />
+
+            <Metric
+              icon={ShieldCheck}
+              label="SLA escalados 24 h"
+              value={health?.slaEscalatedLast24Hours ?? 0}
+              warning={Boolean(health?.slaEscalatedLast24Hours)}
+            />
+
+            <Metric
+              icon={ShieldCheck}
+              label="IA de apoyo"
+              value={worker?.aiAvailable ? 'Disponible' : 'Deshabilitada'}
+            />
+
+            <Metric
+              icon={XCircle}
+              label="Errores worker"
+              value={worker?.errors ?? 0}
+              warning={Boolean(worker?.errors)}
+            />
           </div>
 
-          {!readOnly && (
+          <p className="hd-routing__worker-detail">
+            Última ejecución:{' '}
+            {worker?.lastCycleCompletedAtUtc
+              ? new Date(worker.lastCycleCompletedAtUtc).toLocaleString()
+              : 'Todavía no registrada'}
+            {' · '}Ciclos: {worker?.completedCycles ?? 0}
+            {' · '}Última cola: {worker?.lastSelectedTickets ?? 0} tickets
+            {worker?.lastError
+              ? ` · Último error: ${worker.lastError}`
+              : ''}
+          </p>
+
+          {!operationsReadOnly && (
             <>
               <div
                 className="hd-routing__operations"
@@ -554,9 +665,7 @@ export function HelpdeskRoutingOperationsPanel({
                       type="button"
                       className="hd-routing__secondary"
                       disabled={
-                        Boolean(
-                          action,
-                        )
+                        Boolean(action)
                       }
                       onClick={
                         () =>
@@ -581,9 +690,8 @@ export function HelpdeskRoutingOperationsPanel({
                       type="button"
                       className="hd-routing__primary"
                       disabled={
-                        Boolean(
-                          action,
-                        )
+                        Boolean(action)
+                        || queue?.dryRun !== true
                       }
                       onClick={
                         () =>
@@ -842,13 +950,32 @@ function DiagnosticPanel({
           Site
           <strong>
             {
-              value.siteId
+              value.siteName
               ??
               'Sin Site'
             }
           </strong>
         </span>
+
+        <span>
+          Sublocalidad
+          <strong>
+            {
+              value.siteLocationName
+              ??
+              'Sin sublocalidad'
+            }
+          </strong>
+        </span>
       </div>
+
+      {value.requesterBlockReasons.length > 0 && (
+        <div className="hd-routing__alert">
+          <AlertTriangle size={17} />
+          Bloqueos del solicitante:{' '}
+          {value.requesterBlockReasons.join(' ')}
+        </div>
+      )}
 
       <div
         className="hd-routing__reason"
@@ -882,7 +1009,13 @@ function DiagnosticPanel({
                   candidate
                     .userId
                 }
-                className="hd-routing__candidate"
+                className={
+                  'hd-routing__candidate ' +
+                  (value.selectedCandidate?.teamId === candidate.teamId
+                    && value.selectedCandidate?.userId === candidate.userId
+                    ? 'is-selected'
+                    : '')
+                }
               >
                 <div>
                   <strong>

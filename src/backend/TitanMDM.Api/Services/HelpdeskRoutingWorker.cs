@@ -14,7 +14,8 @@ public sealed class HelpdeskRoutingWorker(
     IServiceScopeFactory scopes,
     ILogger<HelpdeskRoutingWorker> logger,
     IOpenRouterAiService ai,
-    IOptions<OpenRouterOptions> aiOptions)
+    IOptions<OpenRouterOptions> aiOptions,
+    HelpdeskRoutingWorkerState workerState)
     : BackgroundService
 {
     private readonly OpenRouterOptions
@@ -28,6 +29,8 @@ public sealed class HelpdeskRoutingWorker(
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
+        workerState.Started();
+
         try
         {
             /*
@@ -65,6 +68,7 @@ public sealed class HelpdeskRoutingWorker(
                 }
                 catch (Exception exception)
                 {
+                    workerState.RecordError(exception);
                     logger.LogError(
                         exception,
                         "FallÃ³ el ciclo automÃ¡tico de Helpdesk routing.");
@@ -83,6 +87,10 @@ public sealed class HelpdeskRoutingWorker(
         {
             // Shutdown normal.
         }
+        finally
+        {
+            workerState.Stopped();
+        }
     }
 
     // ============================================================
@@ -92,6 +100,7 @@ public sealed class HelpdeskRoutingWorker(
     private async Task ExecuteCycleAsync(
         CancellationToken cancellationToken)
     {
+        workerState.CycleStarted();
         var cycleStarted = System.Diagnostics.Stopwatch.StartNew();
         List<TicketKey> tickets;
 
@@ -378,6 +387,7 @@ public sealed class HelpdeskRoutingWorker(
             }
             catch (Exception exception)
             {
+                workerState.RecordError(exception);
                 logger.LogError(
                     exception,
                     "No se pudo procesar el routing automÃ¡tico del ticket {TicketId}.",
@@ -396,6 +406,7 @@ public sealed class HelpdeskRoutingWorker(
                 }
             }
         }
+        workerState.CycleCompleted(tickets.Count);
         logger.LogInformation("Helpdesk routing cycle: {Selected} candidates, {ElapsedMs} ms.",
             tickets.Count, cycleStarted.ElapsedMilliseconds);
     }

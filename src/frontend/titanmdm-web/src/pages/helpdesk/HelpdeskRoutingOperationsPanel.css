@@ -422,3 +422,13 @@
     flex-wrap: wrap;
   }
 }
+.hd-routing__worker-detail {
+  margin: 12px 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.82rem;
+}
+
+.hd-routing__candidate.is-selected {
+  outline: 2px solid color-mix(in srgb, var(--primary-color, #2563eb) 55%, transparent);
+  outline-offset: -2px;
+}

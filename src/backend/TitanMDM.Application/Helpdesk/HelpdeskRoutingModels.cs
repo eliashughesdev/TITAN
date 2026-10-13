@@ -10,7 +10,10 @@ public sealed record HelpdeskRoutingHealthSnapshot(
     double AverageAutoAssignMinutesLast24Hours,
     int ActiveTeams,
     int ActiveMembers,
-    int MembersOnDutyNow);
+    int MembersOnDutyNow,
+    int AutomaticRetriesPending,
+    int FirstResponseSlaOverdue,
+    int ResolutionSlaOverdue);
 
 public sealed record HelpdeskRoutingDiagnosticSnapshot(
     Guid TicketId,
@@ -21,12 +24,15 @@ public sealed record HelpdeskRoutingDiagnosticSnapshot(
     string? RequesterEmail,
     Guid? RequesterUserId,
     Guid? SiteId,
+    string? SiteName,
     Guid? SiteLocationId,
+    string? SiteLocationName,
     Guid? RequestedTeamId,
     Guid? AssigneeUserId,
     bool AlreadyAssigned,
     bool PendingUser,
     string EngineReason,
+    IReadOnlyList<string> RequesterBlockReasons,
     HelpdeskRoutingCandidatePreview? SelectedCandidate,
     IReadOnlyList<HelpdeskRoutingCandidatePreview> Candidates);
 

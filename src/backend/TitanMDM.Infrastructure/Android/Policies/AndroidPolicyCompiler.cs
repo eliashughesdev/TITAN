@@ -107,6 +107,11 @@ public sealed class AndroidPolicyCompiler
             googlePolicy,
             errors);
 
+        CompileLauncher(
+            android,
+            googlePolicy,
+            errors);
+
         if (errors.Count > 0)
         {
             return AndroidPolicyCompilationResult.Failure(
@@ -749,6 +754,227 @@ public sealed class AndroidPolicyCompiler
             policy["applications"] =
                 compiledApps;
         }
+    }
+
+    private const string DefaultLauncherPackage =
+        "com.titanmdm.agent";
+
+    private const string DefaultLauncherActivity =
+        "com.titanmdm.agent.launcher.TitanLauncherActivity";
+
+    /*
+     * Titan Launcher multiaplicación.
+     *
+     * A diferencia del kiosk de una sola aplicación (installType=KIOSK),
+     * el launcher empresarial:
+     *   - se instala en el paquete del agente;
+     *   - publica su managedConfiguration (empresa, mensaje y apps
+     *     autorizadas) mediante claves APP_RESTRICTIONS;
+     *   - se declara como HOME preferido con
+     *     persistentPreferredActivities.
+     *
+     * Nunca se combina con kiosk de aplicación única.
+     */
+    private static void CompileLauncher(
+        JsonObject android,
+        JsonObject policy,
+        ICollection<string> errors)
+    {
+        var launcher =
+            android["launcher"] as JsonObject;
+
+        if (launcher is null ||
+            !GetBool(launcher, "enabled"))
+        {
+            return;
+        }
+
+        var kiosk =
+            android["kiosk"] as JsonObject;
+
+        if (kiosk is not null &&
+            GetBool(kiosk, "enabled"))
+        {
+            errors.Add(
+                "Android: no se puede combinar el kiosk de una aplicación con el launcher empresarial multiaplicación.");
+            return;
+        }
+
+        var packageName =
+            GetString(
+                launcher,
+                "packageName",
+                DefaultLauncherPackage)
+                .Trim();
+
+        if (string.IsNullOrWhiteSpace(packageName))
+        {
+            errors.Add(
+                "Android: el launcher requiere packageName.");
+            return;
+        }
+
+        var activityName =
+            GetString(
+                launcher,
+                "activityName",
+                DefaultLauncherActivity)
+                .Trim();
+
+        if (string.IsNullOrWhiteSpace(activityName))
+        {
+            errors.Add(
+                "Android: el launcher requiere activityName.");
+            return;
+        }
+
+        var schemaVersion =
+            GetInt(launcher, "schemaVersion", 1);
+
+        if (schemaVersion < 1)
+        {
+            errors.Add(
+                "Android: schemaVersion del launcher debe ser mayor o igual a 1.");
+            return;
+        }
+
+        var companyName =
+            GetString(
+                launcher,
+                "companyName",
+                "TitanMDM Enterprise")
+                .Trim();
+
+        var welcomeMessage =
+            GetString(
+                launcher,
+                "welcomeMessage",
+                "Dispositivo corporativo")
+                .Trim();
+
+        var requiredForSetup =
+            GetBool(launcher, "requiredForSetup", true);
+
+        var installType =
+            requiredForSetup
+                ? "REQUIRED_FOR_SETUP"
+                : "FORCE_INSTALLED";
+
+        var compiledApps =
+            policy["applications"] as JsonArray
+            ?? new JsonArray();
+
+        var allowedApps = new JsonArray();
+
+        foreach (var node in compiledApps)
+        {
+            if (node is not JsonObject app)
+                continue;
+
+            var appPackage =
+                GetString(
+                    app,
+                    "packageName",
+                    string.Empty);
+
+            if (string.IsNullOrWhiteSpace(appPackage) ||
+                string.Equals(
+                    appPackage,
+                    packageName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var appInstallType =
+                GetString(
+                    app,
+                    "installType",
+                    "AVAILABLE")
+                    .ToUpperInvariant();
+
+            if (appInstallType == "BLOCKED")
+                continue;
+
+            var required =
+                appInstallType is
+                    "FORCE_INSTALLED" or
+                    "REQUIRED_FOR_SETUP";
+
+            allowedApps.Add(
+                new JsonObject
+                {
+                    ["packageName"] = appPackage,
+                    ["label"] =
+                        GetString(app, "label", appPackage),
+                    ["required"] = required
+                });
+        }
+
+        var agentEntry =
+            compiledApps
+                .OfType<JsonObject>()
+                .FirstOrDefault(
+                    x => string.Equals(
+                        GetString(
+                            x,
+                            "packageName",
+                            string.Empty),
+                        packageName,
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (agentEntry is null)
+        {
+            agentEntry =
+                new JsonObject
+                {
+                    ["packageName"] = packageName
+                };
+
+            compiledApps.Add(agentEntry);
+        }
+
+        agentEntry["installType"] = installType;
+
+        agentEntry["managedConfiguration"] =
+            new JsonObject
+            {
+                ["titan_company_name"] = companyName,
+                ["titan_welcome_message"] = welcomeMessage,
+                ["titan_launcher_enabled"] = true,
+                ["titan_launcher_schema_version"] = schemaVersion,
+                ["titan_allowed_apps"] = allowedApps.ToJsonString()
+            };
+
+        policy["applications"] = compiledApps;
+
+        policy["persistentPreferredActivities"] =
+            new JsonArray
+            {
+                new JsonObject
+                {
+                    ["receiverActivity"] =
+                        $"{packageName}/{activityName}",
+
+                    ["actions"] =
+                        new JsonArray
+                        {
+                            "android.intent.action.MAIN"
+                        },
+
+                    ["categories"] =
+                        new JsonArray
+                        {
+                            "android.intent.category.HOME"
+                        }
+                }
+            };
+
+        /*
+         * El launcher multiaplicación no utiliza el kiosk launcher de
+         * Google; se deja explícito para evitar ambigüedad.
+         */
+        policy["kioskCustomLauncherEnabled"] = false;
     }
 
     private static bool GetBool(

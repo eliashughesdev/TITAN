@@ -911,3 +911,105 @@
     grid-template-columns: 1fr;
   }
 }
+/* ============================================================
+   TITAN LAUNCHER / MANAGED APPS (AE-CORE)
+   ============================================================ */
+
+.policy-managed-apps {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.policy-managed-apps-label {
+  color: #526075;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.policy-managed-apps-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.policy-managed-app-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e4ebf5;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.policy-managed-app-row input,
+.policy-managed-app-row select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 39px;
+  padding: 0 11px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  outline: none;
+  color: #334155;
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+}
+
+.policy-managed-app-remove {
+  width: 39px;
+  height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #f0d7d7;
+  border-radius: 8px;
+  color: #dc2626;
+  background: #fdf3f3;
+  cursor: pointer;
+}
+
+.policy-managed-apps-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px dashed #c4d2e7;
+  border-radius: 8px;
+  color: #4169e1;
+  background: #f7f9ff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.policy-managed-apps-empty {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.policy-launcher-conflict {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f1d6a8;
+  border-radius: 8px;
+  color: #92400e;
+  background: #fff8ec;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .policy-managed-app-row {
+    grid-template-columns: 1fr;
+  }
+}
