@@ -25,7 +25,6 @@ import {
 } from './hooks/useWindowsEnrollment'
 
 import './EnrollmentPage.css'
-import '../../styles/TitanEnterpriseUI.css'
 /*
  * ============================================================
  * TITANMDM ENROLLMENT CENTER
@@ -350,7 +349,10 @@ export default function EnrollmentPage() {
    */
 
   return (
-    <div className="enrollment-page">
+    <div
+      className="enrollment-page"
+      data-platform={activePlatform}
+    >
       <section className="enrollment-heading">
         <div>
           <p className="enrollment-eyebrow">

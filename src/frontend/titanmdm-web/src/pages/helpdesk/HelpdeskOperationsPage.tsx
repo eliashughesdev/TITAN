@@ -37,6 +37,10 @@ import {
 import apiClient
   from '../../api/apiClient'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import './HelpdeskPages.css'
 import './HelpdeskOperationsPage.css'
 
@@ -946,62 +950,50 @@ export function HelpdeskOperationsPage() {
     <main
       className="titan-page helpdesk-page hd-operation"
     >
-      <header
-        className="helpdesk-inbox__header"
-      >
-        <div>
-          <span
-            className="helpdesk-inbox__eyebrow"
+      <SettingsPageHeader
+        eyebrow="Preparación operativa"
+        title={pageTitle}
+        description={pageDescription}
+        icon={
+          <Headphones
+            size={16}
+          />
+        }
+        actions={
+          <div
+            className="hd-operation__header-actions"
           >
-            <Headphones
-              size={15}
-            />
+            <Link
+              to="/helpdesk/especialidades?tab=schedules&workspace=helpdesk"
+              className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            >
+              <UsersRound
+                size={16}
+              />
 
-            PREPARACIÓN OPERATIVA
-          </span>
+              Grupos y turnos
+            </Link>
 
-          <h1>
-            {pageTitle}
-          </h1>
+            <button
+              type="button"
+              className="helpdesk-ui-button helpdesk-ui-button--secondary"
+              disabled={
+                disabled
+              }
+              onClick={
+                () =>
+                  void refresh()
+              }
+            >
+              <RefreshCw
+                size={16}
+              />
 
-          <p>
-            {pageDescription}
-          </p>
-        </div>
-
-        <div
-          className="hd-operation__header-actions"
-        >
-          <Link
-            to="/helpdesk/especialidades?tab=schedules&workspace=helpdesk"
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
-          >
-            <UsersRound
-              size={16}
-            />
-
-            Grupos y turnos
-          </Link>
-
-          <button
-            type="button"
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            disabled={
-              disabled
-            }
-            onClick={
-              () =>
-                void refresh()
-            }
-          >
-            <RefreshCw
-              size={16}
-            />
-
-            Actualizar
-          </button>
-        </div>
-      </header>
+              Actualizar
+            </button>
+          </div>
+        }
+      />
 
       {error && (
         <div

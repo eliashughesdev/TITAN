@@ -366,11 +366,11 @@ export function WorkspaceInsights({
           />
 
           <InsightCard
-            label="Fully Managed"
+            label="Totalmente administrados"
             value={
               android.fullyManaged
             }
-            detail="Dispositivos corporativos"
+            detail="Confirmados por Android Management"
             icon={
               <MonitorCheck
                 size={19}

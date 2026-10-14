@@ -8,17 +8,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,6 +32,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +47,7 @@ private val TitanGreen = Color(0xFF16A36A)
 private val TitanGreenDark = Color(0xFF0E7A4E)
 private val TitanDark = Color(0xFF0B1720)
 private val TitanSurface = Color(0xFF142831)
+private val TitanSurfaceSoft = Color(0xFF1B3540)
 private val TitanMuted = Color(0xFFBDCDD1)
 private val TitanWarn = Color(0xFFFFC778)
 private val TitanDanger = Color(0xFFE5706A)
@@ -68,7 +76,7 @@ fun TitanLauncherScreen(
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            LauncherHeader(policy, adminStatus)
+            CorporateHeader(policy, adminStatus)
 
             if (policy.state == TitanLauncherPolicyState.Invalid) {
                 StatusBanner(
@@ -92,60 +100,124 @@ fun TitanLauncherScreen(
 }
 
 @Composable
-private fun LauncherHeader(
+private fun CorporateHeader(
     policy: TitanLauncherPolicy,
     adminStatus: TitanLauncherAdminStatus
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = policy.companyName,
-            color = Color.White,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = TitanSurface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                CompanyMark(policy.companyName)
 
-        Text(
-            text = policy.welcomeMessage,
-            color = TitanMuted,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = policy.companyName,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusChip(
-                text = if (policy.managed) "Perfil corporativo activo" else "Sin perfil",
-                color = if (policy.managed) TitanGreen else TitanWarn
-            )
+                    Text(
+                        text = policy.welcomeMessage,
+                        color = TitanMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
 
-            StatusChip(
-                text = adminStatus.label,
-                color = if (adminStatus.isManaged) TitanGreen else TitanWarn
-            )
+            HorizontalDivider(color = TitanSurfaceSoft)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusChip(
+                    text = if (policy.managed) "Perfil corporativo activo" else "Sin perfil",
+                    positive = policy.managed
+                )
+
+                StatusChip(
+                    text = adminStatus.label,
+                    positive = adminStatus.isManaged
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun StatusChip(text: String, color: Color) {
-    Text(
-        text = text,
-        color = color,
-        style = MaterialTheme.typography.labelMedium,
+private fun CompanyMark(name: String) {
+    Box(
         modifier = Modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(
-                color.copy(alpha = 0.12f),
-                RoundedCornerShape(50)
-            )
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    )
+                Brush.linearGradient(
+                    listOf(TitanGreen, TitanGreenDark)
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = name.take(1).uppercase().ifBlank { "T" },
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun StatusChip(text: String, positive: Boolean) {
+    val color = if (positive) TitanGreen else TitanWarn
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+
+        Text(
+            text = text,
+            color = color,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable
 private fun StatusBanner(text: String, color: Color) {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = color.copy(alpha = 0.14f)
         ),
@@ -163,6 +235,7 @@ private fun StatusBanner(text: String, color: Color) {
 @Composable
 private fun AwaitingPolicy() {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = TitanSurface),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -195,6 +268,7 @@ private fun AwaitingPolicy() {
 @Composable
 private fun EmptyApplications() {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = TitanSurface),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -214,27 +288,44 @@ private fun ApplicationGrid(
     iconProvider: (String) -> ImageBitmap?,
     onLaunch: (String) -> Unit
 ) {
-    Text(
-        text = "Aplicaciones de trabajo",
-        color = Color.White,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.SemiBold
-    )
-
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 136.dp),
-        contentPadding = PaddingValues(bottom = 30.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(policy.applications, key = { it.packageName }) { app ->
-            ApplicationTile(
-                app = app,
-                installed = isInstalled(app.packageName),
-                iconProvider = iconProvider,
-                onLaunch = onLaunch
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Aplicaciones de trabajo",
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
             )
+
+            Text(
+                text = "${policy.applications.size} autorizadas",
+                color = TitanMuted,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 152.dp),
+            contentPadding = PaddingValues(bottom = 30.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(policy.applications, key = { it.packageName }) { app ->
+                ApplicationTile(
+                    app = app,
+                    installed = isInstalled(app.packageName),
+                    iconProvider = iconProvider,
+                    onLaunch = onLaunch
+                )
+            }
         }
     }
 }
@@ -258,7 +349,11 @@ private fun ApplicationTile(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = installed) { onLaunch(app.packageName) },
+            .heightIn(min = 132.dp)
+            .clickable(
+                enabled = installed,
+                onClickLabel = "Abrir ${app.label}"
+            ) { onLaunch(app.packageName) },
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = TitanSurface)
     ) {
@@ -276,11 +371,14 @@ private fun ApplicationTile(
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Text(
+            Spacer(modifier = Modifier.height(2.dp))
+
+            StatusPill(
                 text = when {
                     installed -> "Disponible"
                     app.required -> "Pendiente de instalación"
@@ -290,12 +388,50 @@ private fun ApplicationTile(
                     installed -> TitanGreen
                     app.required -> TitanWarn
                     else -> TitanMuted
-                },
-                style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center
+                }
             )
+
+            if (app.required) {
+                RequiredBadge()
+            }
         }
     }
+}
+
+@Composable
+private fun StatusPill(text: String, color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+
+        Text(
+            text = text,
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun RequiredBadge() {
+    Text(
+        text = "OBLIGATORIA",
+        color = TitanWarn,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(TitanWarn.copy(alpha = 0.14f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
 }
 
 @Composable
@@ -308,13 +444,15 @@ private fun AppIcon(bitmap: ImageBitmap?, label: String) {
             contentDescription = label,
             modifier = Modifier
                 .size(56.dp)
-                .background(TitanSurface, shape)
+                .clip(shape)
+                .background(TitanSurfaceSoft)
         )
     } else {
         Box(
             modifier = Modifier
                 .size(56.dp)
-                .background(TitanGreenDark, shape),
+                .clip(shape)
+                .background(TitanGreenDark),
             contentAlignment = Alignment.Center
         ) {
             Text(

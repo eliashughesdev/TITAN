@@ -4,34 +4,6 @@
   margin: 0 auto;
 }
 
-.admin-page__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-
-.admin-page__header h1 {
-  margin: 5px 0 0;
-  color: #172033;
-  font-size: 30px;
-  letter-spacing: -0.03em;
-}
-
-.admin-page__header p {
-  margin: 8px 0 0;
-  color: #6e7a8e;
-  font-size: 14px;
-}
-
-.admin-eyebrow {
-  color: #4e70dc;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
 .admin-page__actions {
   display: flex;
   gap: 10px;
@@ -561,10 +533,6 @@
 }
 
 @media (max-width: 700px) {
-  .admin-page__header {
-    flex-direction: column;
-  }
-
   .admin-summary,
   .admin-role-grid,
   .admin-detail-grid,

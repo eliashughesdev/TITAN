@@ -39,6 +39,11 @@ import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
+import {
+  SettingsPageHeader,
+  SettingsStatus,
+} from '../../components/settings'
+
 import './HelpdeskMailSettingsPage.css'
 
 // ============================================================
@@ -932,19 +937,13 @@ export function HelpdeskMailSettingsPage() {
       <main
         className="titan-page helpdesk-mail-page"
       >
-        <div
-          className="helpdesk-mail-message helpdesk-mail-message--error"
-        >
-          <AlertTriangle
-            size={18}
-          />
-
+        <SettingsStatus tone="error">
           {
             error
             ||
             'No se pudo cargar la configuración.'
           }
-        </div>
+        </SettingsStatus>
       </main>
     )
   }
@@ -960,80 +959,73 @@ export function HelpdeskMailSettingsPage() {
     <main
       className="titan-page helpdesk-mail-page"
     >
-      <header
-        className="helpdesk-mail-hero"
-      >
-        <div>
-          <span
-            className="helpdesk-mail-eyebrow"
-          >
-            <Mail
-              size={14}
-            />
-
-            HELPDESK · MICROSOFT 365
-          </span>
-
-          <h1>
-            Correo de Mesa de Ayuda
-          </h1>
-
-          <p>
-            Controla qué mensajes pueden
-            convertirse en tickets,
-            audita correos ignorados y
-            administra Microsoft Graph
-            desde TitanMDM.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="helpdesk-mail-refresh"
-          disabled={
-            loading
-            ||
-            saving
-            ||
-            testing
-          }
-          onClick={
-            () =>
-              void load()
-          }
-        >
-          <RefreshCw
+      <SettingsPageHeader
+        eyebrow="Helpdesk · Microsoft 365"
+        title="Correo de Mesa de Ayuda"
+        description={
+          'Controla qué mensajes pueden ' +
+          'convertirse en tickets, audita ' +
+          'correos ignorados y administra ' +
+          'Microsoft Graph desde TitanMDM.'
+        }
+        icon={
+          <Mail
             size={16}
           />
+        }
+        actions={
+          <button
+            type="button"
+            className="helpdesk-mail-refresh"
+            disabled={
+              loading
+              ||
+              saving
+              ||
+              testing
+            }
+            onClick={
+              () =>
+                void load()
+            }
+          >
+            <RefreshCw
+              size={16}
+            />
 
-          Actualizar
-        </button>
-      </header>
+            Actualizar
+          </button>
+        }
+      />
 
       {error && (
-        <div
-          className="helpdesk-mail-message helpdesk-mail-message--error"
-          role="alert"
+        <SettingsStatus
+          tone="error"
+          icon={
+            <AlertTriangle
+              size={18}
+            />
+          }
         >
-          <AlertTriangle
-            size={18}
-          />
-
-          {error}
-        </div>
+          <span>
+            {error}
+          </span>
+        </SettingsStatus>
       )}
 
       {success && (
-        <div
-          className="helpdesk-mail-message helpdesk-mail-message--success"
-          role="status"
+        <SettingsStatus
+          tone="success"
+          icon={
+            <CheckCircle2
+              size={18}
+            />
+          }
         >
-          <CheckCircle2
-            size={18}
-          />
-
-          {success}
-        </div>
+          <span>
+            {success}
+          </span>
+        </SettingsStatus>
       )}
 
       {/* ====================================================== */}

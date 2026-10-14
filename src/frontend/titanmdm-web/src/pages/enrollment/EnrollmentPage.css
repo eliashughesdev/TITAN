@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
+  color: var(--titan-platform-ink);
 }
 
 .enrollment-heading {
@@ -10,6 +11,17 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid var(--titan-platform-border);
+  border-radius: 24px;
+  background:
+    linear-gradient(
+      112deg,
+      #fff,
+      #f6fbf9 72%,
+      #e8f5ee
+    );
+  box-shadow: var(--titan-platform-shadow);
 }
 
 .enrollment-eyebrow {
@@ -24,14 +36,15 @@
 .enrollment-heading h1 {
   margin: 0;
   color: #0f172a;
-  font-size: 30px;
+  font-size: clamp(26px, 3vw, 38px);
+  letter-spacing: -.035em;
   line-height: 1.2;
 }
 
 .enrollment-description {
   max-width: 720px;
   margin: 8px 0 0;
-  color: #64748b;
+  color: var(--titan-platform-muted);
   line-height: 1.6;
 }
 
@@ -69,12 +82,16 @@
 }
 
 .enrollment-stat-card {
-  padding: 20px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 22px;
+  border: 1px solid var(--titan-platform-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #f9fcfd
+    );
+  box-shadow: var(--titan-platform-shadow);
 }
 
 .enrollment-stat-card span {
@@ -88,7 +105,8 @@
   display: block;
   margin-top: 10px;
   color: #0f172a;
-  font-size: 30px;
+  font-size: clamp(26px, 2.5vw, 34px);
+  letter-spacing: -.03em;
 }
 
 .enrollment-stat-card small {
@@ -107,16 +125,21 @@
 
 .enrollment-panel {
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid var(--titan-platform-border);
+  border-radius: 18px;
   background: #ffffff;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--titan-platform-shadow);
 }
 
 .enrollment-panel-header {
   padding: 20px 22px;
   border-bottom: 1px solid #e2e8f0;
+  background:
+    linear-gradient(
+      105deg,
+      #fafffd,
+      #f4faf8
+    );
 }
 
 .enrollment-panel-header h2 {
@@ -152,17 +175,21 @@
 }
 
 .enrollment-field select,
-.enrollment-field input {
+.enrollment-field input,
+.enrollment-field textarea {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   box-sizing: border-box;
   padding: 9px 11px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 11px;
   outline: none;
   background: #ffffff;
   color: #0f172a;
   font: inherit;
+  transition:
+    border-color 0.16s,
+    box-shadow 0.16s;
 }
 
 .enrollment-field select:focus,
@@ -170,6 +197,34 @@
   border-color: #2563eb;
   box-shadow:
     0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.enrollment-page[data-platform='android']
+.enrollment-field :is(input, select, textarea):focus-visible {
+  border-color: var(--titan-platform-android-strong);
+  box-shadow:
+    0 0 0 3px rgba(16, 142, 95, 0.16);
+}
+
+.enrollment-page[data-platform='android']
+.enrollment-primary-button {
+  background: var(--titan-platform-android-strong);
+}
+
+.enrollment-page[data-platform='android']
+.enrollment-primary-button:hover:not(:disabled) {
+  background: var(--titan-platform-android-hover);
+}
+
+.enrollment-page
+:is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #198e71;
+  outline-offset: 3px;
+}
+
+.enrollment-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .enrollment-field small {
@@ -413,6 +468,18 @@
   }
 }
 
+@media (max-width: 650px) {
+  .enrollment-heading {
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enrollment-page button {
+    transition: none;
+  }
+}
+
 /* ============================================================
    ANDROID ENTERPRISE
    ============================================================ */
@@ -423,13 +490,13 @@
   justify-content: space-between;
   gap: 24px;
   padding: 24px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--titan-platform-android-soft);
   border-radius: 14px;
   background:
     linear-gradient(
       135deg,
       #ffffff 0%,
-      #f8fbff 100%
+      #f6fbf8 100%
     );
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04);
@@ -813,6 +880,16 @@
   border-color: #93c5fd;
 }
 
+.enrollment-page[data-platform='android']
+.enrollment-platform-tab-active {
+  border-color: var(--titan-platform-android-soft);
+}
+
+.enrollment-page[data-platform='android']
+.enrollment-platform-tab-active:hover {
+  border-color: #86efac;
+}
+
 .enrollment-platform-tab-icon {
   display: grid;
   flex: 0 0 auto;
@@ -830,6 +907,13 @@
 .enrollment-platform-tab-icon {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.enrollment-page[data-platform='android']
+.enrollment-platform-tab-active
+.enrollment-platform-tab-icon {
+  background: var(--titan-platform-android-soft);
+  color: #166534;
 }
 
 .enrollment-platform-tab strong {
@@ -861,13 +945,13 @@
   justify-content: space-between;
   gap: 24px;
   padding: 22px 24px;
-  border: 1px solid #c7d2fe;
+  border: 1px solid var(--titan-platform-android-soft);
   border-radius: 14px;
   background:
     linear-gradient(
       135deg,
       #ffffff 0%,
-      #f8faff 100%
+      #f6fbf8 100%
     );
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04);
@@ -886,7 +970,12 @@
   height: 54px;
   place-items: center;
   border-radius: 14px;
-  background: #1d4ed8;
+  background:
+    linear-gradient(
+      135deg,
+      #22c55e,
+      var(--titan-platform-android-strong)
+    );
   color: #ffffff;
   font-size: 24px;
   font-weight: 800;
@@ -911,8 +1000,8 @@
   align-items: center;
   padding: 8px 12px;
   border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--titan-platform-android-soft);
+  color: #166534;
   font-size: 12px;
   font-weight: 700;
 }
@@ -981,11 +1070,11 @@
 }
 
 .android-technology-tab-active {
-  border-color: #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border-color: #86efac;
+  background: var(--titan-platform-android-soft);
+  color: #14532d;
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.06);
+    0 1px 2px rgba(22, 163, 74, 0.12);
 }
 
 .android-technology-tab strong,

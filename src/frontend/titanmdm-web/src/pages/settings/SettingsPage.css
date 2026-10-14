@@ -1,57 +1,21 @@
+/*
+ * TitanMDM — Configuración (hub) · P1-B
+ *
+ * El encabezado, las secciones y los estados ahora viven en
+ * los componentes compartidos (components/settings). Aquí sólo
+ * se conserva lo específico del hub: cabecera de estado,
+ * reticula de tarjetas y jerarquía de la tarjeta.
+ *
+ * Las reglas de layout base (ancho, padding, max-width)
+ * las aporta .titan-page (titan-theme.css). No se duplican
+ * ni se sobreescriben aquí para evitar conflictos de cascada.
+ */
+
 .titan-settings {
-  width: min(100%, 1380px);
-  margin-inline: auto;
-  color: #26364f;
+  color: var(--titan-platform-ink);
 }
 
-.titan-settings__hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 28px;
-  padding: 28px;
-  border: 1px solid #dfe6f3;
-  border-radius: 20px;
-  background:
-    linear-gradient(
-      115deg,
-      #ffffff 0%,
-      #f2f5ff 65%,
-      #eef2ff 100%
-    );
-  box-shadow:
-    0 8px 28px
-    rgb(31 54 101 / 5%);
-}
-
-.titan-settings__hero h1 {
-  margin: 10px 0 7px;
-  color: #24344e;
-  font-size:
-    clamp(
-      28px,
-      3vw,
-      38px
-    );
-}
-
-.titan-settings__hero p {
-  max-width: 720px;
-  margin: 0;
-  color: #68778f;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.titan-settings__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #5668ce;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .075em;
-}
+/* Estado del encabezado (slot status) */
 
 .titan-settings__hero-status {
   display: flex;
@@ -60,11 +24,10 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid
-    rgb(22 163 74 / 15%);
+    rgba(30, 169, 113, 0.18);
   border-radius: 13px;
-  background:
-    rgb(22 163 74 / 5%);
-  color: #166534;
+  background: var(--titan-success-soft);
+  color: #166a49;
 }
 
 .titan-settings__hero-status > svg {
@@ -87,73 +50,12 @@
   line-height: 1.5;
 }
 
-.titan-settings__notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  margin: 18px 0 21px;
-  padding: 15px 17px;
-  border: 1px solid
-    rgb(86 104 206 / 16%);
-  border-radius: 14px;
-  background:
-    rgb(86 104 206 / 5%);
-  color: #4557b8;
-}
-
-.titan-settings__notice > svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-
-.titan-settings__notice > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.titan-settings__notice strong {
-  font-size: 12px;
-}
-
-.titan-settings__notice span {
-  color: #61708a;
-  font-size: 11px;
-  line-height: 1.5;
-}
+/* Secciones y reticula */
 
 .titan-settings__sections {
   display: flex;
   flex-direction: column;
   gap: 22px;
-}
-
-.titan-settings__section {
-  padding: 24px;
-  border: 1px solid #e1e7f0;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow:
-    0 6px 20px
-    rgb(31 54 101 / 4%);
-}
-
-.titan-settings__section-header {
-  margin-bottom: 18px;
-}
-
-.titan-settings__section-header h2 {
-  margin: 0 0 5px;
-  color: #2c3c56;
-  font-size: 18px;
-}
-
-.titan-settings__section-header p {
-  max-width: 760px;
-  margin: 0;
-  color: #71809a;
-  font-size: 11px;
-  line-height: 1.5;
 }
 
 .titan-settings__grid {
@@ -166,36 +68,46 @@
         1fr
       )
     );
-  gap: 13px;
+  gap: 16px;
 }
+
+/* Tarjeta */
 
 .titan-settings__card {
   display: flex;
   flex-direction: column;
-  min-height: 185px;
+  min-height: 200px;
   padding: 17px;
-  border: 1px solid #e2e8f1;
-  border-radius: 14px;
-  background: #fbfcff;
+  border: 1px solid var(--titan-platform-border);
+  border-radius: 17px;
+  background:
+    linear-gradient(
+      160deg,
+      #fff,
+      #f8fbff
+    );
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    transform 130ms ease,
-    border-color 130ms ease,
-    box-shadow 130ms ease,
-    background 130ms ease;
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+
+.titan-settings-card:not(a):not(button) {
+  cursor: default;
 }
 
 .titan-settings__card:hover {
   transform:
-    translateY(-2px);
-  border-color: #cad4ed;
+    translateY(-3px);
+  border-color: #a4b8de;
   background: #fff;
   box-shadow:
-    0 9px 24px
-    rgb(38 54 94 / 8%);
+    0 16px 32px
+    rgba(28, 54, 81, 0.11);
 }
 
 .titan-settings__card-top {
@@ -212,8 +124,8 @@
   place-items: center;
   height: 40px;
   border-radius: 11px;
-  background: #edf1ff;
-  color: #5869cb;
+  background: var(--titan-platform-neutral-soft);
+  color: var(--titan-platform-neutral-strong);
 }
 
 .titan-settings__badge {
@@ -234,13 +146,14 @@
 .titan-settings__card-content h3 {
   margin: 0 0 7px;
   color: #30405a;
-  font-size: 14px;
+  font-size: 15px;
+  letter-spacing: -.015em;
 }
 
 .titan-settings__card-content p {
   margin: 0;
-  color: #71809a;
-  font-size: 10.5px;
+  color: var(--titan-platform-muted);
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -252,14 +165,13 @@
   margin-top: 15px;
   padding-top: 11px;
   border-top: 1px solid #e8edf4;
-  color: #5869cb;
-  font-size: 10px;
+  color: var(--titan-platform-neutral-strong);
+  font-size: 12px;
   font-weight: 800;
 }
 
 .titan-settings__card:focus-visible {
-  outline: 3px solid
-    rgb(99 102 241 / 28%);
+  outline: 3px solid var(--titan-platform-neutral-strong);
   outline-offset: 3px;
 }
 
@@ -279,28 +191,28 @@
 }
 
 @media (
-  max-width: 760px
-) {
-  .titan-settings__hero {
-    flex-direction: column;
-  }
-
-  .titan-settings__hero-status {
-    flex-basis: auto;
-    width: 100%;
-    box-sizing: border-box;
-  }
-}
-
-@media (
-  max-width: 620px
+  max-width: 650px
 ) {
   .titan-settings__grid {
     grid-template-columns:
       1fr;
   }
 
-  .titan-settings__section {
-    padding: 18px;
+  .titan-settings__hero-status {
+    flex: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (
+  prefers-reduced-motion: reduce
+) {
+  .titan-settings__card {
+    transition: none;
+  }
+
+  .titan-settings__card:hover {
+    transform: none;
   }
 }

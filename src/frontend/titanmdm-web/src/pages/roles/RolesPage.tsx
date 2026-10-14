@@ -23,6 +23,10 @@ import {
 
 import { useAuth } from '../../auth/AuthContext'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import '../users/AdministrationPage.css'
 
 function getErrorMessage(
@@ -328,56 +332,55 @@ export function RolesPage() {
 
   return (
     <div className="admin-page">
-      <header className="admin-page__header">
-        <div>
-          <span className="admin-eyebrow">
-            CONTROL DE ACCESO
-          </span>
-
-          <h1>
-            Roles y permisos
-          </h1>
-
-          <p>
-            Define qué áreas y acciones puede
-            utilizar cada grupo de usuarios.
-          </p>
-        </div>
-
-        <div className="admin-page__actions">
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() =>
-              void loadRoles()
-            }
-          >
-            <RefreshCw
-              size={16}
-            />
-
-            Actualizar
-          </button>
-
-          {canManage && (
+      <SettingsPageHeader
+        eyebrow="Control de acceso"
+        title="Roles y permisos"
+        description={
+          'Define qué áreas y acciones ' +
+          'puede utilizar cada grupo de ' +
+          'usuarios.'
+        }
+        icon={
+          <ShieldCheck
+            size={16}
+          />
+        }
+        actions={
+          <div className="admin-page__actions">
             <button
               type="button"
-              className="admin-button admin-button--primary"
+              className="admin-button"
               onClick={() =>
-                setShowCreate(
-                  true,
-                )
+                void loadRoles()
               }
             >
-              <Plus
+              <RefreshCw
                 size={16}
               />
 
-              Nuevo rol
+              Actualizar
             </button>
-          )}
-        </div>
-      </header>
+
+            {canManage && (
+              <button
+                type="button"
+                className="admin-button admin-button--primary"
+                onClick={() =>
+                  setShowCreate(
+                    true,
+                  )
+                }
+              >
+                <Plus
+                  size={16}
+                />
+
+                Nuevo rol
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <section className="admin-summary">
         <article>

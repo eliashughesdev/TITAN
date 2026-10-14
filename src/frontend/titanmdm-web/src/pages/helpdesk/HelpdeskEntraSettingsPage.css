@@ -1,7 +1,5 @@
 .entra-settings {
-  width: min(100%, 1440px);
   min-width: 0;
-  margin-inline: auto;
   color: #17233b;
 }
 
@@ -9,45 +7,6 @@
 .entra-settings *::before,
 .entra-settings *::after {
   box-sizing: border-box;
-}
-
-.entra-settings__card {
-  min-width: 0;
-  padding: 26px;
-  border: 1px solid #dfe6f3;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgb(31 54 101 / 5%);
-}
-
-.entra-settings__card-header {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 24px;
-}
-
-.entra-settings__card-header h2 {
-  margin: 0 0 5px;
-  font-size: 20px;
-}
-
-.entra-settings__card-header p {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.entra-settings__icon {
-  display: grid;
-  flex: 0 0 46px;
-  width: 46px;
-  height: 46px;
-  place-items: center;
-  border-radius: 14px;
-  background: #ebeeff;
-  color: #5364e9;
 }
 
 .entra-settings__fields {
@@ -243,34 +202,7 @@
   max-width: 620px;
 }
 
-.entra-settings__success,
-.entra-settings__error {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.entra-settings__success {
-  border: 1px solid #b9e4c7;
-  background: #effbf2;
-  color: #166534;
-}
-
-.entra-settings__error {
-  border: 1px solid #f0bfc5;
-  background: #fff1f2;
-  color: #b42332;
-}
-
 @media (max-width: 760px) {
-  .entra-settings__card {
-    padding: 18px;
-  }
-
   .entra-settings__fields {
     grid-template-columns: 1fr;
   }

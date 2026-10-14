@@ -31,6 +31,10 @@ import {
 
 import { useAuth } from '../../auth/AuthContext'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import './AdministrationPage.css'
 
 function getErrorMessage(
@@ -435,54 +439,54 @@ export function UsersPage() {
 
   return (
     <div className="admin-page">
-      <header className="admin-page__header">
-        <div>
-          <span className="admin-eyebrow">
-            IDENTIDAD Y ACCESO
-          </span>
-
-          <h1>Usuarios</h1>
-
-          <p>
-            Administra las cuentas con acceso
-            a TitanMDM y sus roles.
-          </p>
-        </div>
-
-        <div className="admin-page__actions">
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() =>
-              void loadUsers()
-            }
-          >
-            <RefreshCw
-              size={16}
-            />
-
-            Actualizar
-          </button>
-
-          {canManage && (
+      <SettingsPageHeader
+        eyebrow="Identidad y acceso"
+        title="Usuarios"
+        description={
+          'Administra las cuentas con ' +
+          'acceso a TitanMDM y sus roles.'
+        }
+        icon={
+          <UserRound
+            size={16}
+          />
+        }
+        actions={
+          <div className="admin-page__actions">
             <button
               type="button"
-              className="admin-button admin-button--primary"
+              className="admin-button"
               onClick={() =>
-                setShowCreate(
-                  true,
-                )
+                void loadUsers()
               }
             >
-              <Plus
+              <RefreshCw
                 size={16}
               />
 
-              Nuevo usuario
+              Actualizar
             </button>
-          )}
-        </div>
-      </header>
+
+            {canManage && (
+              <button
+                type="button"
+                className="admin-button admin-button--primary"
+                onClick={() =>
+                  setShowCreate(
+                    true,
+                  )
+                }
+              >
+                <Plus
+                  size={16}
+                />
+
+                Nuevo usuario
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <section className="admin-summary">
         <article>

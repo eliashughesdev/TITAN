@@ -24,6 +24,10 @@ import {
 import apiClient
   from '../../api/apiClient'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import './HelpdeskPages.css'
 import './HelpdeskTemplatesAdminPage.css'
 
@@ -643,73 +647,62 @@ export function HelpdeskTemplatesAdminPage() {
     <main
       className="titan-page helpdesk-page hd-template-admin"
     >
-      <header
-        className="helpdesk-inbox__header"
-      >
-        <div>
-          <span
-            className="helpdesk-inbox__eyebrow"
+      <SettingsPageHeader
+        eyebrow="Catálogo de solicitudes"
+        title="Plantillas de tickets"
+        description={
+          'Crea solicitudes guiadas para que ' +
+          'los colaboradores reporten ' +
+          'incidencias con la información ' +
+          'necesaria desde el primer contacto.'
+        }
+        icon={
+          <ClipboardList
+            size={16}
+          />
+        }
+        actions={
+          <div
+            className="helpdesk-inbox__header-actions"
           >
-            <ClipboardList
-              size={15}
-            />
-
-            CATÁLOGO DE SOLICITUDES
-          </span>
-
-          <h1>
-            Plantillas de tickets
-          </h1>
-
-          <p>
-            Crea solicitudes guiadas
-            para que los colaboradores
-            reporten incidencias con la
-            información necesaria desde
-            el primer contacto.
-          </p>
-        </div>
-
-        <div
-          className="helpdesk-inbox__header-actions"
-        >
-          <button
-            type="button"
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            disabled={
-              loading
-              ||
-              saving
-            }
-            onClick={
-              () =>
-                void load()
-            }
-          >
-            <RefreshCw
-              size={16}
-            />
-
-            Actualizar
-          </button>
-
-          {canManage && (
             <button
               type="button"
-              className="helpdesk-ui-button helpdesk-ui-button--primary"
+              className="helpdesk-ui-button helpdesk-ui-button--secondary"
+              disabled={
+                loading
+                ||
+                saving
+              }
               onClick={
-                createNew
+                () =>
+                  void load()
               }
             >
-              <FilePlus2
+              <RefreshCw
                 size={16}
               />
 
-              Nueva plantilla
+              Actualizar
             </button>
-          )}
-        </div>
-      </header>
+
+            {canManage && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--primary"
+                onClick={
+                  createNew
+                }
+              >
+                <FilePlus2
+                  size={16}
+                />
+
+                Nueva plantilla
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {error && (
         <div

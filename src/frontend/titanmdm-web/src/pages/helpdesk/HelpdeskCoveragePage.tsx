@@ -21,6 +21,10 @@ import {
 import apiClient
   from '../../api/apiClient'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import './HelpdeskPages.css'
 import './HelpdeskCoveragePage.css'
 
@@ -394,55 +398,45 @@ export function HelpdeskCoveragePage() {
     <main
       className="titan-page helpdesk-page hdcov"
     >
-      <header
-        className="hdcov__hero"
-      >
-        <div>
-          <span
-            className="hdcov__eyebrow"
-          >
-            <MapPin
-              size={14}
-            />
-
-            Configuración · Mesa de ayuda
-          </span>
-
-          <h1>
-            Cobertura de asignación
-          </h1>
-
-          <p>
-            Comprueba qué localidades,
-            sublocalidades y categorías
-            pueden recibir una asignación
-            automática antes de habilitar
-            el flujo de correo.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="helpdesk-ui-button helpdesk-ui-button--secondary"
-          onClick={
-            () =>
-              void load()
-          }
-          disabled={
-            loading
-          }
-        >
-          <RefreshCw
+      <SettingsPageHeader
+        eyebrow="Configuración · Mesa de ayuda"
+        title="Cobertura de asignación"
+        description={
+          'Comprueba qué localidades, ' +
+          'sublocalidades y categorías ' +
+          'pueden recibir una asignación ' +
+          'automática antes de habilitar el ' +
+          'flujo de correo.'
+        }
+        icon={
+          <MapPin
             size={16}
           />
+        }
+        actions={
+          <button
+            type="button"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            onClick={
+              () =>
+                void load()
+            }
+            disabled={
+              loading
+            }
+          >
+            <RefreshCw
+              size={16}
+            />
 
-          {
-            loading
-              ? 'Actualizando…'
-              : 'Actualizar'
-          }
-        </button>
-      </header>
+            {
+              loading
+                ? 'Actualizando…'
+                : 'Actualizar'
+            }
+          </button>
+        }
+      />
 
       <section
         className="hdcov__metrics"

@@ -10,6 +10,16 @@
   isolation: isolate;
 }
 
+.titan-enterprise-layout[data-titan-workspace="windows"] {
+  --titan-workspace-accent: var(--titan-platform-windows);
+  --titan-workspace-soft: var(--titan-platform-windows-soft);
+}
+
+.titan-enterprise-layout[data-titan-workspace="android"] {
+  --titan-workspace-accent: var(--titan-platform-android);
+  --titan-workspace-soft: var(--titan-platform-android-soft);
+}
+
 .titan-enterprise-layout[data-titan-workspace="ponches"] {
   --titan-workspace-accent: #168c9d;
   --titan-workspace-soft: #e9f9fb;

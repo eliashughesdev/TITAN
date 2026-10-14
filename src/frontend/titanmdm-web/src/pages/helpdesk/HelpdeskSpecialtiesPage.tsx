@@ -31,6 +31,11 @@ import {
 import apiClient
   from '../../api/apiClient'
 
+import {
+  SettingsPageHeader,
+  SettingsStatus,
+} from '../../components/settings'
+
 import './HelpdeskSpecialtiesPage.css'
 
 type PlanningTab =
@@ -1685,104 +1690,99 @@ export function HelpdeskSpecialtiesPage() {
           HEADER
          ======================================================== */}
 
-      <header
-        className="hdgp-header"
-      >
-        <div>
-          <span
-            className="hdgp-eyebrow"
+      <SettingsPageHeader
+        eyebrow="Mesa de ayuda · Administración"
+        title={pageTitle}
+        description={pageDescription}
+        icon={
+          <FolderKanban
+            size={16}
+          />
+        }
+        actions={
+          <div
+            className="hdgp-actions"
           >
-            MESA DE AYUDA · ADMINISTRACIÓN
-          </span>
+            <Link
+              to="/helpdesk/operations?workspace=helpdesk"
+            >
+              <MapPin
+                size={15}
+              />
 
-          <h1>
-            {pageTitle}
-          </h1>
+              Localidades
+            </Link>
 
-          <p>
-            {pageDescription}
-          </p>
-        </div>
+            <button
+              type="button"
+              disabled={
+                busy
+              }
+              onClick={
+                () =>
+                  void load(
+                    selected?.id,
+                  )
+              }
+            >
+              <RefreshCw
+                size={15}
+              />
 
-        <div
-          className="hdgp-actions"
-        >
-          <Link
-            to="/helpdesk/operations?workspace=helpdesk"
-          >
-            <MapPin
-              size={15}
-            />
+              Actualizar
+            </button>
 
-            Localidades
-          </Link>
+            <button
+              type="button"
+              className="hdgp-primary"
+              disabled={
+                busy
+              }
+              onClick={
+                () =>
+                  setShowCreate(
+                    value =>
+                      !value,
+                  )
+              }
+            >
+              <Plus
+                size={15}
+              />
 
-          <button
-            type="button"
-            disabled={
-              busy
-            }
-            onClick={
-              () =>
-                void load(
-                  selected?.id,
-                )
-            }
-          >
-            <RefreshCw
-              size={15}
-            />
-
-            Actualizar
-          </button>
-
-          <button
-            type="button"
-            className="hdgp-primary"
-            disabled={
-              busy
-            }
-            onClick={
-              () =>
-                setShowCreate(
-                  value =>
-                    !value,
-                )
-            }
-          >
-            <Plus
-              size={15}
-            />
-
-            Crear grupo
-          </button>
-        </div>
-      </header>
+              Crear grupo
+            </button>
+          </div>
+        }
+      />
 
       {/* ========================================================
           STATUS
          ======================================================== */}
 
       {error && (
-        <div
-          className="hdgp-alert hdgp-error"
-          role="alert"
+        <SettingsStatus
+          tone="error"
         >
-          {error}
-        </div>
+          <span>
+            {error}
+          </span>
+        </SettingsStatus>
       )}
 
       {success && (
-        <div
-          className="hdgp-alert hdgp-success"
-          role="status"
+        <SettingsStatus
+          tone="success"
+          icon={
+            <CheckCircle2
+              size={16}
+            />
+          }
         >
-          <CheckCircle2
-            size={16}
-          />
-
-          {success}
-        </div>
+          <span>
+            {success}
+          </span>
+        </SettingsStatus>
       )}
 
       {/* ========================================================

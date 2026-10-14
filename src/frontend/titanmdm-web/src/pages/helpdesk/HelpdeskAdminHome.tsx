@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Building2,
   Clock3,
   CloudCog,
@@ -21,6 +20,12 @@ import {
 import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
+
+import {
+  SettingsCard,
+  SettingsPageHeader,
+  SettingsSection,
+} from '../../components/settings'
 
 import {
   HelpdeskRoutingOperationsPanel,
@@ -311,31 +316,20 @@ export function HelpdeskAdminHome() {
         'helpdesk-admin-home'
       }
     >
-      <header
-        className="helpdesk-admin-home__hero"
-      >
-        <div>
-          <span
-            className="helpdesk-hub__eyebrow"
-          >
-            <Settings
-              size={15}
-            />
-
-            ADMINISTRACIÓN HELPDESK
-          </span>
-
-          <h1>
-            Administración de Mesa de Ayuda
-          </h1>
-
-          <p>
-            Configura la operación,
-            integraciones, automatización
-            y distribución del servicio.
-          </p>
-        </div>
-      </header>
+      <SettingsPageHeader
+        eyebrow="Administración Helpdesk"
+        title="Administración de Mesa de Ayuda"
+        description={
+          'Configura la operación, ' +
+          'integraciones, automatización y ' +
+          'distribución del servicio.'
+        }
+        icon={
+          <Settings
+            size={16}
+          />
+        }
+      />
 
       <HelpdeskRoutingOperationsPanel />
 
@@ -362,26 +356,17 @@ export function HelpdeskAdminHome() {
             }
 
             return (
-              <section
+              <SettingsSection
                 key={
                   section.title
                 }
-                className="helpdesk-admin-home__section"
+                title={
+                  section.title
+                }
+                description={
+                  section.description
+                }
               >
-                <header>
-                  <h2>
-                    {
-                      section.title
-                    }
-                  </h2>
-
-                  <p>
-                    {
-                      section.description
-                    }
-                  </p>
-                </header>
-
                 <div
                   className="helpdesk-admin-home__grid"
                 >
@@ -391,50 +376,33 @@ export function HelpdeskAdminHome() {
                         action.icon
 
                       return (
-                        <button
+                        <SettingsCard
                           key={
                             action.title
                           }
-                          type="button"
-                          className="helpdesk-admin-home__card"
+                          title={
+                            action.title
+                          }
+                          description={
+                            action.description
+                          }
+                          icon={
+                            <Icon
+                              size={20}
+                            />
+                          }
                           onClick={
                             () =>
                               navigate(
                                 action.path,
                               )
                           }
-                        >
-                          <span
-                            className="helpdesk-admin-home__icon"
-                          >
-                            <Icon
-                              size={20}
-                            />
-                          </span>
-
-                          <div>
-                            <h3>
-                              {
-                                action.title
-                              }
-                            </h3>
-
-                            <p>
-                              {
-                                action.description
-                              }
-                            </p>
-                          </div>
-
-                          <ArrowRight
-                            size={17}
-                          />
-                        </button>
+                        />
                       )
                     },
                   )}
                 </div>
-              </section>
+              </SettingsSection>
             )
           },
         )}

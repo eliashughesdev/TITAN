@@ -377,7 +377,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #4169e1;
+  color: var(--titan-platform-android-strong);
 }
 
 .android-publication-title h2 {
@@ -413,9 +413,9 @@
 }
 
 .android-publication-status--publishing {
-  color: #3158ca;
-  border-color: #cbd8ff;
-  background: #edf2ff;
+  color: #166534;
+  border-color: #bbf7d0;
+  background: var(--titan-platform-android-soft);
 }
 
 .android-publication-status--failed {
@@ -456,12 +456,12 @@
   white-space: nowrap;
 }
 
-.android-publication-mono {
+.android-publication-field strong.android-publication-mono {
   font-family:
     "Cascadia Code",
     Consolas,
     monospace;
-  font-size: 9px !important;
+  font-size: 9px;
 }
 
 .android-publication-actions {
@@ -492,15 +492,20 @@
 }
 
 .android-publish-button {
-  border: 1px solid #4169e1;
+  border: 1px solid var(--titan-platform-android);
   color: #fff;
-  background: #4169e1;
+  background: var(--titan-platform-android);
+}
+
+.android-publish-button:hover:not(:disabled) {
+  border-color: var(--titan-platform-android-strong);
+  background: var(--titan-platform-android-strong);
 }
 
 .android-verify-button {
-  border: 1px solid #b9c9f8;
-  color: #3158ca;
-  background: #edf2ff;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  background: var(--titan-platform-android-soft);
 }
 
 .android-refresh-button {
@@ -671,8 +676,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  background: #eef4ff;
-  color: #2563eb;
+  background: var(--titan-platform-android-soft);
+  color: var(--titan-platform-android-strong);
 }
 
 .android-assignment-title h3 {
@@ -770,8 +775,8 @@
 }
 
 .android-assignment-field select:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--titan-platform-android);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
 }
 
 .android-selected-device {
@@ -813,7 +818,7 @@
   padding: 0 17px;
   border: 0;
   border-radius: 8px;
-  background: #2563eb;
+  background: var(--titan-platform-android);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
@@ -821,7 +826,7 @@
 }
 
 .android-assign-button:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--titan-platform-android-strong);
 }
 
 .android-assign-button:disabled {
@@ -1012,4 +1017,40 @@
   .policy-managed-app-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   ANDROID WORKSPACE — IDENTIDAD VERDE
+   ============================================================
+
+   Los controles genéricos del editor de políticas se comparten
+   con Windows, por lo que se reescapan con [data-workspace='android']
+   para heredar la identidad verde sin alterar el módulo Windows. */
+
+[data-workspace='android'] .policy-editor-save {
+  border-color: var(--titan-platform-android);
+  background: var(--titan-platform-android);
+}
+
+[data-workspace='android'] .policy-editor-save:hover:not(:disabled) {
+  border-color: var(--titan-platform-android-strong);
+  background: var(--titan-platform-android-strong);
+}
+
+[data-workspace='android'] .policy-editor-platform button.active {
+  color: var(--titan-platform-android-strong);
+  background: var(--titan-platform-android-soft);
+}
+
+[data-workspace='android'] .policy-toggle--active {
+  background: var(--titan-platform-android);
+}
+
+[data-workspace='android'] .policy-managed-apps-add {
+  color: var(--titan-platform-android-strong);
+  background: var(--titan-platform-android-soft);
+}
+
+[data-workspace='android'] .policy-editor-card__header {
+  color: var(--titan-platform-android-strong);
 }

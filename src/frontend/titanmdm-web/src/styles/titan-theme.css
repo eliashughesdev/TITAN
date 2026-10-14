@@ -137,6 +137,50 @@
 
   --titan-sidebar-active-border:
     rgba(142, 167, 255, 0.45);
+
+  /* Platform identity tokens */
+
+  --titan-platform-windows:
+    #2563eb;
+
+  --titan-platform-windows-strong:
+    #1d4ed8;
+
+  --titan-platform-windows-soft:
+    #eff6ff;
+
+  --titan-platform-android:
+    #16a34a;
+
+  --titan-platform-android-strong:
+    #087c58;
+
+  --titan-platform-android-hover:
+    #056745;
+
+  --titan-platform-android-soft:
+    #f0fdf4;
+
+  --titan-platform-neutral:
+    #64748b;
+
+  --titan-platform-neutral-strong:
+    #475569;
+
+  --titan-platform-neutral-soft:
+    #f1f5f9;
+
+  --titan-platform-border:
+    #dce6eb;
+
+  --titan-platform-muted:
+    #617589;
+
+  --titan-platform-ink:
+    #1b3345;
+
+  --titan-platform-shadow:
+    0 12px 32px rgba(23, 48, 68, 0.075);
 }
 
 * {
@@ -994,4 +1038,118 @@ body {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* ============================================================
+   ANDROID WORKSPACE IDENTITY
+   ============================================================
+
+   Android reutiliza los tokens y componentes genéricos titan-*
+   para heredar la identidad verde empresarial premium en TODAS
+   las pantallas del módulo (dashboard, dispositivos, inventario,
+   inscripción, Android Enterprise, políticas, aplicaciones,
+   perfiles, launcher, seguridad, cumplimiento, geofencing y
+   kiosco) sin duplicar CSS por página.
+
+   El alcance [data-workspace='android'] garantiza que el módulo
+   Windows conserve su identidad azul intacta. */
+
+[data-workspace='android'] {
+  --titan-primary:
+    var(--titan-platform-android);
+
+  --titan-primary-strong:
+    var(--titan-platform-android-strong);
+
+  --titan-primary-soft:
+    var(--titan-platform-android-soft);
+
+  --titan-accent:
+    var(--titan-platform-android-strong);
+}
+
+[data-workspace='android'] .titan-page-header {
+  border-color:
+    rgba(22, 163, 74, 0.2);
+
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(22, 163, 74, 0.1),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.97),
+      rgba(240, 253, 244, 0.9)
+    );
+}
+
+[data-workspace='android'] .titan-section-card__icon,
+[data-workspace='android'] .titan-kpi-card__icon,
+[data-workspace='android'] .titan-empty-state__icon {
+  color:
+    var(--titan-platform-android-strong);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(22, 163, 74, 0.16),
+      rgba(22, 163, 74, 0.06)
+    );
+}
+
+[data-workspace='android'] .titan-btn--primary {
+  border-color:
+    var(--titan-platform-android);
+
+  background:
+    linear-gradient(
+      180deg,
+      #22b365,
+      #15803d
+    );
+
+  box-shadow:
+    0 10px 22px rgba(22, 163, 74, 0.24);
+}
+
+[data-workspace='android'] .titan-btn--primary:hover {
+  background:
+    linear-gradient(
+      180deg,
+      #29bf6f,
+      #16803f
+    );
+}
+
+[data-workspace='android'] .titan-btn--ghost {
+  color:
+    var(--titan-platform-android-strong);
+
+  border-color:
+    rgba(22, 163, 74, 0.2);
+
+  background:
+    rgba(22, 163, 74, 0.08);
+}
+
+[data-workspace='android'] .titan-input:focus,
+[data-workspace='android'] .titan-select:focus,
+[data-workspace='android'] .titan-textarea:focus {
+  border-color:
+    rgba(22, 163, 74, 0.5);
+
+  box-shadow:
+    0 0 0 4px rgba(22, 163, 74, 0.12);
+}
+
+[data-workspace='android'] .titan-card--interactive:hover {
+  border-color:
+    rgba(22, 163, 74, 0.3);
+}
+
+[data-workspace='android'] .titan-table tbody tr:hover {
+  background:
+    rgba(22, 163, 74, 0.045);
 }

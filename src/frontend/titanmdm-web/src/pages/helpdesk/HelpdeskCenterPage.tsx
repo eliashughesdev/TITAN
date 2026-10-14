@@ -51,6 +51,10 @@ import {
 } from '../../auth/helpdeskAccess'
 
 import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
+import {
   HelpdeskRequestTemplates,
 } from './HelpdeskRequestTemplates'
 
@@ -898,50 +902,44 @@ export function HelpdeskCenterPage() {
     <main
       className="titan-page hdc"
     >
-      <header
-        className="hdc-header"
-      >
-        <div>
-          <span
-            className="hdc-eyebrow"
-          >
-            HELPDESK ENTERPRISE
-          </span>
-
-          <h1>
-            Centro de operación de Helpdesk
-          </h1>
-
-          <p>
-            Configuración, SLA,
-            preparación y métricas
-            operativas de la Mesa de Ayuda.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="hdc-refresh"
-          disabled={
-            loading
-            ||
-            saving
-          }
-          onClick={
-            () =>
-              setVersion(
-                value =>
-                  value + 1,
-              )
-          }
-        >
-          <RefreshCw
+      <SettingsPageHeader
+        eyebrow="Helpdesk Enterprise"
+        title="Centro de operación de Helpdesk"
+        description={
+          'Configuración, SLA, preparación ' +
+          'y métricas operativas de la ' +
+          'Mesa de Ayuda.'
+        }
+        icon={
+          <ShieldCheck
             size={16}
           />
+        }
+        actions={
+          <button
+            type="button"
+            className="hdc-refresh"
+            disabled={
+              loading
+              ||
+              saving
+            }
+            onClick={
+              () =>
+                setVersion(
+                  value =>
+                    value + 1,
+                )
+            }
+          >
+            <RefreshCw
+              size={16}
+            />
 
-          Actualizar
-        </button>
-      </header>
+            Actualizar
+          </button>
+        }
+      />
 
       <nav
         className="hdc-nav"

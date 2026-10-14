@@ -26,6 +26,10 @@ import {
   useAuth,
 } from '../../auth/AuthContext'
 
+import {
+  SettingsPageHeader,
+} from '../../components/settings'
+
 import './SitesPage.css'
 
 import {
@@ -678,57 +682,56 @@ export function SitesPage() {
           HEADER
       ====================================================== */}
 
-      <header className="sites-hero">
-        <div>
-          <span className="sites-eyebrow">
-            MULTI-SITE
-          </span>
-
-          <h1>
-            Localidades
-          </h1>
-
-          <p>
-            Administración central de plantas,
-            naves, edificios y ubicaciones
-            operativas de TitanMDM.
-          </p>
-        </div>
-
-        <div className="sites-actions">
-          <button
-            type="button"
-            className="sites-button"
-            onClick={() =>
-              void loadSites()
-            }
-          >
-            <RefreshCw
-              size={16}
-            />
-
-            Actualizar
-          </button>
-
-          {canManage && (
+      <SettingsPageHeader
+        eyebrow="Multi-site"
+        title="Localidades"
+        description={
+          'Administración central de ' +
+          'plantas, naves, edificios y ' +
+          'ubicaciones operativas de ' +
+          'TitanMDM.'
+        }
+        icon={
+          <Building2
+            size={16}
+          />
+        }
+        actions={
+          <div className="sites-actions">
             <button
               type="button"
-              className="sites-button sites-button--primary"
+              className="sites-button"
               onClick={() =>
-                setShowCreate(
-                  true,
-                )
+                void loadSites()
               }
             >
-              <Plus
+              <RefreshCw
                 size={16}
               />
 
-              Nueva localidad
+              Actualizar
             </button>
-          )}
-        </div>
-      </header>
+
+            {canManage && (
+              <button
+                type="button"
+                className="sites-button sites-button--primary"
+                onClick={() =>
+                  setShowCreate(
+                    true,
+                  )
+                }
+              >
+                <Plus
+                  size={16}
+                />
+
+                Nueva localidad
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* ======================================================
           KPIs

@@ -18,8 +18,10 @@ import {
 } from 'lucide-react'
 
 import {
-  TitanPageHeader,
-} from '../../components/ui/TitanPageHeader'
+  SettingsPageHeader,
+  SettingsSection,
+  SettingsStatus,
+} from '../../components/settings'
 
 import {
   helpdeskApi,
@@ -709,7 +711,7 @@ export function HelpdeskEntraSettingsPage() {
     <main
       className="titan-page helpdesk-page entra-settings"
     >
-      <TitanPageHeader
+      <SettingsPageHeader
         eyebrow="Directorio empresarial"
         title="Microsoft Entra ID"
         description={
@@ -724,59 +726,48 @@ export function HelpdeskEntraSettingsPage() {
       />
 
       {message && (
-        <div
-          className="entra-settings__success"
-          role="status"
+        <SettingsStatus
+          tone="success"
+          icon={
+            <ShieldCheck
+              size={18}
+            />
+          }
         >
-          <ShieldCheck
-            size={18}
-          />
-
           <span>
             {message}
           </span>
-        </div>
+        </SettingsStatus>
       )}
 
       {error && (
-        <div
-          className="entra-settings__error"
-          role="alert"
+        <SettingsStatus
+          tone="error"
         >
-          {error}
-        </div>
+          <span>
+            {error}
+          </span>
+        </SettingsStatus>
       )}
 
       {/* ======================================================
           DIAGNOSTIC
          ====================================================== */}
 
-      <section
-        className="entra-settings__card entra-settings__diagnostic"
+      <SettingsSection
+        className="entra-settings__diagnostic"
+        title="Estado de integración"
+        description={
+          'Comprueba qué componentes de ' +
+          'Microsoft Entra están listos ' +
+          'antes de probar el acceso.'
+        }
+        icon={
+          <ShieldCheck
+            size={22}
+          />
+        }
       >
-        <div
-          className="entra-settings__card-header"
-        >
-          <div
-            className="entra-settings__icon"
-          >
-            <ShieldCheck
-              size={22}
-            />
-          </div>
-
-          <div>
-            <h2>
-              Estado de integración
-            </h2>
-
-            <p>
-              Comprueba qué componentes de
-              Microsoft Entra están listos
-              antes de probar el acceso.
-            </p>
-          </div>
-        </div>
 
         <div
           className="entra-settings__diagnostic-grid"
@@ -939,38 +930,25 @@ export function HelpdeskEntraSettingsPage() {
             probarlo.
           </div>
         )}
-      </section>
+      </SettingsSection>
 
       {/* ======================================================
           GRAPH SETTINGS
          ====================================================== */}
 
-      <section
-        className="entra-settings__card"
+      <SettingsSection
+        title="Aplicación Microsoft Entra"
+        description={
+          'Esta misma configuración se ' +
+          'utiliza para Directorio, Graph ' +
+          'y Login Microsoft.'
+        }
+        icon={
+          <CloudCog
+            size={22}
+          />
+        }
       >
-        <div
-          className="entra-settings__card-header"
-        >
-          <div
-            className="entra-settings__icon"
-          >
-            <CloudCog
-              size={22}
-            />
-          </div>
-
-          <div>
-            <h2>
-              Aplicación Microsoft Entra
-            </h2>
-
-            <p>
-              Esta misma configuración se
-              utiliza para Directorio,
-              Graph y Login Microsoft.
-            </p>
-          </div>
-        </div>
 
         <div
           className="entra-settings__fields"
@@ -1174,38 +1152,25 @@ export function HelpdeskEntraSettingsPage() {
             }
           </p>
         )}
-      </section>
+      </SettingsSection>
 
       {/* ======================================================
           DIRECTORY
          ====================================================== */}
 
-      <section
-        className="entra-settings__card"
+      <SettingsSection
+        title="Personas sincronizadas"
+        description={
+          'Busca una persona de Entra ID, ' +
+          'vincúlala con TitanMDM y asígnale ' +
+          'un rol de acceso.'
+        }
+        icon={
+          <Users
+            size={22}
+          />
+        }
       >
-        <div
-          className="entra-settings__card-header"
-        >
-          <div
-            className="entra-settings__icon"
-          >
-            <Users
-              size={22}
-            />
-          </div>
-
-          <div>
-            <h2>
-              Personas sincronizadas
-            </h2>
-
-            <p>
-              Busca una persona de Entra ID,
-              vincúlala con TitanMDM y asígnale
-              un rol de acceso.
-            </p>
-          </div>
-        </div>
 
         <div
           className="entra-settings__search"
@@ -1391,7 +1356,7 @@ export function HelpdeskEntraSettingsPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SettingsSection>
 
       {/* ======================================================
           ACCESS
@@ -1399,40 +1364,19 @@ export function HelpdeskEntraSettingsPage() {
 
       {selected &&
         canAssignAccess && (
-        <section
-          className="entra-settings__card"
+        <SettingsSection
+          title="Asignar acceso individual"
+          description={
+            `${selected.directoryUser.displayName} · ` +
+            selected.directoryUser
+              .userPrincipalName
+          }
+          icon={
+            <UserPlus
+              size={22}
+            />
+          }
         >
-          <div
-            className="entra-settings__card-header"
-          >
-            <div
-              className="entra-settings__icon"
-            >
-              <UserPlus
-                size={22}
-              />
-            </div>
-
-            <div>
-              <h2>
-                Asignar acceso individual
-              </h2>
-
-              <p>
-                {
-                  selected
-                    .directoryUser
-                    .displayName
-                }
-                {' · '}
-                {
-                  selected
-                    .directoryUser
-                    .userPrincipalName
-                }
-              </p>
-            </div>
-          </div>
 
           <label
             className="entra-settings__role"
@@ -1537,7 +1481,7 @@ export function HelpdeskEntraSettingsPage() {
               Cancelar
             </button>
           </div>
-        </section>
+        </SettingsSection>
       )}
     </main>
   )

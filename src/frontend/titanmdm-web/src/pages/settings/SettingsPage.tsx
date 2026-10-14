@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Building2,
   CheckCircle2,
   Clock3,
@@ -25,8 +24,14 @@ import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
+import {
+  SettingsCard,
+  SettingsPageHeader,
+  SettingsSection,
+  SettingsStatus,
+} from '../../components/settings'
+
 import './SettingsPage.css'
-import '../../styles/TitanEnterpriseUI.css'
 
 interface ConfigurationCard {
   title: string
@@ -423,105 +428,80 @@ export function SettingsPage() {
     <main
       className="titan-page titan-settings"
     >
-      <header
-        className="titan-settings__hero"
-      >
-        <div>
-          <span
-            className="titan-settings__eyebrow"
+      <SettingsPageHeader
+        eyebrow="Administración"
+        title="Configuración"
+        description={
+          'Centraliza la configuración ' +
+          'administrativa de TitanMDM sin ' +
+          'depender de cambios manuales en ' +
+          'código o archivos del servidor.'
+        }
+        icon={
+          <Settings
+            size={16}
+          />
+        }
+        status={
+          <div
+            className="titan-settings__hero-status"
           >
-            <Settings
-              size={16}
+            <CheckCircle2
+              size={18}
             />
 
-            ADMINISTRACIÓN
-          </span>
+            <div>
+              <strong>
+                Configuración centralizada
+              </strong>
 
-          <h1>
-            Configuración
-          </h1>
-
-          <p>
-            Centraliza la configuración
-            administrativa de TitanMDM
-            sin depender de cambios
-            manuales en código o archivos
-            del servidor.
-          </p>
-        </div>
-
-        <div
-          className="titan-settings__hero-status"
-        >
-          <CheckCircle2
-            size={18}
-          />
-
-          <div>
-            <strong>
-              Configuración centralizada
-            </strong>
-
-            <span>
-              Los parámetros operativos
-              deben administrarse desde
-              estas pantallas.
-            </span>
+              <span>
+                Los parámetros operativos
+                deben administrarse desde
+                estas pantallas.
+              </span>
+            </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <section
-        className="titan-settings__notice"
+      <SettingsStatus
+        tone="neutral"
+        icon={
+          <ShieldCheck
+            size={19}
+          />
+        }
+        title="Configuración de Mesa de Ayuda"
       >
-        <ShieldCheck
-          size={19}
-        />
-
-        <div>
-          <strong>
-            Configuración de Mesa de Ayuda
-          </strong>
-
-          <span>
-            SLA, Microsoft 365, Entra ID,
-            técnicos, localidades, grupos,
-            turnos y cobertura se administran
-            desde aquí. No es necesario
-            modificar el código para cambiar
-            el buzón o los parámetros
-            operativos.
-          </span>
-        </div>
-      </section>
+        <span>
+          SLA, Microsoft 365, Entra ID,
+          técnicos, localidades, grupos,
+          turnos y cobertura se administran
+          desde aquí. No es necesario
+          modificar el código para cambiar
+          el buzón o los parámetros
+          operativos.
+        </span>
+      </SettingsStatus>
 
       <div
         className="titan-settings__sections"
       >
         {visibleSections.map(
           section => (
-            <section
+            <SettingsSection
               key={
                 section.id
               }
+              title={
+                section.title
+              }
+              description={
+                section.description
+              }
               className="titan-settings__section"
             >
-              <header
-                className="titan-settings__section-header"
-              >
-                <h2>
-                  {
-                    section.title
-                  }
-                </h2>
-
-                <p>
-                  {
-                    section.description
-                  }
-                </p>
-              </header>
-
               <div
                 className="titan-settings__grid"
               >
@@ -531,74 +511,36 @@ export function SettingsPage() {
                       card.icon
 
                     return (
-                      <button
+                      <SettingsCard
                         key={
                           card.title
                         }
-                        type="button"
-                        className="titan-settings__card"
+                        title={
+                          card.title
+                        }
+                        description={
+                          card.description
+                        }
+                        icon={
+                          <Icon
+                            size={21}
+                          />
+                        }
+                        badge={
+                          card.badge
+                        }
                         onClick={
                           () =>
                             navigate(
                               card.path,
                             )
                         }
-                      >
-                        <div
-                          className="titan-settings__card-top"
-                        >
-                          <span
-                            className="titan-settings__icon"
-                          >
-                            <Icon
-                              size={21}
-                            />
-                          </span>
-
-                          {card.badge && (
-                            <span
-                              className="titan-settings__badge"
-                            >
-                              {
-                                card.badge
-                              }
-                            </span>
-                          )}
-                        </div>
-
-                        <div
-                          className="titan-settings__card-content"
-                        >
-                          <h3>
-                            {
-                              card.title
-                            }
-                          </h3>
-
-                          <p>
-                            {
-                              card.description
-                            }
-                          </p>
-                        </div>
-
-                        <div
-                          className="titan-settings__card-action"
-                        >
-                          <span>
-                            Configurar
-                          </span>
-
-                          <ArrowRight
-                            size={16}
-                          />
-                        </div>
-                      </button>
+                      />
                     )
                   },
                 )}
               </div>
-            </section>
+            </SettingsSection>
           ),
         )}
       </div>

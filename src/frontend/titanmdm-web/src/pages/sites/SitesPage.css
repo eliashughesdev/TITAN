@@ -4,43 +4,6 @@
   margin: 0 auto;
 }
 
-.sites-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 28px;
-  border: 1px solid #dfe6f3;
-  border-radius: 20px;
-  background:
-    linear-gradient(
-      120deg,
-      #ffffff,
-      #f1f5ff
-    );
-}
-
-.sites-eyebrow {
-  color: #4169e1;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-}
-
-.sites-hero h1 {
-  margin: 8px 0 5px;
-  color: #162033;
-  font-size: 30px;
-}
-
-.sites-hero p {
-  max-width: 700px;
-  margin: 0;
-  color: #718096;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .sites-actions {
   display: flex;
   gap: 10px;
@@ -490,10 +453,6 @@
 @media (
   max-width: 700px
 ) {
-  .sites-hero {
-    flex-direction: column;
-  }
-
   .sites-kpis,
   .sites-grid,
   .sites-details,

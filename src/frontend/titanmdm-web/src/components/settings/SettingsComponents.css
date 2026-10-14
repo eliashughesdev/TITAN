@@ -1,0 +1,208 @@
+/*
+ * TitanMDM Enterprise — Configuración (P1-B)
+ * Componentes compartidos del módulo Configuración.
+ *
+ * Esta capa NO es un tema global: sólo refina los componentes
+ * compartidos del módulo reutilizando clases y tokens
+ * existentes (titan-theme.css). La identidad de Configuración
+ * es NEUTRAL: no aplica el verde Android ni el azul de
+ * plataforma a toda la pantalla.
+ */
+
+/* ============================================================
+   ENCABEZADO
+   ============================================================ */
+
+/*
+ * Igual especificidad que .titan-page-header (0,1,0) se evita:
+ * se usa doble clase (0,2,0) para ganar sin !important.
+ */
+.titan-page-header.titan-settings-header {
+  border-color: var(--titan-platform-border);
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(100, 116, 139, 0.08),
+      transparent 32%
+    ),
+    linear-gradient(
+      115deg,
+      #ffffff 0%,
+      #f6f8fb 68%,
+      #eef2f7 100%
+    );
+  box-shadow: var(--titan-platform-shadow);
+}
+
+.titan-settings-header .titan-page-title {
+  color: var(--titan-platform-ink);
+  letter-spacing: -0.03em;
+}
+
+.titan-settings-header .titan-page-description {
+  color: var(--titan-platform-muted);
+}
+
+.titan-settings-header__eyebrow {
+  color: var(--titan-platform-neutral-strong);
+  letter-spacing: 0.16em;
+}
+
+.titan-settings-header__actions {
+  align-items: center;
+}
+
+/* ============================================================
+   SECCIONES
+   ============================================================ */
+
+.titan-settings-section {
+  border-color: var(--titan-platform-border);
+  box-shadow: var(--titan-platform-shadow);
+}
+
+.titan-settings-section .titan-section-card__icon {
+  color: var(--titan-platform-neutral-strong);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(100, 116, 139, 0.14),
+      rgba(100, 116, 139, 0.06)
+    );
+}
+
+.titan-settings-section .titan-section-card__title {
+  color: var(--titan-platform-ink);
+}
+
+.titan-settings-section .titan-section-card__description {
+  color: var(--titan-platform-muted);
+}
+
+.titan-settings-section__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--titan-platform-border);
+}
+
+/* ============================================================
+   TARJETAS (hub)
+   ============================================================ */
+
+.titan-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.titan-settings-card__status {
+  margin-top: 2px;
+}
+
+/* ============================================================
+   CAMPOS
+   ============================================================ */
+
+.titan-settings-field--full {
+  grid-column: 1 / -1;
+}
+
+.titan-settings-field__required {
+  color: var(--titan-danger);
+}
+
+.titan-settings-field__hint {
+  color: var(--titan-platform-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.titan-settings-field__error {
+  color: var(--titan-danger);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.titan-settings-field--invalid
+:is(.titan-input, .titan-select, .titan-textarea) {
+  border-color: var(--titan-danger);
+  box-shadow:
+    0 0 0 3px rgba(217, 76, 99, 0.12);
+}
+
+/* ============================================================
+   ESTADOS
+   ============================================================ */
+
+.titan-settings-status {
+  align-items: center;
+}
+
+.titan-settings-status__icon {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.titan-settings-status__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.titan-settings-status__body strong {
+  font-size: 13px;
+}
+
+.titan-settings-status__body :is(span, p) {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.titan-notice--neutral {
+  background: var(--titan-platform-neutral-soft);
+  border-color: var(--titan-platform-border);
+  color: var(--titan-platform-neutral-strong);
+}
+
+.titan-settings-status--loading
+.titan-settings-status__icon {
+  animation: titan-settings-spin 1s linear infinite;
+}
+
+@keyframes titan-settings-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   ACCESIBILIDAD
+   ============================================================ */
+
+.titan-settings-card:focus-visible {
+  outline: 3px solid var(--titan-platform-neutral-strong);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .titan-settings-section__footer {
+    justify-content: stretch;
+  }
+
+  .titan-settings-section__footer > * {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-settings-status--loading
+  .titan-settings-status__icon {
+    animation: none;
+  }
+}
