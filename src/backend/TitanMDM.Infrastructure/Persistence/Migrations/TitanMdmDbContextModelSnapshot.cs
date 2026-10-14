@@ -2284,6 +2284,9 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("DescriptionHtml")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("DeviceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2435,6 +2438,9 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("EmailMessageId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(180)
@@ -2467,6 +2473,8 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EmailMessageId");
+
                     b.HasIndex("StorageName")
                         .IsUnique();
 
@@ -2492,6 +2500,9 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("BodyHtml")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -4103,6 +4114,11 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskTicketAttachment", b =>
                 {
+                    b.HasOne("TitanMDM.Domain.Entities.HelpdeskEmailMessage", null)
+                        .WithMany()
+                        .HasForeignKey("EmailMessageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("TitanMDM.Domain.Entities.Organization", null)
                         .WithMany()
                         .HasForeignKey("OrganizationId")

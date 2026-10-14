@@ -29,7 +29,9 @@ public sealed record IncomingHelpdeskEmail(
     DateTime? ReceivedAtUtc,
 
     string? AutoSubmitted,
-    string? Precedence);
+    string? Precedence,
+
+    string? BodyHtml = null);
 
 public sealed class HelpdeskEmailImportService
 {
@@ -107,6 +109,15 @@ public sealed class HelpdeskEmailImportService
         var body =
             NormalizeBody(
                 message.Body);
+
+        /*
+         * HTML saneado del correo entrante. Se conserva para
+         * reconstruir firmas e imágenes inline de forma segura.
+         */
+        var bodyHtml =
+            HelpdeskEmailHtmlSanitizer
+                .Sanitize(
+                    message.BodyHtml);
 
         // ============================================================
         // FAST IDEMPOTENCY
@@ -287,6 +298,9 @@ public sealed class HelpdeskEmailImportService
                                     fromEmail,
                                 fromEmail);
 
+                            ticket.SetDescriptionHtml(
+                                bodyHtml);
+
                             _db.HelpdeskTicketEvents
                                 .Add(
                                     new HelpdeskTicketEvent(
@@ -318,6 +332,9 @@ public sealed class HelpdeskEmailImportService
                                     ??
                                     fromEmail,
                                 fromEmail);
+
+                            comment.SetBodyHtml(
+                                bodyHtml);
 
                             _db.HelpdeskTicketComments
                                 .Add(

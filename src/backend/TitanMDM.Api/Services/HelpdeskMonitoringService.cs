@@ -16,6 +16,7 @@ public sealed class HelpdeskMonitoringService
     private readonly int _idleMinutes;
     private readonly int _repeatMinutes;
     private readonly int _overdueRepeatMinutes;
+    private readonly int _batchSize;
 
     public HelpdeskMonitoringService(
         IServiceScopeFactory scopes,
@@ -56,6 +57,9 @@ public sealed class HelpdeskMonitoringService
 
         _overdueRepeatMinutes =
             Read("OverdueRepeatMinutes", 120, 15, 1440);
+
+        _batchSize =
+            Read("BatchSize", 250, 25, 2000);
     }
 
     protected override async Task ExecuteAsync(
@@ -102,57 +106,116 @@ public sealed class HelpdeskMonitoringService
     private async Task ScanAsync(
         CancellationToken cancellationToken)
     {
-        List<TicketKey> keys;
-
-        using (var scope = _scopes.CreateScope())
-        {
-            var db = scope.ServiceProvider
-                .GetRequiredService<TitanMdmDbContext>();
-
-            keys = await db.HelpdeskTickets
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.Status != "resolved" &&
-                        x.Status != "closed")
-                .OrderBy(x => x.CreatedAtUtc)
-                .Select(
-                    x => new TicketKey(
-                        x.OrganizationId,
-                        x.Id))
-                .ToListAsync(cancellationToken);
-        }
-
         var count = 0;
 
-        foreach (var key in keys)
+        /*
+         * Escaneo por lotes con paginación por clave
+         * (CreatedAtUtc, Id) para no cargar en memoria todos
+         * los tickets abiertos de la organización. El orden es
+         * determinista y estable aunque se creen tickets
+         * durante el propio escaneo.
+         */
+        TicketKey? cursor = null;
+
+        while (true)
         {
             cancellationToken
                 .ThrowIfCancellationRequested();
 
-            using var scope = _scopes.CreateScope();
+            List<TicketKey> batch;
 
-            var db = scope.ServiceProvider
-                .GetRequiredService<TitanMdmDbContext>();
+            using (var scope = _scopes.CreateScope())
+            {
+                var db = scope.ServiceProvider
+                    .GetRequiredService<
+                        TitanMdmDbContext>();
 
-            try
-            {
-                count += await RecordAsync(
-                    db,
-                    key,
-                    cancellationToken);
+                var query = db.HelpdeskTickets
+                    .AsNoTracking()
+                    .Where(
+                        x =>
+                            x.Status != "resolved" &&
+                            x.Status != "closed");
+
+                if (cursor is not null)
+                {
+                    var cursorCreatedAt =
+                        cursor.CreatedAtUtc;
+
+                    var cursorId =
+                        cursor.Id;
+
+                    query = query.Where(
+                        x =>
+                            x.CreatedAtUtc >
+                                cursorCreatedAt
+                            ||
+                            (
+                                x.CreatedAtUtc ==
+                                    cursorCreatedAt
+                                &&
+                                x.Id >
+                                    cursorId
+                            ));
+                }
+
+                batch = await query
+                    .OrderBy(x => x.CreatedAtUtc)
+                    .ThenBy(x => x.Id)
+                    .Take(_batchSize)
+                    .Select(
+                        x => new TicketKey(
+                            x.OrganizationId,
+                            x.Id,
+                            x.CreatedAtUtc))
+                    .ToListAsync(
+                        cancellationToken);
             }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
+
+            if (batch.Count == 0)
             {
-                throw;
+                break;
             }
-            catch (Exception exception)
+
+            foreach (var key in batch)
             {
-                _logger.LogError(
-                    exception,
-                    "Falló el seguimiento del ticket {TicketId}.",
-                    key.Id);
+                cancellationToken
+                    .ThrowIfCancellationRequested();
+
+                using var scope =
+                    _scopes.CreateScope();
+
+                var db = scope.ServiceProvider
+                    .GetRequiredService<
+                        TitanMdmDbContext>();
+
+                try
+                {
+                    count += await RecordAsync(
+                        db,
+                        key,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken
+                        .IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "Falló el seguimiento del ticket {TicketId}.",
+                        key.Id);
+                }
+            }
+
+            cursor = batch[^1];
+
+            if (batch.Count < _batchSize)
+            {
+                break;
             }
         }
 
@@ -370,5 +433,6 @@ public sealed class HelpdeskMonitoringService
 
     private sealed record TicketKey(
         Guid OrganizationId,
-        Guid Id);
+        Guid Id,
+        DateTime CreatedAtUtc);
 }

@@ -1117,6 +1117,7 @@ public sealed partial class HelpdeskService
             ticket.Number,
             ticket.Subject,
             ticket.Description,
+            ticket.DescriptionHtml,
             ticket.Status,
             ticket.Priority,
             ticket.Type,
@@ -1174,6 +1175,7 @@ public sealed partial class HelpdeskService
                             author?.FullName ??
                                 "Usuario",
                             item.Body,
+                            item.BodyHtml,
                             item.IsInternal,
                             item.CreatedAtUtc);
                     })

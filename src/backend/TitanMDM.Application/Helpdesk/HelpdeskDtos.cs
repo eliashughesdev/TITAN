@@ -27,6 +27,7 @@ public sealed record HelpdeskTicketDetailsDto(
     string Number,
     string Subject,
     string Description,
+    string? DescriptionHtml,
     string Status,
     string Priority,
     string Type,
@@ -54,6 +55,7 @@ public sealed record HelpdeskCommentDto(
     Guid AuthorUserId,
     string AuthorName,
     string Body,
+    string? BodyHtml,
     bool IsInternal,
     DateTime CreatedAtUtc);
 

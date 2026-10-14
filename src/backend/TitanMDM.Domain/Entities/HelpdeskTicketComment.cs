@@ -34,11 +34,36 @@ public sealed class HelpdeskTicketComment
     public Guid TicketId { get; private set; }
     public Guid AuthorUserId { get; private set; }
     public string Body { get; private set; } = string.Empty;
+
+    /*
+     * Cuerpo HTML (sanitizado) del correo entrante. Se conserva
+     * para reconstruir firmas e imágenes inline (cid:) de forma
+     * segura. Nunca se sirve sin sanear.
+     */
+    public string? BodyHtml { get; private set; }
+
     public bool IsInternal { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
     public string? ExternalAuthorName { get; private set; }
     public string? ExternalAuthorEmail { get; private set; }
+
+    public void SetBodyHtml(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            BodyHtml = null;
+            return;
+        }
+
+        var normalized = html.Trim();
+
+        BodyHtml =
+            normalized[
+                ..Math.Min(
+                    normalized.Length,
+                    200_000)];
+    }
 
     public void SetEmailAuthor(string name, string email)
     {

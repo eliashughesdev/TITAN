@@ -52,6 +52,14 @@ import {
   HelpdeskTicketAttachmentsPanel,
 } from './HelpdeskTicketAttachmentsPanel'
 
+import {
+  EmailContent,
+} from './EmailContent'
+
+import {
+  useInlineAttachmentUrls,
+} from './useInlineAttachmentUrls'
+
 const STATUS:
   Record<string, string> = {
     new:
@@ -165,6 +173,11 @@ export function HelpdeskTicketPage() {
   ] =
     useState<HelpdeskTicketDetails | null>(
       null,
+    )
+
+  const inlineAttachmentUrls =
+    useInlineAttachmentUrls(
+      ticket?.id,
     )
 
   const [
@@ -1038,15 +1051,16 @@ export function HelpdeskTicketPage() {
               </div>
             </div>
 
-            <p
+            <EmailContent
               className="helpdesk-detail__description"
-            >
-              {
+              text={
                 ticket.description
                 ||
                 'No se agregó una descripción.'
               }
-            </p>
+              html={ticket.descriptionHtml}
+              cidUrls={inlineAttachmentUrls}
+            />
 
             <div
               className="helpdesk-detail__attributes"
@@ -1181,11 +1195,13 @@ export function HelpdeskTicketPage() {
                         )}
                       </div>
 
-                      <p>
-                        {
-                          item.body
+                      <EmailContent
+                        text={item.body}
+                        html={item.bodyHtml}
+                        cidUrls={
+                          inlineAttachmentUrls
                         }
-                      </p>
+                      />
                     </article>
                   ),
                 )

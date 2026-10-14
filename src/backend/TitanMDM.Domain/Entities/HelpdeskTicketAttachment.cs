@@ -105,6 +105,19 @@ public sealed class HelpdeskTicketAttachment
         private set;
     }
 
+    /*
+     * Mensaje de correo del que proviene el adjunto.
+     *
+     * Null cuando el archivo fue subido manualmente por un
+     * usuario. Permite vincular cada adjunto/firma con el
+     * mensaje exacto que lo trajo.
+     */
+    public Guid? EmailMessageId
+    {
+        get;
+        private set;
+    }
+
     public Guid UploadedByUserId
     {
         get;
@@ -173,6 +186,27 @@ public sealed class HelpdeskTicketAttachment
     {
         get;
         private set;
+    }
+
+    /*
+     * Vincula el adjunto con el mensaje de correo que lo
+     * aportó. Es idempotente: reasignar el mismo mensaje no
+     * cambia el estado.
+     */
+    public void AttachToEmailMessage(
+        Guid emailMessageId)
+    {
+        if (
+            emailMessageId ==
+            Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El mensaje de correo no es válido.",
+                nameof(emailMessageId));
+        }
+
+        EmailMessageId =
+            emailMessageId;
     }
 
     public DateTime CreatedAtUtc

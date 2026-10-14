@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -358,47 +359,9 @@ public sealed class HelpdeskRoutingDiagnosticsController
 
     private bool CanViewRouting()
     {
-        return User.Claims.Any(
-            claim =>
-                claim.Type ==
-                    "permission"
-                &&
-                (
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.admin.access",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.routing.view",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.routing.manage",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.technicians.view",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.technicians.manage",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "helpdesk.manage",
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    string.Equals(
-                        claim.Value,
-                        "settings.manage",
-                        StringComparison.OrdinalIgnoreCase)
-                ));
+        return HelpdeskRoutingAuthorization
+            .CanView(
+                User);
     }
 
     private bool TryGetOrganization(

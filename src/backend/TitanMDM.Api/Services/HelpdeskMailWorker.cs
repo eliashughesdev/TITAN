@@ -972,10 +972,15 @@ public sealed class HelpdeskMailWorker
                 "Bearer",
                 token);
 
+        /*
+         * Solicitamos el cuerpo en HTML para reconstruir firmas e
+         * imágenes inline. El texto plano se deriva del HTML y se
+         * sanea antes de persistir (HelpdeskEmailHtmlSanitizer).
+         */
         request.Headers
             .TryAddWithoutValidation(
                 "Prefer",
-                "outlook.body-content-type=\"text\"");
+                "outlook.body-content-type=\"html\"");
 
         using var response =
             await client.SendAsync(
@@ -1108,7 +1113,7 @@ public sealed class HelpdeskMailWorker
         // BODY
         // ========================================================
 
-        var bodyText =
+        var bodyHtmlRaw =
             root.TryGetProperty(
                 "body",
                 out var body)
@@ -1123,6 +1128,21 @@ public sealed class HelpdeskMailWorker
                     ??
                     string.Empty
                 : string.Empty;
+
+        /*
+         * El HTML se sanea aquí (defensa en profundidad) y también
+         * en la importación. El texto plano se deriva del HTML para
+         * búsqueda y respaldo.
+         */
+        var bodyHtml =
+            HelpdeskEmailHtmlSanitizer
+                .Sanitize(
+                    bodyHtmlRaw);
+
+        var bodyText =
+            HelpdeskEmailHtmlSanitizer
+                .ToPlainText(
+                    bodyHtmlRaw);
 
         // ========================================================
         // INCOMING MESSAGE
@@ -1166,7 +1186,8 @@ public sealed class HelpdeskMailWorker
                     "Auto-Submitted"),
                 ReadInternetHeader(
                     root,
-                    "Precedence"));
+                    "Precedence"),
+                bodyHtml);
 
         // ========================================================
         // ATTACHMENTS

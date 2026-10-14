@@ -9,6 +9,7 @@ using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Persistence;
 
 using TitanMDM.Api.Services;
+using TitanMDM.Application.Sites;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -27,10 +28,14 @@ public sealed class UsersController
     private readonly ILogger<
         UsersController> _logger;
 
+    private readonly ISiteAssignmentService
+        _siteAssignmentService;
+
     public UsersController(
     TitanMdmDbContext dbContext,
     IPasswordHasher<User> passwordHasher,
     SessionSecurityService sessionSecurity,
+    ISiteAssignmentService siteAssignmentService,
     ILogger<UsersController> logger)
     {
         _dbContext =
@@ -38,6 +43,9 @@ public sealed class UsersController
 
         _passwordHasher =
             passwordHasher;
+
+        _siteAssignmentService =
+            siteAssignmentService;
 
         _sessionSecurity =
             sessionSecurity;
@@ -462,6 +470,47 @@ public sealed class UsersController
             cancellationToken);
 
         /*
+         * Asignación de sede/localidad a través del servicio
+         * único SiteAssignmentService, para garantizar las
+         * mismas validaciones (organización, localidad y
+         * estado activo) que el resto del sistema.
+         */
+        if (
+            request.SiteId.HasValue
+            ||
+            request.SiteLocationId
+                .HasValue)
+        {
+            try
+            {
+                await _siteAssignmentService
+                    .AssignUserAsync(
+                        organizationId,
+                        user.Id,
+                        request.SiteId,
+                        request.SiteLocationId,
+                        cancellationToken);
+            }
+            catch (
+                InvalidOperationException
+                exception)
+            {
+                _dbContext.Users.Remove(
+                    user);
+
+                await _dbContext.SaveChangesAsync(
+                    cancellationToken);
+
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            exception.Message
+                    });
+            }
+        }
+
+        /*
  * Los permisos efectivos del usuario cambiaron.
  * Invalidamos sus sesiones renovables.
  */
@@ -642,6 +691,41 @@ public sealed class UsersController
             user.DisableMfa();
         }
 
+        /*
+         * Asignación de sede/localidad a través del servicio
+         * único SiteAssignmentService. Sólo se aplica cuando el
+         * cliente envía una sede/localidad, para no alterar las
+         * asignaciones existentes.
+         */
+        if (
+            request.SiteId.HasValue
+            ||
+            request.SiteLocationId
+                .HasValue)
+        {
+            try
+            {
+                await _siteAssignmentService
+                    .AssignUserAsync(
+                        organizationId,
+                        user.Id,
+                        request.SiteId,
+                        request.SiteLocationId,
+                        cancellationToken);
+            }
+            catch (
+                InvalidOperationException
+                exception)
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            exception.Message
+                    });
+            }
+        }
+
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
@@ -670,7 +754,13 @@ public sealed class UsersController
                     user.MfaEnabled,
 
                 isActive =
-                    user.IsActive
+                    user.IsActive,
+
+                siteId =
+                    user.SiteId,
+
+                siteLocationId =
+                    user.SiteLocationId
             });
     }
 
@@ -1113,14 +1203,18 @@ public sealed record CreateUserRequest(
     string? JobTitle,
     Guid? DepartmentId,
     bool MfaEnabled,
-    IReadOnlyCollection<Guid>? RoleIds);
+    IReadOnlyCollection<Guid>? RoleIds,
+    Guid? SiteId = null,
+    Guid? SiteLocationId = null);
 
 public sealed record UpdateUserRequest(
     string FirstName,
     string LastName,
     string? JobTitle,
     Guid? DepartmentId,
-    bool MfaEnabled);
+    bool MfaEnabled,
+    Guid? SiteId = null,
+    Guid? SiteLocationId = null);
 
 public sealed record ChangePasswordRequest(
     string NewPassword);

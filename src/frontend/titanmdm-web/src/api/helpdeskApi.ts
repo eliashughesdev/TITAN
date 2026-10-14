@@ -38,6 +38,7 @@ export interface HelpdeskComment {
   authorUserId: string
   authorName: string
   body: string
+  bodyHtml?: string | null
   isInternal: boolean
   createdAtUtc: string
 }
@@ -52,6 +53,8 @@ export interface HelpdeskEvent {
 export interface HelpdeskTicketDetails
   extends HelpdeskTicketListItem {
   description: string
+
+  descriptionHtml?: string | null
 
   remoteSessionId?: string | null
 

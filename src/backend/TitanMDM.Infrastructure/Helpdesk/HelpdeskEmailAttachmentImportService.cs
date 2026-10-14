@@ -104,6 +104,32 @@ public sealed class HelpdeskEmailAttachmentImportService
                 "El ticket asociado al correo no existe.");
         }
 
+        /*
+         * Resolvemos el mensaje de correo una sola vez para
+         * vincular cada adjunto con su mensaje exacto.
+         */
+        var normalizedMessageId =
+            internetMessageId.Trim();
+
+        var emailMessageId =
+            await _db.HelpdeskEmailMessages
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.TicketId ==
+                            ticketId
+                        &&
+                        x.InternetMessageId ==
+                            normalizedMessageId)
+                .Select(
+                    x =>
+                        (Guid?)x.Id)
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
         var directory =
             Path.Combine(
                 _root,
@@ -128,6 +154,14 @@ public sealed class HelpdeskEmailAttachmentImportService
         var processedStorageNames =
             new HashSet<string>(
                 StringComparer.OrdinalIgnoreCase);
+
+        /*
+         * Adjuntos rechazados por seguridad, tamaño o formato.
+         * Se registran de forma agregada al final para dejar
+         * trazabilidad sin crear un ticket adicional.
+         */
+        var rejected =
+            new List<string>();
 
         foreach (
             var attachment
@@ -156,6 +190,11 @@ public sealed class HelpdeskEmailAttachmentImportService
                     attachment,
                     "max_individual_size");
 
+                rejected.Add(
+                    Describe(
+                        attachment,
+                        "max_individual_size"));
+
                 continue;
             }
 
@@ -167,6 +206,11 @@ public sealed class HelpdeskEmailAttachmentImportService
                 LogSkipped(
                     attachment,
                     "max_total_size");
+
+                rejected.Add(
+                    Describe(
+                        attachment,
+                        "max_total_size"));
 
                 continue;
             }
@@ -181,6 +225,11 @@ public sealed class HelpdeskEmailAttachmentImportService
                     attachment,
                     "unsupported_extension");
 
+                rejected.Add(
+                    Describe(
+                        attachment,
+                        "unsupported_extension"));
+
                 continue;
             }
 
@@ -192,6 +241,11 @@ public sealed class HelpdeskEmailAttachmentImportService
                 LogSkipped(
                     attachment,
                     "invalid_file_signature");
+
+                rejected.Add(
+                    Describe(
+                        attachment,
+                        "invalid_file_signature"));
 
                 continue;
             }
@@ -286,6 +340,13 @@ public sealed class HelpdeskEmailAttachmentImportService
                             NormalizeContentId(
                                 attachment.ContentId));
 
+                if (
+                    emailMessageId.HasValue)
+                {
+                    entity.AttachToEmailMessage(
+                        emailMessageId.Value);
+                }
+
                 _db
                     .Set<HelpdeskTicketAttachment>()
                     .Add(
@@ -370,6 +431,36 @@ public sealed class HelpdeskEmailAttachmentImportService
             }
         }
 
+        if (
+            rejected.Count >
+            0)
+        {
+            var summary =
+                string.Join(
+                    ", ",
+                    rejected.Take(10));
+
+            if (
+                summary.Length >
+                440)
+            {
+                summary =
+                    summary[..440];
+            }
+
+            _db.HelpdeskTicketEvents
+                .Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticketId,
+                        uploadedByUserId,
+                        "email_attachments_rejected",
+                        $"Adjuntos de correo rechazados ({rejected.Count}): {summary}."));
+
+            await _db.SaveChangesAsync(
+                cancellationToken);
+        }
+
         return imported;
     }
 
@@ -410,6 +501,19 @@ public sealed class HelpdeskEmailAttachmentImportService
             throw new ArgumentException(
                 "InternetMessageId is required.");
         }
+    }
+
+    private static string Describe(
+        IncomingHelpdeskAttachment attachment,
+        string reason)
+    {
+        var name =
+            string.IsNullOrWhiteSpace(
+                attachment.FileName)
+                ? "(sin nombre)"
+                : attachment.FileName.Trim();
+
+        return $"{name} [{reason}]";
     }
 
     private void LogSkipped(
@@ -458,6 +562,9 @@ public sealed class HelpdeskEmailAttachmentImportService
                     "image/jpeg" =>
                         "image.jpg",
 
+                    "image/gif" =>
+                        "image.gif",
+
                     "application/pdf" =>
                         "attachment.pdf",
 
@@ -483,6 +590,9 @@ public sealed class HelpdeskEmailAttachmentImportService
 
                     "image/jpeg" =>
                         ".jpg",
+
+                    "image/gif" =>
+                        ".gif",
 
                     "application/pdf" =>
                         ".pdf",
@@ -518,6 +628,9 @@ public sealed class HelpdeskEmailAttachmentImportService
                 ".jpeg" or
                 ".jfif" =>
                     "image/jpeg",
+
+                ".gif" =>
+                    "image/gif",
 
                 _ =>
                     null
@@ -720,6 +833,25 @@ public sealed class HelpdeskEmailAttachmentImportService
                 &&
                 bytes[2] ==
                     0xFF,
+
+            ".gif" =>
+                bytes.Length >= 6
+                &&
+                (
+                    bytes
+                        .AsSpan(
+                            0,
+                            6)
+                        .SequenceEqual(
+                            "GIF87a"u8)
+                    ||
+                    bytes
+                        .AsSpan(
+                            0,
+                            6)
+                        .SequenceEqual(
+                            "GIF89a"u8)
+                ),
 
             _ =>
                 false

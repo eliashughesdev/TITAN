@@ -86,6 +86,10 @@ public sealed class HelpdeskTicketAttachmentConfiguration
                 });
 
         builder.HasIndex(
+            x =>
+                x.EmailMessageId);
+
+        builder.HasIndex(
                 x =>
                     x.StorageName)
             .IsUnique();
@@ -97,6 +101,14 @@ public sealed class HelpdeskTicketAttachmentConfiguration
                     x.TicketId)
             .OnDelete(
                 DeleteBehavior.Cascade);
+
+        builder.HasOne<HelpdeskEmailMessage>()
+            .WithMany()
+            .HasForeignKey(
+                x =>
+                    x.EmailMessageId)
+            .OnDelete(
+                DeleteBehavior.SetNull);
 
         builder.HasOne<Organization>()
             .WithMany()

@@ -40,6 +40,10 @@ import {
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
+import {
+  EmailContent,
+} from './EmailContent'
+
 import './HelpdeskPages.css'
 import './MyHelpdeskWorkflow.css'
 
@@ -48,6 +52,7 @@ interface MyTicket {
   number: string
   subject: string
   description: string
+  descriptionHtml?: string | null
   status: string
   priority: string
   category: string
@@ -75,6 +80,7 @@ interface MyTicketDetails
     authorUserId: string
     authorName: string
     body: string
+    bodyHtml?: string | null
     createdAtUtc: string
   }[]
 
@@ -845,13 +851,11 @@ export function MyHelpdeskPage() {
                 Tu solicitud
               </h2>
 
-              <p
+              <EmailContent
                 className="my-helpdesk__body"
-              >
-                {
-                  ticket.description
-                }
-              </p>
+                text={ticket.description}
+                html={ticket.descriptionHtml}
+              />
 
               <div
                 className="my-helpdesk-workflow__request-meta"
@@ -941,13 +945,11 @@ export function MyHelpdeskPage() {
                           </time>
                         </div>
 
-                        <p
+                        <EmailContent
                           className="my-helpdesk__body"
-                        >
-                          {
-                            item.body
-                          }
-                        </p>
+                          text={item.body}
+                          html={item.bodyHtml}
+                        />
                       </article>
                     ),
                   )}

@@ -210,6 +210,7 @@ public sealed class MyHelpdeskController
                 {
                     comment.Id,
                     comment.Body,
+                    comment.BodyHtml,
                     comment.CreatedAtUtc,
 
                     authorUserId =
@@ -338,6 +339,7 @@ public sealed class MyHelpdeskController
                 ticket.Number,
                 ticket.Subject,
                 ticket.Description,
+                ticket.DescriptionHtml,
                 ticket.Status,
                 ticket.Priority,
                 ticket.Category,

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 using TitanMDM.Api.AI;
+using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
 using TitanMDM.Application.Helpdesk;
 
@@ -278,46 +279,25 @@ public sealed class HelpdeskRoutingOperationsController
 
     private bool CanView()
     {
-        return HasAnyPermission(
-            "helpdesk.routing.view",
-            "helpdesk.routing.manage",
-            "helpdesk.automation.view",
-            "helpdesk.automation.manage",
-            "helpdesk.technicians.view",
-            "helpdesk.technicians.manage",
-            "helpdesk.groups.view",
-            "helpdesk.admin.access",
-            "helpdesk.manage",
-            "settings.manage");
+        return HelpdeskRoutingAuthorization
+            .CanView(
+                User);
     }
 
     private bool CanManage()
     {
-        return HasAnyPermission(
-            "helpdesk.routing.manage",
-            "helpdesk.automation.manage",
-            "helpdesk.technicians.manage",
-            "helpdesk.groups.manage",
-            "helpdesk.admin.access",
-            "helpdesk.manage",
-            "settings.manage");
+        return HelpdeskRoutingAuthorization
+            .CanManage(
+                User);
     }
 
     private bool HasAnyPermission(
         params string[] permissions)
     {
-        return User.Claims
-            .Any(
-                claim =>
-                    claim.Type ==
-                        "permission"
-                    &&
-                    permissions.Any(
-                        permission =>
-                            string.Equals(
-                                claim.Value,
-                                permission,
-                                StringComparison.OrdinalIgnoreCase)));
+        return HelpdeskRoutingAuthorization
+            .HasAnyPermission(
+                User,
+                permissions);
     }
 
     private bool TryGetOrganization(

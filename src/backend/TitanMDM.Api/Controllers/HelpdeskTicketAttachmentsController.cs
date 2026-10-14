@@ -174,6 +174,7 @@ public sealed class HelpdeskTicketAttachmentsController
                             x.IsInternal,
                             x.IsInline,
                             x.ContentId,
+                            x.EmailMessageId,
                             x.CreatedAtUtc,
 
                             canPreview =
@@ -189,6 +190,268 @@ public sealed class HelpdeskTicketAttachmentsController
 
         return Ok(
             items);
+    }
+
+    // ============================================================
+    // UPLOAD
+    // ============================================================
+
+    private const long MaxUploadBytes =
+        10L * 1024 * 1024;
+
+    [HttpPost]
+    [RequestSizeLimit(
+        MaxUploadBytes + 1024 * 1024)]
+    public async Task<IActionResult> Upload(
+        Guid ticketId,
+        [FromForm] IFormFile? file,
+        [FromForm] bool isInternal,
+        CancellationToken cancellationToken)
+    {
+        var identity =
+            GetIdentity();
+
+        if (
+            identity is null)
+        {
+            return Unauthorized(
+                new
+                {
+                    message =
+                        "La sesión no contiene una identidad válida."
+                });
+        }
+
+        var access =
+            await GetTicketAccessAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken);
+
+        if (
+            !access.Exists)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        "El ticket no existe."
+                });
+        }
+
+        if (
+            !access.CanView
+            ||
+            !access.CanUpload)
+        {
+            return Forbid();
+        }
+
+        if (
+            isInternal
+            &&
+            !CanViewInternal())
+        {
+            return Forbid();
+        }
+
+        if (
+            file is null
+            ||
+            file.Length is <= 0
+                or > MaxUploadBytes)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Selecciona un archivo de hasta 10 MiB."
+                });
+        }
+
+        var extension =
+            Path.GetExtension(
+                file.FileName)
+                .ToLowerInvariant();
+
+        var contentType =
+            extension switch
+            {
+                ".pdf" =>
+                    "application/pdf",
+                ".png" =>
+                    "image/png",
+                ".jpg" or ".jpeg" or ".jfif" =>
+                    "image/jpeg",
+                ".gif" =>
+                    "image/gif",
+                _ => null
+            };
+
+        if (
+            contentType is null)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "Solo se permiten PDF, PNG, JPEG y GIF."
+                });
+        }
+
+        var fileName =
+            Path.GetFileName(
+                file.FileName)
+                .Trim();
+
+        if (
+            string.IsNullOrWhiteSpace(
+                fileName))
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "El nombre del archivo no es válido."
+                });
+        }
+
+        if (
+            fileName.Length > 180)
+        {
+            fileName =
+                fileName[^180..];
+        }
+
+        var storageName =
+            Guid.NewGuid()
+                .ToString("N")
+            +
+            ".bin";
+
+        var directory =
+            Path.Combine(
+                _root,
+                identity.Value
+                    .OrganizationId
+                    .ToString("N"),
+                ticketId
+                    .ToString("N"));
+
+        Directory.CreateDirectory(
+            directory);
+
+        var path =
+            Path.Combine(
+                directory,
+                storageName);
+
+        try
+        {
+            await using (
+                var output =
+                    new FileStream(
+                        path,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        81920,
+                        useAsync:
+                            true))
+            {
+                await file.CopyToAsync(
+                    output,
+                    cancellationToken);
+            }
+
+            if (
+                !await HasValidSignatureAsync(
+                    path,
+                    extension,
+                    cancellationToken))
+            {
+                return BadRequest(
+                    new
+                    {
+                        message =
+                            "El contenido no coincide con el tipo de archivo."
+                    });
+            }
+
+            var attachment =
+                new HelpdeskTicketAttachment(
+                    identity.Value
+                        .OrganizationId,
+                    ticketId,
+                    identity.Value.UserId,
+                    fileName,
+                    storageName,
+                    contentType,
+                    file.Length,
+                    isInternal);
+
+            _db.Set<
+                HelpdeskTicketAttachment>()
+                .Add(
+                    attachment);
+
+            _db.HelpdeskTicketEvents.Add(
+                new HelpdeskTicketEvent(
+                    identity.Value
+                        .OrganizationId,
+                    ticketId,
+                    identity.Value.UserId,
+                    "attachment_added",
+                    isInternal
+                        ? "TIC agregó un adjunto interno."
+                        : "Se agregó un adjunto al ticket."));
+
+            await _db.SaveChangesAsync(
+                cancellationToken);
+
+            return Ok(
+                new
+                {
+                    attachment.Id,
+                    attachment.FileName,
+                    attachment.ContentType,
+                    attachment.SizeBytes,
+                    attachment.IsInternal,
+                    attachment.IsInline,
+                    attachment.ContentId,
+                    attachment.UploadedByUserId,
+                    attachment.CreatedAtUtc
+                });
+        }
+        finally
+        {
+            var existsInDatabase =
+                await _db
+                    .Set<HelpdeskTicketAttachment>()
+                    .AsNoTracking()
+                    .AnyAsync(
+                        x =>
+                            x.OrganizationId ==
+                                identity.Value
+                                    .OrganizationId
+                            &&
+                            x.TicketId ==
+                                ticketId
+                            &&
+                            x.StorageName ==
+                                storageName,
+                        CancellationToken.None);
+
+            if (
+                !existsInDatabase
+                &&
+                System.IO.File.Exists(
+                    path))
+            {
+                System.IO.File.Delete(
+                    path);
+            }
+        }
     }
 
     // ============================================================
@@ -216,6 +479,25 @@ public sealed class HelpdeskTicketAttachmentsController
     [HttpGet(
         "{attachmentId:guid}/download")]
     public async Task<IActionResult> Download(
+        Guid ticketId,
+        Guid attachmentId,
+        CancellationToken cancellationToken)
+    {
+        return await OpenFileAsync(
+            ticketId,
+            attachmentId,
+            true,
+            cancellationToken);
+    }
+
+    /*
+     * Alias histórico utilizado por el panel del portal
+     * (MyHelpdesk). Mantiene la compatibilidad sin duplicar
+     * controladores ni rutas ambiguas.
+     */
+    [HttpGet(
+        "{attachmentId:guid}")]
+    public async Task<IActionResult> DownloadLegacy(
         Guid ticketId,
         Guid attachmentId,
         CancellationToken cancellationToken)
@@ -417,7 +699,8 @@ public sealed class HelpdeskTicketAttachmentsController
                     x =>
                         new
                         {
-                            x.RequesterUserId
+                            x.RequesterUserId,
+                            x.Status
                         })
                 .SingleOrDefaultAsync(
                     cancellationToken);
@@ -427,8 +710,13 @@ public sealed class HelpdeskTicketAttachmentsController
         {
             return new TicketAccessResult(
                 false,
+                false,
                 false);
         }
+
+        var canUpload =
+            ticket.Status is not
+                ("closed" or "resolved");
 
         /*
          * Solicitante viendo SU ticket.
@@ -445,7 +733,8 @@ public sealed class HelpdeskTicketAttachmentsController
         {
             return new TicketAccessResult(
                 true,
-                true);
+                true,
+                canUpload);
         }
 
         /*
@@ -462,6 +751,7 @@ public sealed class HelpdeskTicketAttachmentsController
         {
             return new TicketAccessResult(
                 true,
+                false,
                 false);
         }
 
@@ -479,7 +769,8 @@ public sealed class HelpdeskTicketAttachmentsController
 
         return new TicketAccessResult(
             true,
-            canAccess);
+            canAccess,
+            canAccess && canUpload);
     }
 
     private bool CanViewInternal()
@@ -561,5 +852,76 @@ public sealed class HelpdeskTicketAttachmentsController
 
     private sealed record TicketAccessResult(
         bool Exists,
-        bool CanView);
+        bool CanView,
+        bool CanUpload);
+
+    private static async Task<bool>
+        HasValidSignatureAsync(
+            string path,
+            string extension,
+            CancellationToken cancellationToken)
+    {
+        var signature =
+            new byte[8];
+
+        await using var stream =
+            System.IO.File.OpenRead(
+                path);
+
+        var read =
+            await stream.ReadAsync(
+                signature,
+                cancellationToken);
+
+        return extension switch
+        {
+            ".pdf" =>
+                read >= 5
+                &&
+                signature
+                    .AsSpan(0, 5)
+                    .SequenceEqual(
+                        "%PDF-"u8),
+
+            ".png" =>
+                read >= 8
+                &&
+                signature
+                    .AsSpan()
+                    .SequenceEqual(
+                        new byte[]
+                        {
+                            137, 80, 78, 71,
+                            13, 10, 26, 10
+                        }),
+
+            ".jpg"
+                or ".jpeg"
+                or ".jfif" =>
+                read >= 3
+                &&
+                signature[0] == 0xFF
+                &&
+                signature[1] == 0xD8
+                &&
+                signature[2] == 0xFF,
+
+            ".gif" =>
+                read >= 6
+                &&
+                (
+                    signature
+                        .AsSpan(0, 6)
+                        .SequenceEqual(
+                            "GIF87a"u8)
+                    ||
+                    signature
+                        .AsSpan(0, 6)
+                        .SequenceEqual(
+                            "GIF89a"u8)
+                ),
+
+            _ => false
+        };
+    }
 }

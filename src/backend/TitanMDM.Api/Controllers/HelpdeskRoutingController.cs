@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Helpdesk;
 
 namespace TitanMDM.Api.Controllers;
@@ -447,48 +448,24 @@ public sealed class HelpdeskRoutingController
 
     private bool CanViewRouting()
     {
-        return HasAnyPermission(
-            "helpdesk.routing.view",
-            "helpdesk.groups.view",
-            "helpdesk.technicians.view",
-            "helpdesk.ticket.details.view",
-            "helpdesk.admin.access",
-
-            // Legacy compatibility.
-            "tickets.view",
-            "helpdesk.view",
-            "helpdesk.manage",
-            "settings.manage");
+        return HelpdeskRoutingAuthorization
+            .CanView(
+                User);
     }
 
     private bool CanManageRouting()
     {
-        return HasAnyPermission(
-            "helpdesk.routing.manage",
-            "helpdesk.ticket.assign",
-            "helpdesk.groups.manage",
-            "helpdesk.technicians.manage",
-            "helpdesk.admin.access",
-
-            // Legacy compatibility.
-            "tickets.assign",
-            "helpdesk.manage",
-            "settings.manage");
+        return HelpdeskRoutingAuthorization
+            .CanManage(
+                User);
     }
 
     private bool HasAnyPermission(
         params string[] permissions)
     {
-        return User.Claims.Any(
-            claim =>
-                claim.Type ==
-                    "permission"
-                &&
-                permissions.Any(
-                    permission =>
-                        string.Equals(
-                            claim.Value,
-                            permission,
-                            StringComparison.OrdinalIgnoreCase)));
+        return HelpdeskRoutingAuthorization
+            .HasAnyPermission(
+                User,
+                permissions);
     }
 }

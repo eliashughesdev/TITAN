@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Domain.Entities;
+using TitanMDM.Infrastructure.Helpdesk;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Controllers;
@@ -15,26 +16,6 @@ namespace TitanMDM.Api.Controllers;
 public sealed class HelpdeskStaffController
     : ControllerBase
 {
-    private static readonly string[]
-        OperationalPermissions =
-        [
-            "helpdesk.agent.access",
-            "helpdesk.ticket.details.view",
-            "helpdesk.ticket.comment",
-            "helpdesk.ticket.take",
-            "helpdesk.ticket.assign",
-            "helpdesk.ticket.transition",
-            "helpdesk.ticket.resolve",
-            "helpdesk.ticket.close",
-
-            // Compatibilidad legacy
-            "tickets.comment",
-            "tickets.assign",
-            "tickets.close",
-            "helpdesk.view",
-            "helpdesk.manage"
-        ];
-
     private static readonly string[]
         OpenTicketStatuses =
         [
@@ -82,57 +63,12 @@ public sealed class HelpdeskStaffController
         // ========================================================
 
         var staffPermissionUserIds =
-            await (
-                from userRole
-                    in _db.UserRoles
-                        .AsNoTracking()
-
-                join role
-                    in _db.Roles
-                        .AsNoTracking()
-                    on userRole.RoleId
-                    equals role.Id
-
-                join rolePermission
-                    in _db.RolePermissions
-                        .AsNoTracking()
-                    on role.Id
-                    equals rolePermission.RoleId
-
-                join permission
-                    in _db.Permissions
-                        .AsNoTracking()
-                    on rolePermission.PermissionId
-                    equals permission.Id
-
-                join user
-                    in _db.Users
-                        .AsNoTracking()
-                    on userRole.UserId
-                    equals user.Id
-
-                where
-                    user.OrganizationId ==
-                        organizationId
-                    &&
-                    role.OrganizationId ==
-                        organizationId
-                    &&
-                    user.IsActive
-                    &&
-                    role.IsActive
-                    &&
-                    permission.IsActive
-                    &&
-                    OperationalPermissions
-                        .Contains(
-                            permission.Code)
-
-                select user.Id
-            )
-            .Distinct()
-            .ToListAsync(
-                cancellationToken);
+            await HelpdeskTechnicianEligibility
+                .EligibleTechnicianIds(
+                    _db,
+                    organizationId)
+                .ToListAsync(
+                    cancellationToken);
 
         var staffPermissionSet =
             staffPermissionUserIds

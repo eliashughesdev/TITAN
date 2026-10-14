@@ -93,6 +93,13 @@ public sealed class HelpdeskTicket
     public string Description { get; private set; } =
         string.Empty;
 
+    /*
+     * Cuerpo HTML (sanitizado) del correo entrante. Se conserva
+     * para reconstruir firmas e imágenes inline (cid:) de forma
+     * segura. Nunca se sirve sin sanear.
+     */
+    public string? DescriptionHtml { get; private set; }
+
     public string Type { get; private set; } =
         "incident";
 
@@ -695,6 +702,31 @@ public sealed class HelpdeskTicket
 
         ExternalRequesterEmail =
             normalizedEmail;
+
+        Touch();
+    }
+
+    public void SetDescriptionHtml(
+        string? html)
+    {
+        if (
+            string.IsNullOrWhiteSpace(
+                html))
+        {
+            DescriptionHtml =
+                null;
+
+            return;
+        }
+
+        var normalized =
+            html.Trim();
+
+        DescriptionHtml =
+            normalized[
+                ..Math.Min(
+                    normalized.Length,
+                    200_000)];
 
         Touch();
     }
