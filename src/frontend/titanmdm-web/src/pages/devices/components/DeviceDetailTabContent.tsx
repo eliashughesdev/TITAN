@@ -25,6 +25,10 @@ import type {
   DeviceDetailTab,
 } from './DeviceDetailTabs'
 
+import {
+  AndroidRemoteActionsPanel,
+} from './AndroidRemoteActionsPanel'
+
 interface DetailFieldProps {
   label: string
 
@@ -450,6 +454,10 @@ export function DeviceDetailTabContent({
             />
           </div>
         </article>
+
+        <AndroidRemoteActionsPanel
+          deviceId={device.id}
+        />
       </section>
     )
   }

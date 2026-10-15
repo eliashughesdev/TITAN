@@ -71,3 +71,90 @@ export interface AndroidDeviceInventorySummary {
   nonCompliant: number
   lastSynchronizationUtc: string | null
 }
+
+export type AndroidRemoteAction =
+  | 'lock'
+  | 'reboot'
+  | 'reset-password'
+  | 'start-lost-mode'
+  | 'stop-lost-mode'
+  | 'wipe'
+  | 'delete'
+
+export interface AndroidRemoteActionRequest {
+  action: AndroidRemoteAction
+  newPassword?: string
+  lostModeMessage?: string
+  lostModePhoneNumber?: string
+}
+
+export interface AndroidRemoteActionResponse {
+  deviceId: string
+  action: string
+  status: 'Issued' | 'DeletionRequested'
+  googleCommandName: string | null
+  correlationId: string | null
+  issuedAtUtc: string
+}
+
+export interface AndroidInventoryItem {
+  deviceId: string
+  deviceName: string
+  serialNumber: string
+  manufacturer: string | null
+  model: string | null
+  status: string
+  complianceStatus: string
+  isManaged: boolean
+  lastSeenAtUtc: string | null
+  managementMode: string | null
+  ownership: string | null
+  state: string | null
+  appliedPolicyName: string | null
+  appliedPolicyVersion: number | null
+  appliedPolicyState: string | null
+  lastPolicySyncTimeUtc: string | null
+  lastSynchronizedAtUtc: string
+  isDeletedInGoogle: boolean
+}
+
+export interface AndroidInventoryPage {
+  items: AndroidInventoryItem[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface AndroidInventoryQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+}
+
+export interface AndroidAuditEvent {
+  id: string
+  action: string
+  targetType: string
+  targetId: string | null
+  result: string
+  actorName: string
+  actorEmail: string | null
+  correlationId: string | null
+  ipAddress: string | null
+  createdAtUtc: string
+}
+
+export interface AndroidAuditPage {
+  items: AndroidAuditEvent[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface AndroidAuditQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+}

@@ -4,6 +4,7 @@ import {
   FileBarChart,
   Gauge,
   Home,
+  LayoutGrid,
   MapPinned,
   MonitorSmartphone,
   Network,
@@ -70,6 +71,7 @@ const androidNavigation: WorkspaceNavigationItem[] = [
   item('Seguridad', '/security?workspace=android', ShieldCheck, 'security.view'),
   item('Cumplimiento', '/compliance?workspace=android', ShieldCheck, 'compliance.view'),
   item('Kiosk', '/kiosk?workspace=android', PackageOpen, 'kiosk.view'),
+  item('Titan Launcher', '/android/titan-launcher', LayoutGrid, 'android.enterprise.view'),
   item('Geofencing', '/geofencing?workspace=android', MapPinned, 'geofencing.view'),
   item('Reportes', '/reports?workspace=android', FileBarChart, 'reports.view'),
 ]

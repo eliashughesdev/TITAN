@@ -251,6 +251,169 @@
   font-size: 10px;
 }
 
+.android-remote-actions > header > div {
+  min-width: 0;
+}
+
+.android-remote-actions-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+}
+
+.android-remote-guidance,
+.android-remote-access-note {
+  padding: 11px 13px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.android-remote-access-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px;
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.android-remote-inputs {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.android-remote-inputs label {
+  min-width: 0;
+}
+
+.android-remote-inputs span {
+  display: block;
+  margin-bottom: 6px;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.android-remote-inputs input {
+  width: 100%;
+  min-height: 39px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #172033;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+}
+
+.android-remote-inputs input:focus-visible,
+.android-remote-action:focus-visible {
+  outline: 2px solid #4169e1;
+  outline-offset: 2px;
+}
+
+.android-remote-action-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.android-remote-action {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid #dbe3ed;
+  border-radius: 10px;
+  color: #334155;
+  background: #fff;
+  text-align: left;
+}
+
+.android-remote-action:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.android-remote-action--warning {
+  color: #92400e;
+}
+
+.android-remote-action--danger {
+  border-color: #fecaca;
+  color: #b42318;
+}
+
+.android-remote-action--danger:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.android-remote-action:disabled {
+  cursor: wait;
+  opacity: .58;
+}
+
+.android-remote-action > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.android-remote-action strong,
+.android-remote-action small {
+  display: block;
+}
+
+.android-remote-action strong {
+  font-size: 11px;
+}
+
+.android-remote-action small {
+  margin-top: 4px;
+  color: #7c899c;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.android-remote-action em {
+  color: #4169e1;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.android-remote-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 9px;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.android-remote-result strong {
+  font-size: 12px;
+}
+
+.android-remote-result span,
+.android-remote-result small {
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .device-detail-fields {
   display: grid;
   grid-template-columns:
@@ -442,6 +605,11 @@
   .device-detail-kpis,
   .device-detail-grid,
   .device-detail-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .android-remote-inputs,
+  .android-remote-action-grid {
     grid-template-columns: 1fr;
   }
 }

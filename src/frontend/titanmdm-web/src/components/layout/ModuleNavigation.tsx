@@ -7,6 +7,7 @@ import {
   Headphones,
   Inbox,
   LayoutDashboard,
+  LayoutGrid,
   MapPin,
   Monitor,
   Package,
@@ -183,6 +184,13 @@ const androidLinks:
       '/kiosk?workspace=android',
       Cog,
       'kiosk.view',
+    ),
+
+    link(
+      'Titan Launcher',
+      '/android/titan-launcher',
+      LayoutGrid,
+      'android.enterprise.view',
     ),
 
     link(

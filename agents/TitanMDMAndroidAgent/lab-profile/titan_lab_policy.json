@@ -1,0 +1,25 @@
+{
+  "titan_company_name": "TitanMDM Laboratorio",
+  "titan_welcome_message": "Perfil local de laboratorio (no administrado)",
+  "titan_launcher_enabled": true,
+  "titan_launcher_schema_version": 1,
+  "titan_primary_color": "#16A36A",
+  "titan_background_color": "#0B1720",
+  "titan_allowed_apps": [
+    {
+      "packageName": "com.microsoft.teams",
+      "label": "Microsoft Teams",
+      "required": true
+    },
+    {
+      "packageName": "com.microsoft.office.outlook",
+      "label": "Microsoft Outlook",
+      "required": true
+    },
+    {
+      "packageName": "com.android.chrome",
+      "label": "Google Chrome",
+      "required": false
+    }
+  ]
+}

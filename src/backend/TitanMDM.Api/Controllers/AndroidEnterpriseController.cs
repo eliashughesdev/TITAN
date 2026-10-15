@@ -2,13 +2,16 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using TitanMDM.Api.Security;
 using TitanMDM.Application.AndroidEnterprise;
+using TitanMDM.Application.Security;
 using TitanMDM.Infrastructure.Android;
 
 namespace TitanMDM.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ServiceFilter(typeof(RbacAuditFilter))]
 [Route("api/android-enterprise")]
 public sealed class AndroidEnterpriseController
     : ControllerBase
@@ -25,6 +28,9 @@ public sealed class AndroidEnterpriseController
     }
 
     [HttpGet("status")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
     public async Task<IActionResult> GetStatus(
         CancellationToken cancellationToken)
     {
@@ -42,7 +48,36 @@ public sealed class AndroidEnterpriseController
         return Ok(result);
     }
 
+    [HttpGet("audit")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public async Task<IActionResult> GetAudit(
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var organizationId =
+            GetOrganizationId();
+
+        if (organizationId is null)
+            return Unauthorized();
+
+        var result =
+            await _service.GetAuditPageAsync(
+                organizationId.Value,
+                search,
+                page,
+                pageSize,
+                cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost("signup")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.Manage)]
     public async Task<IActionResult> CreateSignup(
         CancellationToken cancellationToken)
     {
@@ -114,6 +149,9 @@ public sealed class AndroidEnterpriseController
     }
 
     [HttpGet("enrollments")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
     public async Task<IActionResult> GetEnrollments(
         CancellationToken cancellationToken)
     {
@@ -130,6 +168,8 @@ public sealed class AndroidEnterpriseController
     }
 
     [HttpPost("enrollments")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.Manage)]
     public async Task<IActionResult> CreateEnrollment(
         [FromBody]
         CreateAndroidEnrollmentRequest request,
@@ -170,6 +210,8 @@ public sealed class AndroidEnterpriseController
     }
 
     [HttpDelete("enrollments/{id:guid}")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.Manage)]
     public async Task<IActionResult> RevokeEnrollment(
         Guid id,
         CancellationToken cancellationToken)

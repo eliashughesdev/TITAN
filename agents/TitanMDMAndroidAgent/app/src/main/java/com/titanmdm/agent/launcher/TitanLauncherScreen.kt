@@ -44,7 +44,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val TitanGreen = Color(0xFF16A36A)
-private val TitanGreenDark = Color(0xFF0E7A4E)
 private val TitanDark = Color(0xFF0B1720)
 private val TitanSurface = Color(0xFF142831)
 private val TitanSurfaceSoft = Color(0xFF1B3540)
@@ -58,17 +57,20 @@ private val TitanDanger = Color(0xFFE5706A)
  * Sólo muestra y permite abrir aplicaciones autorizadas por la política.
  * No concede permisos, no lanza componentes privilegiados y no trata la
  * propia pantalla como mecanismo de control: el enforcement real de un
- * dispositivo dedicado pertenece a Android Enterprise / Device Owner.
+ * dispositivo dedicado pertenece a Android Enterprise / Android Device Policy.
  */
 @Composable
 fun TitanLauncherScreen(
     policy: TitanLauncherPolicy,
-    adminStatus: TitanLauncherAdminStatus,
-    isInstalled: (String) -> Boolean,
+    homeStatus: TitanLauncherHomeStatus,
+    appState: (String) -> TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
     onLaunch: (String) -> Unit
 ) {
-    Scaffold(containerColor = TitanDark) { padding ->
+    val primaryColor = policyColor(policy.primaryColor, TitanGreen)
+    val backgroundColor = policyColor(policy.backgroundColor, TitanDark)
+
+    Scaffold(containerColor = backgroundColor) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -76,7 +78,14 @@ fun TitanLauncherScreen(
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            CorporateHeader(policy, adminStatus)
+            CorporateHeader(policy, homeStatus, primaryColor)
+
+            if (policy.isLabProfile) {
+                StatusBanner(
+                    text = "Modo laboratorio — política local",
+                    color = TitanWarn
+                )
+            }
 
             if (policy.state == TitanLauncherPolicyState.Invalid) {
                 StatusBanner(
@@ -86,14 +95,20 @@ fun TitanLauncherScreen(
             }
 
             when {
-                !policy.managed -> AwaitingPolicy()
-                policy.applications.isEmpty() -> EmptyApplications()
-                else -> ApplicationGrid(
+                policy.state == TitanLauncherPolicyState.Valid &&
+                    policy.applications.isEmpty() -> EmptyApplications()
+
+                policy.state == TitanLauncherPolicyState.Valid -> ApplicationGrid(
                     policy = policy,
-                    isInstalled = isInstalled,
+                    appState = appState,
                     iconProvider = iconProvider,
-                    onLaunch = onLaunch
+                    onLaunch = onLaunch,
+                    primaryColor = primaryColor
                 )
+
+                policy.isLabProfile -> LabStandby(primaryColor)
+
+                else -> AwaitingPolicy(primaryColor)
             }
         }
     }
@@ -102,7 +117,8 @@ fun TitanLauncherScreen(
 @Composable
 private fun CorporateHeader(
     policy: TitanLauncherPolicy,
-    adminStatus: TitanLauncherAdminStatus
+    homeStatus: TitanLauncherHomeStatus,
+    primaryColor: Color
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -119,7 +135,7 @@ private fun CorporateHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                CompanyMark(policy.companyName)
+                CompanyMark(policy.companyName, primaryColor)
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -150,13 +166,19 @@ private fun CorporateHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 StatusChip(
-                    text = if (policy.managed) "Perfil corporativo activo" else "Sin perfil",
-                    positive = policy.managed
+                    text = when {
+                        policy.isLabProfile -> "Modo laboratorio"
+                        policy.managed -> "Política HOME administrada"
+                        else -> "Sin política HOME"
+                    },
+                    positive = policy.managed,
+                    positiveColor = primaryColor
                 )
 
                 StatusChip(
-                    text = adminStatus.label,
-                    positive = adminStatus.isManaged
+                    text = homeStatus.label,
+                    positive = homeStatus.isDefaultHome,
+                    positiveColor = primaryColor
                 )
             }
         }
@@ -164,14 +186,14 @@ private fun CorporateHeader(
 }
 
 @Composable
-private fun CompanyMark(name: String) {
+private fun CompanyMark(name: String, primaryColor: Color) {
     Box(
         modifier = Modifier
             .size(52.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(
                 Brush.linearGradient(
-                    listOf(TitanGreen, TitanGreenDark)
+                    listOf(primaryColor, primaryColor.copy(alpha = 0.68f))
                 )
             ),
         contentAlignment = Alignment.Center
@@ -186,8 +208,12 @@ private fun CompanyMark(name: String) {
 }
 
 @Composable
-private fun StatusChip(text: String, positive: Boolean) {
-    val color = if (positive) TitanGreen else TitanWarn
+private fun StatusChip(
+    text: String,
+    positive: Boolean,
+    positiveColor: Color
+) {
+    val color = if (positive) positiveColor else TitanWarn
 
     Row(
         modifier = Modifier
@@ -233,7 +259,7 @@ private fun StatusBanner(text: String, color: Color) {
 }
 
 @Composable
-private fun AwaitingPolicy() {
+private fun AwaitingPolicy(primaryColor: Color) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = TitanSurface),
@@ -246,7 +272,7 @@ private fun AwaitingPolicy() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(color = TitanGreen)
+            CircularProgressIndicator(color = primaryColor)
 
             Text(
                 text = "Esperando configuración administrada",
@@ -257,6 +283,40 @@ private fun AwaitingPolicy() {
 
             Text(
                 text = "El administrador todavía no ha publicado un perfil de Titan Launcher para este dispositivo.",
+                color = TitanMuted,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun LabStandby(primaryColor: Color) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = TitanSurface),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Modo laboratorio — política local",
+                color = TitanWarn,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "No hay un perfil de laboratorio cargado. " +
+                    "Cargue titan_lab_policy.json en el almacenamiento " +
+                    "interno de la app o use el perfil empaquetado de debug.",
                 color = TitanMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
@@ -284,9 +344,10 @@ private fun EmptyApplications() {
 @Composable
 private fun ApplicationGrid(
     policy: TitanLauncherPolicy,
-    isInstalled: (String) -> Boolean,
+    appState: (String) -> TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
-    onLaunch: (String) -> Unit
+    onLaunch: (String) -> Unit,
+    primaryColor: Color
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -321,9 +382,10 @@ private fun ApplicationGrid(
             items(policy.applications, key = { it.packageName }) { app ->
                 ApplicationTile(
                     app = app,
-                    installed = isInstalled(app.packageName),
+                    state = appState(app.packageName),
                     iconProvider = iconProvider,
-                    onLaunch = onLaunch
+                    onLaunch = onLaunch,
+                    primaryColor = primaryColor
                 )
             }
         }
@@ -333,9 +395,10 @@ private fun ApplicationGrid(
 @Composable
 private fun ApplicationTile(
     app: TitanLauncherApp,
-    installed: Boolean,
+    state: TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
-    onLaunch: (String) -> Unit
+    onLaunch: (String) -> Unit,
+    primaryColor: Color
 ) {
     val icon by produceState<ImageBitmap?>(
         initialValue = null,
@@ -351,7 +414,7 @@ private fun ApplicationTile(
             .fillMaxWidth()
             .heightIn(min = 132.dp)
             .clickable(
-                enabled = installed,
+                enabled = state == TitanLauncherAppState.Launchable,
                 onClickLabel = "Abrir ${app.label}"
             ) { onLaunch(app.packageName) },
         shape = RoundedCornerShape(18.dp),
@@ -364,7 +427,11 @@ private fun ApplicationTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            AppIcon(bitmap = icon, label = app.label)
+            AppIcon(
+                bitmap = icon,
+                label = app.label,
+                primaryColor = primaryColor
+            )
 
             Text(
                 text = app.label,
@@ -380,12 +447,15 @@ private fun ApplicationTile(
 
             StatusPill(
                 text = when {
-                    installed -> "Disponible"
+                    state == TitanLauncherAppState.Launchable -> "Disponible"
+                    state == TitanLauncherAppState.Disabled -> "Deshabilitada"
+                    state == TitanLauncherAppState.NotLaunchable -> "Sin inicio disponible"
+                    state == TitanLauncherAppState.Unavailable -> "No disponible"
                     app.required -> "Pendiente de instalación"
                     else -> "No instalada"
                 },
                 color = when {
-                    installed -> TitanGreen
+                    state == TitanLauncherAppState.Launchable -> primaryColor
                     app.required -> TitanWarn
                     else -> TitanMuted
                 }
@@ -435,7 +505,11 @@ private fun RequiredBadge() {
 }
 
 @Composable
-private fun AppIcon(bitmap: ImageBitmap?, label: String) {
+private fun AppIcon(
+    bitmap: ImageBitmap?,
+    label: String,
+    primaryColor: Color
+) {
     val shape = RoundedCornerShape(16.dp)
 
     if (bitmap != null) {
@@ -452,7 +526,7 @@ private fun AppIcon(bitmap: ImageBitmap?, label: String) {
             modifier = Modifier
                 .size(56.dp)
                 .clip(shape)
-                .background(TitanGreenDark),
+                .background(primaryColor.copy(alpha = 0.76f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -463,4 +537,10 @@ private fun AppIcon(bitmap: ImageBitmap?, label: String) {
             )
         }
     }
+}
+
+private fun policyColor(value: String, fallback: Color): Color {
+    return runCatching {
+        Color(0xFF000000L or value.removePrefix("#").toLong(16))
+    }.getOrDefault(fallback)
 }

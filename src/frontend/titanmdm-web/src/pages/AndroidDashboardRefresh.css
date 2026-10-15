@@ -1,0 +1,57 @@
+/* TitanMDM Android dashboard: scoped overlay, temporary pending consolidation.
+   Applies ONLY when HTML workspace is Android. Does not alter Windows. */
+[data-titan-workspace="android"] .dashboard-page {
+  max-width: 1740px;
+  gap: 16px;
+  --android-focus: #108a61;
+  --android-ink: #163c31;
+  --android-border: #d9e9e1;
+}
+[data-titan-workspace="android"] .dashboard-heading--hero {
+  min-height: 116px;
+  border-radius: 20px;
+  border-color: var(--android-border);
+  padding: clamp(20px, 2vw, 30px);
+  background: radial-gradient(circle at 91% 6%, rgba(45, 175, 104, .15), transparent 36%), linear-gradient(115deg, #fff 35%, #f1faf5 100%);
+  box-shadow: 0 12px 36px rgba(12, 68, 45, .06);
+}
+[data-titan-workspace="android"] .dashboard-heading h1 {font-size: clamp(25px, 2.2vw, 34px);letter-spacing: -.04em;}
+[data-titan-workspace="android"] .dashboard-heading p {font-size: 13px;line-height: 1.55;}
+[data-titan-workspace="android"] .dashboard-kpi-grid {gap: 14px;}
+[data-titan-workspace="android"] .dashboard-kpi-card {
+  min-height: 116px;
+  border: 1px solid var(--android-border);
+  border-radius: 18px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fff, #f8fcfa);
+  box-shadow: 0 7px 22px rgba(18, 64, 45, .045);
+  transition: transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+[data-titan-workspace="android"] .dashboard-kpi-card:hover {transform: translateY(-2px);border-color: #b2dbc5;box-shadow: 0 14px 30px rgba(18,64,45,.09);}
+[data-titan-workspace="android"] .dashboard-kpi-card__content strong {font-size: clamp(24px, 2.2vw, 34px);}
+[data-titan-workspace="android"] .dashboard-chart-grid {gap: 16px;}
+[data-titan-workspace="android"] .dashboard-chart-card,
+[data-titan-workspace="android"] .dashboard-operation-card {
+  min-width: 0;
+  border: 1px solid var(--android-border);
+  border-radius: 18px;
+  padding: clamp(16px,1.7vw,24px);
+  box-shadow: 0 8px 24px rgba(18,64,45,.05);
+}
+[data-titan-workspace="android"] .dashboard-chart-card__header {padding-bottom: 12px;}
+[data-titan-workspace="android"] .dashboard-chart-container {height: clamp(190px, 22vw, 265px);}
+[data-titan-workspace="android"] .dashboard-chart-container--donut {height: clamp(190px, 22vw, 265px);}
+[data-titan-workspace="android"] .dashboard-refresh-button {border-radius: 11px;min-height: 42px;font-size: 12px;}
+[data-titan-workspace="android"] .dashboard-refresh-button:focus-visible {outline: 3px solid #6ac39b;outline-offset: 3px;}
+@media(max-width: 900px) {
+  [data-titan-workspace="android"] .dashboard-heading--hero {flex-direction: column;align-items:stretch;}
+  [data-titan-workspace="android"] .dashboard-heading__actions {flex-wrap: wrap;}
+}
+@media(max-width: 650px) {
+  [data-titan-workspace="android"] .dashboard-kpi-card {min-height: 100px;padding: 15px;}
+  [data-titan-workspace="android"] .dashboard-chart-card {padding: 16px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  [data-titan-workspace="android"] .dashboard-kpi-card {transition:none;}
+  [data-titan-workspace="android"] .dashboard-kpi-card:hover {transform:none;}
+}

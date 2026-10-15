@@ -592,13 +592,14 @@ public sealed class AndroidPolicyCompiler
             GetString(
                 kiosk,
                 "applicationId",
-                string.Empty);
+                string.Empty)
+                .Trim();
 
-        if (string.IsNullOrWhiteSpace(
+        if (!IsValidAndroidPackageName(
                 applicationId))
         {
             errors.Add(
-                "Android: Kiosk requiere applicationId.");
+                "Android: Kiosk requiere un applicationId válido.");
             return;
         }
 
@@ -617,16 +618,18 @@ public sealed class AndroidPolicyCompiler
 
         policy[
             "keyguardDisabled"] =
-            GetBool(
+            GetCompatibleKioskBool(
                 kiosk,
                 "disableKeyguard",
+                "keyguard",
                 true);
 
         policy[
             "statusBarDisabled"] =
-            GetBool(
+            GetCompatibleKioskBool(
                 kiosk,
                 "disableStatusBar",
+                "statusBar",
                 true);
     }
 
@@ -681,6 +684,10 @@ public sealed class AndroidPolicyCompiler
                 as JsonArray
             ?? new JsonArray();
 
+        var packageNames =
+            new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+
         foreach (var packageNode in packages)
         {
             if (packageNode is not
@@ -693,13 +700,33 @@ public sealed class AndroidPolicyCompiler
                 GetString(
                     package,
                     "packageName",
-                    string.Empty);
+                    string.Empty)
+                    .Trim();
 
-            if (string.IsNullOrWhiteSpace(
+            if (!IsValidAndroidPackageName(
                     packageName))
             {
                 errors.Add(
-                    "Android: una aplicación administrada no contiene packageName.");
+                    $"Android: packageName '{packageName}' no es un nombre de paquete Android válido.");
+                continue;
+            }
+
+            if (!packageNames.Add(packageName))
+            {
+                errors.Add(
+                    $"Android: packageName duplicado '{packageName}'.");
+                continue;
+            }
+
+            var label =
+                GetApplicationLabel(
+                    package,
+                    packageName);
+
+            if (label.Length > MaxLauncherLabelLength)
+            {
+                errors.Add(
+                    $"Android: el label/displayName de {packageName} no puede exceder {MaxLauncherLabelLength} caracteres.");
                 continue;
             }
 
@@ -762,6 +789,16 @@ public sealed class AndroidPolicyCompiler
     private const string DefaultLauncherActivity =
         "com.titanmdm.agent.launcher.TitanLauncherActivity";
 
+    private const int SupportedLauncherSchemaVersion = 1;
+
+    private const int MaxLauncherApps = 100;
+
+    private const int MaxLauncherLabelLength = 60;
+
+    private const int MaxLauncherCompanyLength = 80;
+
+    private const int MaxLauncherWelcomeLength = 180;
+
     /*
      * Titan Launcher multiaplicación.
      *
@@ -800,6 +837,13 @@ public sealed class AndroidPolicyCompiler
             return;
         }
 
+        if (HasKioskApplication(android))
+        {
+            errors.Add(
+                "Android: una aplicación con installType KIOSK no se puede combinar con el launcher empresarial multiaplicación.");
+            return;
+        }
+
         var packageName =
             GetString(
                 launcher,
@@ -807,10 +851,10 @@ public sealed class AndroidPolicyCompiler
                 DefaultLauncherPackage)
                 .Trim();
 
-        if (string.IsNullOrWhiteSpace(packageName))
+        if (!IsValidAndroidPackageName(packageName))
         {
             errors.Add(
-                "Android: el launcher requiere packageName.");
+                "Android: el launcher requiere un packageName válido.");
             return;
         }
 
@@ -829,12 +873,17 @@ public sealed class AndroidPolicyCompiler
         }
 
         var schemaVersion =
-            GetInt(launcher, "schemaVersion", 1);
+            SupportedLauncherSchemaVersion;
 
-        if (schemaVersion < 1)
+        if (launcher.TryGetPropertyValue(
+                "schemaVersion",
+                out var schemaNode) &&
+            (schemaNode is not JsonValue schemaValue ||
+             !schemaValue.TryGetValue<int>(out schemaVersion) ||
+             schemaVersion != SupportedLauncherSchemaVersion))
         {
             errors.Add(
-                "Android: schemaVersion del launcher debe ser mayor o igual a 1.");
+                $"Android: schemaVersion del launcher debe ser exactamente {SupportedLauncherSchemaVersion}.");
             return;
         }
 
@@ -845,12 +894,54 @@ public sealed class AndroidPolicyCompiler
                 "TitanMDM Enterprise")
                 .Trim();
 
+        if (companyName.Length >
+            MaxLauncherCompanyLength)
+        {
+            errors.Add(
+                $"Android: companyName del launcher no puede exceder {MaxLauncherCompanyLength} caracteres.");
+            return;
+        }
+
+        if (companyName.Length == 0)
+        {
+            companyName =
+                "TitanMDM Enterprise";
+        }
+
         var welcomeMessage =
             GetString(
                 launcher,
                 "welcomeMessage",
                 "Dispositivo corporativo")
                 .Trim();
+
+        if (welcomeMessage.Length >
+            MaxLauncherWelcomeLength)
+        {
+            errors.Add(
+                $"Android: welcomeMessage del launcher no puede exceder {MaxLauncherWelcomeLength} caracteres.");
+            return;
+        }
+
+        if (welcomeMessage.Length == 0)
+        {
+            welcomeMessage =
+                "Dispositivo corporativo";
+        }
+
+        if (!TryGetBrandingColor(
+                launcher,
+                "primaryColor",
+                out var primaryColor) ||
+            !TryGetBrandingColor(
+                launcher,
+                "backgroundColor",
+                out var backgroundColor))
+        {
+            errors.Add(
+                "Android: los colores del launcher deben utilizar el formato #RRGGBB.");
+            return;
+        }
 
         var requiredForSetup =
             GetBool(launcher, "requiredForSetup", true);
@@ -896,6 +987,13 @@ public sealed class AndroidPolicyCompiler
             if (appInstallType == "BLOCKED")
                 continue;
 
+            if (appInstallType == "KIOSK")
+            {
+                errors.Add(
+                    "Android: una aplicación con installType KIOSK no se puede combinar con el launcher empresarial multiaplicación.");
+                continue;
+            }
+
             var required =
                 appInstallType is
                     "FORCE_INSTALLED" or
@@ -906,10 +1004,21 @@ public sealed class AndroidPolicyCompiler
                 {
                     ["packageName"] = appPackage,
                     ["label"] =
-                        GetString(app, "label", appPackage),
+                        GetManagedApplicationLabel(
+                            android,
+                            appPackage),
                     ["required"] = required
                 });
         }
+
+        if (allowedApps.Count > MaxLauncherApps)
+        {
+            errors.Add(
+                $"Android: el launcher no puede contener más de {MaxLauncherApps} aplicaciones efectivas.");
+        }
+
+        if (errors.Count > 0)
+            return;
 
         var agentEntry =
             compiledApps
@@ -936,7 +1045,7 @@ public sealed class AndroidPolicyCompiler
 
         agentEntry["installType"] = installType;
 
-        agentEntry["managedConfiguration"] =
+        var managedConfiguration =
             new JsonObject
             {
                 ["titan_company_name"] = companyName,
@@ -945,6 +1054,21 @@ public sealed class AndroidPolicyCompiler
                 ["titan_launcher_schema_version"] = schemaVersion,
                 ["titan_allowed_apps"] = allowedApps.ToJsonString()
             };
+
+        if (primaryColor is not null)
+        {
+            managedConfiguration["titan_primary_color"] =
+                primaryColor;
+        }
+
+        if (backgroundColor is not null)
+        {
+            managedConfiguration["titan_background_color"] =
+                backgroundColor;
+        }
+
+        agentEntry["managedConfiguration"] =
+            managedConfiguration;
 
         policy["applications"] = compiledApps;
 
@@ -975,6 +1099,193 @@ public sealed class AndroidPolicyCompiler
          * Google; se deja explícito para evitar ambigüedad.
          */
         policy["kioskCustomLauncherEnabled"] = false;
+    }
+
+    private static bool HasKioskApplication(
+        JsonObject android)
+    {
+        var packages =
+            android["applications"]?["packages"]
+                as JsonArray;
+
+        return packages?
+            .OfType<JsonObject>()
+            .Any(package =>
+                string.Equals(
+                    GetString(
+                        package,
+                        "installType",
+                        string.Empty)
+                        .Trim(),
+                    "KIOSK",
+                    StringComparison.OrdinalIgnoreCase))
+            ?? false;
+    }
+
+    private static string GetManagedApplicationLabel(
+        JsonObject android,
+        string packageName)
+    {
+        var packages =
+            android["applications"]?["packages"]
+                as JsonArray;
+
+        var package = packages?
+            .OfType<JsonObject>()
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    GetString(
+                        candidate,
+                        "packageName",
+                        string.Empty)
+                        .Trim(),
+                    packageName,
+                    StringComparison.OrdinalIgnoreCase));
+
+        return package is null
+            ? packageName
+            : GetApplicationLabel(
+                package,
+                packageName);
+    }
+
+    private static string GetApplicationLabel(
+        JsonObject package,
+        string packageName)
+    {
+        var label =
+            GetString(
+                package,
+                "label",
+                string.Empty)
+                .Trim();
+
+        if (label.Length == 0)
+        {
+            label =
+                GetString(
+                    package,
+                    "displayName",
+                    string.Empty)
+                    .Trim();
+        }
+
+        return label.Length == 0
+            ? packageName
+            : label;
+    }
+
+    private static bool TryGetBrandingColor(
+        JsonObject launcher,
+        string property,
+        out string? color)
+    {
+        color = null;
+
+        if (!launcher.TryGetPropertyValue(
+                property,
+                out var node))
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<string>(out var rawColor))
+        {
+            return false;
+        }
+
+        color = rawColor.Trim();
+
+        if (color.Length == 0)
+        {
+            color = null;
+            return true;
+        }
+
+        if (color.Length != 7 ||
+            color[0] != '#')
+        {
+            return false;
+        }
+
+        for (var index = 1;
+             index < color.Length;
+             index++)
+        {
+            var character = color[index];
+
+            if (!((character >= '0' && character <= '9') ||
+                  (character >= 'A' && character <= 'F') ||
+                  (character >= 'a' && character <= 'f')))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsValidAndroidPackageName(
+        string packageName)
+    {
+        var segments =
+            packageName.Split('.');
+
+        if (segments.Length < 2)
+            return false;
+
+        foreach (var segment in segments)
+        {
+            if (segment.Length == 0 ||
+                !IsAsciiLetter(segment[0]))
+            {
+                return false;
+            }
+
+            for (var index = 1;
+                 index < segment.Length;
+                 index++)
+            {
+                var character = segment[index];
+
+                if (!IsAsciiLetter(character) &&
+                    !(character >= '0' && character <= '9') &&
+                    character != '_')
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(
+        char character)
+    {
+        return (character >= 'A' && character <= 'Z') ||
+               (character >= 'a' && character <= 'z');
+    }
+
+    private static bool GetCompatibleKioskBool(
+        JsonObject kiosk,
+        string legacyProperty,
+        string currentProperty,
+        bool defaultValue)
+    {
+        if (kiosk.ContainsKey(legacyProperty))
+        {
+            return GetBool(
+                kiosk,
+                legacyProperty,
+                defaultValue);
+        }
+
+        return GetBool(
+            kiosk,
+            currentProperty,
+            defaultValue);
     }
 
     private static bool GetBool(

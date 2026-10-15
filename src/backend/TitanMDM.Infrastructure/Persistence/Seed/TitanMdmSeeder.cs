@@ -898,7 +898,29 @@ public sealed partial class TitanMdmSeeder
                 "sites.manage",
                 "Administrar localidades",
                 "Sites",
-                "Permite crear, modificar y administrar localidades y ubicaciones.")
+                "Permite crear, modificar y administrar localidades y ubicaciones."),
+
+            // =====================================================
+            // ANDROID ENTERPRISE
+            // =====================================================
+
+            new(
+                "android.enterprise.view",
+                "Ver Android Enterprise",
+                "AndroidEnterprise",
+                "Permite consultar el estado de Android Enterprise, inventario, politicas y publicaciones."),
+
+            new(
+                "android.enterprise.manage",
+                "Administrar Android Enterprise",
+                "AndroidEnterprise",
+                "Permite conectar la organizacion, crear y revocar enrollments y publicar/asignar politicas Android."),
+
+            new(
+                "android.enterprise.actions",
+                "Ejecutar acciones Android",
+                "AndroidEnterprise",
+                "Permite ejecutar acciones remotas sobre dispositivos Android administrados (bloquear, reiniciar, borrar, lost mode).")
         ];
 
     // ============================================================

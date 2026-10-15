@@ -14,6 +14,18 @@
         android:defaultValue="Dispositivo corporativo" />
 
     <restriction
+        android:key="titan_primary_color"
+        android:title="Color principal (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#16A36A" />
+
+    <restriction
+        android:key="titan_background_color"
+        android:title="Color de fondo (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#0B1720" />
+
+    <restriction
         android:key="titan_allowed_apps"
         android:title="Aplicaciones autorizadas"
         android:restrictionType="string"

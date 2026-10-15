@@ -57,6 +57,13 @@ public sealed class AndroidManagementOptions
 
     public bool EnableComplianceSynchronization { get; set; } = true;
 
+    /// <summary>
+    /// Ventana (segundos) durante la cual una acción remota
+    /// Android idéntica sobre el mismo dispositivo se considera
+    /// duplicada y se rechaza.
+    /// </summary>
+    public int RemoteActionDeduplicationSeconds { get; set; } = 30;
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ProjectId) &&
         !string.IsNullOrWhiteSpace(BaseUrl) &&

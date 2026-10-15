@@ -1,10 +1,16 @@
 import apiClient from './apiClient'
 
 import type {
+  AndroidAuditPage,
+  AndroidAuditQuery,
   AndroidDeviceInventorySummary,
   AndroidDeviceSyncResult,
   AndroidEnterpriseStatus,
   AndroidEnrollment,
+  AndroidInventoryPage,
+  AndroidInventoryQuery,
+  AndroidRemoteActionRequest,
+  AndroidRemoteActionResponse,
   AndroidSignupResponse,
   CreateAndroidEnrollmentRequest,
   CreatedAndroidEnrollment,
@@ -73,6 +79,55 @@ export const androidEnterpriseApi = {
     const response =
       await apiClient.post<AndroidDeviceSyncResult>(
         '/android-enterprise/devices/sync',
+      )
+
+    return response.data
+  },
+
+  async getInventory(
+    query: AndroidInventoryQuery = {},
+  ): Promise<AndroidInventoryPage> {
+    const response =
+      await apiClient.get<AndroidInventoryPage>(
+        '/android-enterprise/devices',
+        {
+          params: {
+            page: query.page ?? 1,
+            pageSize: query.pageSize ?? 50,
+            search: query.search?.trim() || undefined,
+          },
+        },
+      )
+
+    return response.data
+  },
+
+  async getAudit(
+    query: AndroidAuditQuery = {},
+  ): Promise<AndroidAuditPage> {
+    const response =
+      await apiClient.get<AndroidAuditPage>(
+        '/android-enterprise/audit',
+        {
+          params: {
+            page: query.page ?? 1,
+            pageSize: query.pageSize ?? 50,
+            search: query.search?.trim() || undefined,
+          },
+        },
+      )
+
+    return response.data
+  },
+
+  async executeDeviceAction(
+    deviceId: string,
+    request: AndroidRemoteActionRequest,
+  ): Promise<AndroidRemoteActionResponse> {
+    const response =
+      await apiClient.post<AndroidRemoteActionResponse>(
+        `/android-enterprise/devices/${deviceId}/actions`,
+        request,
       )
 
     return response.data

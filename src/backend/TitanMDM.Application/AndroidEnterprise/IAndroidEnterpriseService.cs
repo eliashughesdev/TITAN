@@ -32,4 +32,17 @@ public interface IAndroidEnterpriseService
         Guid organizationId,
         Guid enrollmentId,
         CancellationToken cancellationToken = default);
+
+    Task<AndroidAuditPageDto> GetAuditPageAsync(
+        Guid organizationId,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<AndroidWebTokenDto> CreateManagedPlayWebTokenAsync(
+        Guid organizationId,
+        Guid userId,
+        CreateAndroidWebTokenRequest request,
+        CancellationToken cancellationToken = default);
 }

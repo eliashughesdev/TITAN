@@ -357,4 +357,20 @@ public static class PermissionCodes
         public const string FiorellaUse =
             "ponches.fiorella.use";
     }
+
+    // ============================================================
+    // ANDROID ENTERPRISE
+    // ============================================================
+
+    public static class AndroidEnterprise
+    {
+        public const string View =
+            "android.enterprise.view";
+
+        public const string Manage =
+            "android.enterprise.manage";
+
+        public const string Actions =
+            "android.enterprise.actions";
+    }
 }

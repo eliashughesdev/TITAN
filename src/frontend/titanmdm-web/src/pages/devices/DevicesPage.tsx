@@ -13,6 +13,10 @@ import {
   useWorkspace,
 } from '../../workspace/WorkspaceContext'
 
+import {
+  useAuth,
+} from '../../auth/AuthContext'
+
 import type {
   DeviceListItem,
 } from '../../types/device'
@@ -61,6 +65,16 @@ export function DevicesPage() {
     activeWorkspaceId,
   } =
     useWorkspace()
+
+  const {
+    hasPermission,
+  } =
+    useAuth()
+
+  const canManageAndroid =
+    hasPermission(
+      'android.enterprise.manage',
+    )
 
   /* ============================================================
      WORKSPACE RESOLUTION
@@ -316,6 +330,9 @@ export function DevicesPage() {
         }
         isAndroidWorkspace={
           isAndroidWorkspace
+        }
+        canSyncAndroid={
+          canManageAndroid
         }
         isLoading={
           inventory.isLoading

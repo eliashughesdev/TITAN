@@ -92,6 +92,10 @@ import {
 } from './pages/kiosk/KioskPage'
 
 import {
+  TitanLauncherPage,
+} from './pages/android-launcher/TitanLauncherPage'
+
+import {
   GeofencingPage,
 } from './pages/geofencing/GeofencingPage'
 
@@ -728,6 +732,22 @@ const applicationRoutes:
 
       permissions: [
         'kiosk.view',
+      ],
+    },
+
+    {
+      path:
+        'android/titan-launcher',
+
+      page:
+        <TitanLauncherPage />,
+
+      permissions: [
+        'android.enterprise.view',
+      ],
+
+      allPermissions: [
+        'policies.view',
       ],
     },
 

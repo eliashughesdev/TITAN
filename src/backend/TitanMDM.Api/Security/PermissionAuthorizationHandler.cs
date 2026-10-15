@@ -16,16 +16,24 @@ public sealed class PermissionAuthorizationHandler
             return Task.CompletedTask;
         }
 
+        var granted =
+            context.User
+                .Claims
+                .Where(
+                    claim =>
+                        claim.Type ==
+                            "permission")
+                .Select(
+                    claim =>
+                        claim.Value)
+                .ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
+
         var hasPermission =
-            context.User.Claims.Any(
-                claim =>
-                    claim.Type ==
-                        "permission"
-                    &&
-                    string.Equals(
-                        claim.Value,
-                        requirement.Permission,
-                        StringComparison.OrdinalIgnoreCase));
+            requirement
+                .Permissions
+                .Any(
+                    granted.Contains);
 
         if (hasPermission)
         {

@@ -106,6 +106,13 @@ function resolveWorkspace(
   if (pathname.startsWith('/remote')) return 'windows'
 
   if (
+    pathname === '/android' ||
+    pathname.startsWith('/android/')
+  ) {
+    return 'android'
+  }
+
+  if (
     pathname.startsWith('/kiosk') ||
     pathname.startsWith('/geofencing')
   ) {

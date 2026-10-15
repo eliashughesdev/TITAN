@@ -11,6 +11,18 @@ import {
   androidEnterpriseApi,
 } from '../../../api/androidEnterpriseApi'
 
+import {
+  policiesApi,
+} from '../../../api/policiesApi'
+
+import {
+  useAuth,
+} from '../../../auth/AuthContext'
+
+import {
+  Permissions,
+} from '../../../auth/permissions'
+
 import type {
   AndroidEnterpriseStatus,
   AndroidEnrollment,
@@ -23,7 +35,21 @@ import {
   isAndroidEnterpriseActive,
 } from '../utils/enrollmentFormatters'
 
+import {
+  isCurrentPublishedAndroidPolicy,
+  type PublishedAndroidPolicy,
+} from '../utils/androidEnrollmentPolicies'
+
 export function useAndroidEnterpriseEnrollment() {
+  const {
+    hasPermission,
+  } = useAuth()
+
+  const canViewPolicies =
+    hasPermission(
+      Permissions.policies.view,
+    )
+
   const [
     status,
     setStatus,
@@ -49,6 +75,26 @@ export function useAndroidEnterpriseEnrollment() {
     expirationMinutes,
     setExpirationMinutes,
   ] = useState(60)
+
+  const [
+    publishedPolicies,
+    setPublishedPolicies,
+  ] = useState<PublishedAndroidPolicy[]>([])
+
+  const [
+    selectedPolicyId,
+    setSelectedPolicyId,
+  ] = useState('')
+
+  const [
+    policiesLoading,
+    setPoliciesLoading,
+  ] = useState(false)
+
+  const [
+    policiesError,
+    setPoliciesError,
+  ] = useState<string | null>(null)
 
   const [
     createdEnrollment,
@@ -103,6 +149,10 @@ export function useAndroidEnterpriseEnrollment() {
       status?.hasPublicCallback,
     )
 
+  const policyRequired =
+    mode === 'FullyManaged'
+    || mode === 'Dedicated'
+
   const statistics =
     useMemo(
       () => ({
@@ -147,15 +197,91 @@ export function useAndroidEnterpriseEnrollment() {
           response.status === 'Active' &&
           response.enterpriseName
         ) {
+          if (canViewPolicies) {
+            setPoliciesLoading(true)
+            setPoliciesError(null)
+          }
+
           const enrollmentResponse =
             await androidEnterpriseApi
               .getEnrollments()
+
+          if (canViewPolicies) {
+            try {
+              const policies =
+                await policiesApi.getAll(
+                  'Android',
+                )
+
+              const publications =
+                await Promise.all(
+                  policies.map(
+                    policy =>
+                      policiesApi
+                        .getAndroidPublication(
+                          policy.id,
+                        ),
+                  ),
+                )
+
+              const available =
+                policies.flatMap(
+                  (policy, index) => {
+                    const publication =
+                      publications[index]
+
+                    return isCurrentPublishedAndroidPolicy(
+                      policy,
+                      publication,
+                    )
+                      ? [{
+                          policy,
+                          publication,
+                        }]
+                      : []
+                  },
+                )
+
+              setPublishedPolicies(
+                available,
+              )
+
+              setSelectedPolicyId(
+                current =>
+                  available.some(
+                    item =>
+                      item.policy.id === current,
+                  )
+                    ? current
+                    : '',
+              )
+            } catch (policyError) {
+              console.error(policyError)
+              setPublishedPolicies([])
+              setSelectedPolicyId('')
+              setPoliciesError(
+                extractRequestError(
+                  policyError,
+                  'No fue posible consultar las políticas Android publicadas.',
+                ),
+              )
+            } finally {
+              setPoliciesLoading(false)
+            }
+          } else {
+            setPublishedPolicies([])
+            setSelectedPolicyId('')
+            setPoliciesError(null)
+          }
 
           setEnrollments(
             enrollmentResponse,
           )
         } else {
           setEnrollments([])
+          setPublishedPolicies([])
+          setSelectedPolicyId('')
+          setPoliciesError(null)
         }
       } catch (requestError) {
         console.error(requestError)
@@ -168,8 +294,9 @@ export function useAndroidEnterpriseEnrollment() {
         )
       } finally {
         setLoading(false)
+        setPoliciesLoading(false)
       }
-    }, [])
+    }, [canViewPolicies])
 
   useEffect(() => {
     let cancelled = false
@@ -244,6 +371,16 @@ export function useAndroidEnterpriseEnrollment() {
 
   const createEnrollment =
     useCallback(async () => {
+      if (
+        policyRequired
+        && !selectedPolicyId
+      ) {
+        setError(
+          'Selecciona una política Android publicada para este modo de administración.',
+        )
+        return
+      }
+
       try {
         setCreating(true)
         setError(null)
@@ -257,13 +394,14 @@ export function useAndroidEnterpriseEnrollment() {
             .createEnrollment({
               mode,
               expirationMinutes,
-              policyId: null,
+              policyId:
+                selectedPolicyId || null,
             })
 
         setCreatedEnrollment(response)
 
         setSuccess(
-          'La credencial Android Enterprise fue creada correctamente.',
+          'La credencial de aprovisionamiento fue emitida. La inscripción solo se completa cuando el dispositivo se sincroniza y aparece en TitanMDM.',
         )
 
         const enrollmentResponse =
@@ -288,6 +426,8 @@ export function useAndroidEnterpriseEnrollment() {
     }, [
       mode,
       expirationMinutes,
+      policyRequired,
+      selectedPolicyId,
     ])
 
   const revokeEnrollment =
@@ -408,6 +548,14 @@ export function useAndroidEnterpriseEnrollment() {
 
     expirationMinutes,
     setExpirationMinutes,
+
+    publishedPolicies,
+    selectedPolicyId,
+    setSelectedPolicyId,
+    policiesLoading,
+    policiesError,
+    canViewPolicies,
+    policyRequired,
 
     createdEnrollment,
     qrDataUrl,

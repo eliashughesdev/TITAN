@@ -286,9 +286,13 @@ public sealed class AndroidDeviceSyncService
     public async Task<AndroidDeviceInventorySummaryDto>
         GetSummaryAsync(
             Guid organizationId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds = null,
             CancellationToken cancellationToken = default)
     {
         ValidateOrganization(organizationId);
+
+        var allowedSiteIds =
+            NormalizeSiteScope(accessibleSiteIds);
 
         var rows =
             await (
@@ -308,7 +312,11 @@ public sealed class AndroidDeviceSyncService
                     android.OrganizationId ==
                     organizationId &&
                     device.OrganizationId ==
-                    organizationId
+                    organizationId &&
+                    (allowedSiteIds == null ||
+                     (device.SiteId != null &&
+                      allowedSiteIds.Contains(
+                          device.SiteId.Value)))
 
                 select new
                 {
@@ -405,6 +413,132 @@ public sealed class AndroidDeviceSyncService
 
             LastSynchronizationUtc:
                 lastSync);
+    }
+
+    public async Task<AndroidDeviceInventoryPageDto>
+        GetInventoryPageAsync(
+            Guid organizationId,
+            string? search,
+            int page,
+            int pageSize,
+            IReadOnlyCollection<Guid>? accessibleSiteIds = null,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        var normalizedPage =
+            Math.Max(page, 1);
+
+        var normalizedPageSize =
+            Math.Clamp(pageSize, 1, 200);
+
+        var allowedSiteIds =
+            NormalizeSiteScope(accessibleSiteIds);
+
+        var query =
+            from android in
+                _dbContext
+                    .AndroidDevices
+                    .AsNoTracking()
+
+            join device in
+                _dbContext
+                    .Devices
+                    .AsNoTracking()
+                on android.DeviceId
+                equals device.Id
+
+            where
+                android.OrganizationId ==
+                organizationId &&
+                device.OrganizationId ==
+                organizationId &&
+                !device.IsDeleted &&
+                (allowedSiteIds == null ||
+                 (device.SiteId != null &&
+                  allowedSiteIds.Contains(
+                      device.SiteId.Value)))
+
+            select new
+            {
+                Device = device,
+                Android = android
+            };
+
+        var term =
+            search?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            query =
+                query.Where(
+                    x =>
+                        x.Device.DeviceName
+                            .Contains(term) ||
+                        x.Device.SerialNumber
+                            .Contains(term) ||
+                        (x.Device.Model != null &&
+                         x.Device.Model
+                             .Contains(term)) ||
+                        (x.Android.AppliedPolicyName != null &&
+                         x.Android.AppliedPolicyName
+                             .Contains(term)));
+        }
+
+        var totalCount =
+            await query
+                .CountAsync(
+                    cancellationToken);
+
+        var rows =
+            await query
+                .OrderByDescending(
+                    x =>
+                        x.Android
+                            .LastSynchronizedAtUtc)
+                .Skip(
+                    (normalizedPage - 1) *
+                    normalizedPageSize)
+                .Take(normalizedPageSize)
+                .ToListAsync(
+                    cancellationToken);
+
+        var items =
+            rows
+                .Select(
+                    x =>
+                        new AndroidInventoryItemDto(
+                            x.Device.Id,
+                            x.Device.DeviceName,
+                            x.Device.SerialNumber,
+                            x.Device.Manufacturer,
+                            x.Device.Model,
+                            x.Device.Status.ToString(),
+                            x.Device.ComplianceStatus
+                                .ToString(),
+                            x.Device.IsManaged,
+                            x.Device.LastSeenAtUtc,
+                            x.Android.ManagementMode,
+                            x.Android.Ownership,
+                            x.Android.State,
+                            x.Android.AppliedPolicyName,
+                            x.Android.AppliedPolicyVersion,
+                            x.Android.AppliedPolicyState,
+                            x.Android.LastPolicySyncTimeUtc,
+                            x.Android.LastSynchronizedAtUtc,
+                            x.Android.IsDeletedInGoogle))
+                .ToList();
+
+        return new AndroidDeviceInventoryPageDto(
+            items,
+            totalCount,
+            normalizedPage,
+            normalizedPageSize,
+            totalCount == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalCount /
+                    (double)normalizedPageSize));
     }
 
     private async Task<bool>
@@ -1096,6 +1230,18 @@ public sealed class AndroidDeviceSyncService
             actual,
             expected,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Guid[]? NormalizeSiteScope(
+        IReadOnlyCollection<Guid>? accessibleSiteIds)
+    {
+        if (accessibleSiteIds is null)
+            return null;
+
+        return accessibleSiteIds
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToArray();
     }
 
     private static void ValidateOrganization(

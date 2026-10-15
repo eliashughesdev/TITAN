@@ -44,6 +44,14 @@ export default function AndroidEnterpriseEnrollment({
     expirationMinutes,
     setExpirationMinutes,
 
+    publishedPolicies,
+    selectedPolicyId,
+    setSelectedPolicyId,
+    policiesLoading,
+    policiesError,
+    canViewPolicies,
+    policyRequired,
+
     createdEnrollment,
     qrDataUrl,
 
@@ -390,6 +398,69 @@ export default function AndroidEnterpriseEnrollment({
                 </div>
 
                 <div className="enrollment-field">
+                  <label htmlFor="androidEnterprisePolicy">
+                    Política Android publicada
+                    {policyRequired
+                      ? ' (obligatoria)'
+                      : ' (opcional)'}
+                  </label>
+
+                  <select
+                    id="androidEnterprisePolicy"
+                    value={selectedPolicyId}
+                    required={policyRequired}
+                    disabled={
+                      creating
+                      || policiesLoading
+                      || !canCreate
+                      || !canViewPolicies
+                      || publishedPolicies.length === 0
+                    }
+                    onChange={(event) =>
+                      setSelectedPolicyId(
+                        event.target.value,
+                      )
+                    }
+                  >
+                    <option value="">
+                      {policiesLoading
+                        ? 'Consultando políticas...'
+                        : 'Selecciona una política'}
+                    </option>
+
+                    {publishedPolicies.map(
+                      ({ policy, publication }) => (
+                        <option
+                          key={policy.id}
+                          value={policy.id}
+                        >
+                          {policy.name} · v{publication.policyVersion}
+                        </option>
+                      ),
+                    )}
+                  </select>
+
+                  {!canViewPolicies ? (
+                    <small className="enrollment-field-error">
+                      No tienes permiso para consultar políticas. Solicita el permiso policies.view para seleccionar una.
+                    </small>
+                  ) : policiesError ? (
+                    <small className="enrollment-field-error" role="alert">
+                      {policiesError}
+                    </small>
+                  ) : !policiesLoading
+                    && publishedPolicies.length === 0 ? (
+                    <small className="enrollment-field-error">
+                      No hay políticas Android con su versión actual publicada. Publica una política antes de generar credenciales para dispositivos totalmente administrados o dedicados.
+                    </small>
+                  ) : (
+                    <small>
+                      Solo se muestran políticas cuya versión actual está publicada en Android Enterprise.
+                    </small>
+                  )}
+                </div>
+
+                <div className="enrollment-field">
                   <label htmlFor="androidEnterpriseExpiration">
                     Vigencia del QR
                   </label>
@@ -439,7 +510,15 @@ export default function AndroidEnterpriseEnrollment({
                   type="button"
                   disabled={
                     creating ||
-                    !canCreate
+                    !canCreate ||
+                    policiesLoading ||
+                    (
+                      policyRequired &&
+                      (
+                        !canViewPolicies ||
+                        !selectedPolicyId
+                      )
+                    )
                   }
                   onClick={() =>
                     void createEnrollment()
@@ -461,9 +540,10 @@ export default function AndroidEnterpriseEnrollment({
                 </h2>
 
                 <p>
-                  Utiliza este QR únicamente
-                  durante el aprovisionamiento
-                  Android Enterprise.
+                  Este QR es únicamente una
+                  credencial de aprovisionamiento;
+                  generarlo no completa la
+                  inscripción.
                 </p>
               </div>
 
@@ -491,6 +571,14 @@ export default function AndroidEnterpriseEnrollment({
                     aprovisionamiento. No la
                     publiques ni la incluyas en
                     el repositorio.
+                  </div>
+
+                  <div className="android-enrollment-completion-note">
+                    El dispositivo se considera
+                    inscrito solo después de
+                    completar el aprovisionamiento,
+                    sincronizarse y aparecer en el
+                    inventario de TitanMDM.
                   </div>
 
                   {qrDataUrl && (

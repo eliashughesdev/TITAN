@@ -4,6 +4,14 @@ import {
   useState,
 } from 'react'
 
+import {
+  useAuth,
+} from '../../auth/AuthContext'
+
+import {
+  Permissions,
+} from '../../auth/permissions'
+
 import AndroidEnrollmentPanel from './components/AndroidEnrollmentPanel'
 import EnrollmentPlatformTabs from './components/EnrollmentPlatformTabs'
 import WindowsEnrollmentPanel from './components/WindowsEnrollmentPanel'
@@ -53,56 +61,68 @@ import './EnrollmentPage.css'
  */
 
 export default function EnrollmentPage() {
-  /*
-   * ==========================================================
-   * PERMISSIONS PLACEHOLDERS
-   * ==========================================================
-   *
-   * Estos valores son deliberadamente explícitos.
-   *
-   * Más adelante serán sustituidos por el sistema RBAC real:
-   *
-   * enrollment.android.view
-   * enrollment.android.enterprise.view
-   * enrollment.android.enterprise.create
-   * enrollment.android.enterprise.revoke
-   * enrollment.android.enterprise.connect
-   *
-   * enrollment.android.agent.view
-   * enrollment.android.agent.create
-   * enrollment.android.agent.revoke
-   *
-   * enrollment.windows.view
-   * enrollment.windows.create
-   * enrollment.windows.revoke
-   */
+  const {
+    hasPermission,
+  } = useAuth()
 
   const permissions = useMemo(
-    () => ({
-      android: {
-        view: true,
+    () => {
+      const canViewAndroid =
+        hasPermission(
+          Permissions.workspace.android.view,
+        )
 
-        enterprise: {
-          view: true,
-          create: true,
-          revoke: true,
-          connect: true,
+      const canViewWindows =
+        hasPermission(
+          Permissions.workspace.windows.view,
+        )
+
+      const canManageEnrollment =
+        hasPermission(
+          Permissions.enrollment.manage,
+        )
+
+      const canManageEnterprise =
+        hasPermission(
+          Permissions.androidEnterprise.manage,
+        )
+
+      return {
+        android: {
+          view: canViewAndroid,
+
+          enterprise: {
+            view:
+              canViewAndroid,
+            create:
+              canManageEnterprise,
+            revoke:
+              canManageEnterprise,
+            connect:
+              canManageEnterprise,
+          },
+
+          agent: {
+            view:
+              canViewAndroid,
+            create:
+              canManageEnrollment,
+            revoke:
+              canManageEnrollment,
+          },
         },
 
-        agent: {
-          view: true,
-          create: true,
-          revoke: true,
+        windows: {
+          view:
+            canViewWindows,
+          create:
+            canManageEnrollment,
+          revoke:
+            canManageEnrollment,
         },
-      },
-
-      windows: {
-        view: true,
-        create: true,
-        revoke: true,
-      },
-    }),
-    [],
+      }
+    },
+    [hasPermission],
   )
 
   /*

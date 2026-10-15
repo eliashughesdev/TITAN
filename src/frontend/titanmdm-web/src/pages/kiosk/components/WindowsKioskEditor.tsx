@@ -17,6 +17,7 @@ import type {
 
 interface Props {
   saving: boolean
+  canManage: boolean
 
   onCreate:
     (
@@ -61,6 +62,7 @@ const initialRestrictions:
 
 export function WindowsKioskEditor({
   saving,
+  canManage,
   onCreate,
 }: Props) {
   const [
@@ -576,14 +578,16 @@ export function WindowsKioskEditor({
       <button
         type="button"
         className="kiosk-create"
-        disabled={saving}
+        disabled={saving || !canManage}
         onClick={() =>
           void submit()
         }
       >
         <Rocket size={17} />
 
-        {saving
+        {!canManage
+          ? 'Sin permiso para administrar'
+          : saving
           ? 'Creando...'
           : 'Crear perfil Windows'}
       </button>

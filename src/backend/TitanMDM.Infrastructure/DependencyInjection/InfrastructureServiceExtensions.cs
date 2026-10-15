@@ -408,6 +408,10 @@ public static class InfrastructureServiceExtensions
             IAndroidPolicyAssignmentService,
             AndroidPolicyAssignmentService>();
 
+        services.AddScoped<
+            IAndroidRemoteActionService,
+            AndroidRemoteActionService>();
+
         // ============================================================
         // SECURITY / COMPLIANCE
         // ============================================================

@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react'
-import {
-  CheckCircle2,
-  FileEdit,
-  Archive,
-  PauseCircle,
-  PanelsTopLeft,
-} from 'lucide-react'
+import { PanelsTopLeft, Search } from 'lucide-react'
 
-import { WindowsOperationResults } from '../../../components/windows/WindowsOperationResults'
 import type { Policy } from '../../../api/policiesApi'
+import {
+  TitanEmptyState,
+  TitanStatusBadge,
+} from '../../../components/ui'
+import { WindowsOperationResults } from '../../../components/windows/WindowsOperationResults'
 
 interface Props {
   loading: boolean
@@ -22,14 +20,14 @@ const labels = {
   Active: 'Activo',
   Disabled: 'Deshabilitado',
   Archived: 'Archivado',
-}
+} as const
 
-const icons = {
-  Draft: FileEdit,
-  Active: CheckCircle2,
-  Disabled: PauseCircle,
-  Archived: Archive,
-}
+const tones = {
+  Draft: 'neutral',
+  Active: 'success',
+  Disabled: 'warning',
+  Archived: 'danger',
+} as const
 
 export function KioskProfilesList({
   loading,
@@ -44,145 +42,102 @@ export function KioskProfilesList({
     const term = search.trim().toLocaleLowerCase()
 
     return profiles
-      .filter(
-        profile =>
-          (!status || profile.status === status) &&
-          (!term ||
-            `${profile.name} ${profile.description ?? ''}`
-              .toLocaleLowerCase()
-              .includes(term)),
+      .filter((profile) =>
+        (!status || profile.status === status) &&
+        (!term || `${profile.name} ${profile.description ?? ''}`
+          .toLocaleLowerCase()
+          .includes(term)),
       )
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [profiles, search, status])
 
-  const showWindowsResults =
-    selectedId &&
-    profiles.some(
-      profile =>
-        profile.id === selectedId &&
-        profile.platform === 'Windows',
-    )
+  const showWindowsResults = profiles.some(
+    (profile) =>
+      profile.id === selectedId && profile.platform === 'Windows',
+  )
 
   return (
-    <section
-      className="kiosk-profiles"
-      aria-busy={loading}
-    >
-      <div className="kiosk-section-title">
-        <div>
-          <PanelsTopLeft size={18} />
-          <strong>Perfiles de kiosk</strong>
-        </div>
-      </div>
-
-      <p>
-        Kiosk restringe el equipo a las aplicaciones autorizadas
-        para su puesto. Guardar un perfil no lo aplica: debes
-        activarlo, asignarlo y revisar el resultado del agente.
-        Activo no significa aplicado en todos los equipos.
-      </p>
-
-      <div
-        style={{
-          display: 'grid',
-          gap: 10,
-          margin: '16px 0',
-        }}
-      >
-        <label style={{ display: 'grid', gap: 6 }}>
-          Buscar perfil
-
-          <input
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-            placeholder="Nombre o descripción"
-          />
+    <div className="kiosk-profiles-content" aria-busy={loading}>
+      <div className="kiosk-profile-filters">
+        <label>
+          <span>Buscar perfil</span>
+          <div className="kiosk-search-input">
+            <Search size={15} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Nombre o descripción"
+            />
+          </div>
         </label>
 
-        <label style={{ display: 'grid', gap: 6 }}>
-          Estado
-
+        <label>
+          <span>Estado</span>
           <select
             value={status}
-            onChange={event => setStatus(event.target.value)}
+            onChange={(event) => setStatus(event.target.value)}
           >
             <option value="">Todos</option>
-
             {Object.entries(labels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
+              <option key={value} value={value}>{label}</option>
             ))}
           </select>
         </label>
       </div>
 
-      <p aria-live="polite">
+      <span className="kiosk-profile-count" aria-live="polite">
         {visible.length} de {profiles.length} perfiles
-      </p>
+      </span>
 
       {loading ? (
-        <div className="kiosk-empty" role="status">
-          Cargando perfiles…
+        <div className="kiosk-loading-list" role="status">
+          <span />
+          <span />
+          <span />
+          Cargando perfiles
         </div>
       ) : visible.length === 0 ? (
-        <div className="kiosk-empty">
-          {profiles.length
-            ? 'No hay perfiles para estos filtros.'
-            : 'Crea el primer perfil para definir las aplicaciones permitidas.'}
-        </div>
+        <TitanEmptyState
+          icon={<PanelsTopLeft size={28} />}
+          title={profiles.length ? 'Sin coincidencias' : 'No hay perfiles Kiosk'}
+          description={profiles.length
+            ? 'Ajusta la búsqueda o el filtro de estado.'
+            : 'Crea el primer perfil para definir una experiencia dedicada.'}
+        />
       ) : (
-        visible.map(profile => {
-          const Icon = icons[profile.status] ?? PanelsTopLeft
-
-          return (
+        <div className="kiosk-profile-list">
+          {visible.map((profile) => (
             <button
               type="button"
               key={profile.id}
-              className={
-                profile.id === selectedId
-                  ? 'kiosk-profile selected'
-                  : 'kiosk-profile'
-              }
+              className={profile.id === selectedId
+                ? 'kiosk-profile selected'
+                : 'kiosk-profile'}
               aria-pressed={profile.id === selectedId}
               onClick={() => onSelect(profile)}
             >
               <div className="kiosk-profile-icon">
-                <PanelsTopLeft size={20} />
+                <PanelsTopLeft size={19} />
               </div>
-
-              <div>
+              <div className="kiosk-profile-copy">
                 <strong>{profile.name}</strong>
-
-                <span>
-                  {profile.description || 'Sin descripción'}
-                </span>
-
+                <span>{profile.description || 'Sin descripción'}</span>
                 <small>
-                  {profile.platform}
-                  {' · Versión '}
-                  {profile.currentVersion}
-                  {' · '}
-                  {profile.assignedDevices}
-                  {' equipos asignados'}
+                  Versión {profile.currentVersion} · {profile.assignedDevices} asignados
                 </small>
               </div>
-
-              <div className="kiosk-profile-status">
-                <Icon size={14} />
-                {labels[profile.status] ?? profile.status}
-              </div>
+              <TitanStatusBadge
+                label={labels[profile.status]}
+                tone={tones[profile.status]}
+              />
             </button>
-          )
-        })
+          ))}
+        </div>
       )}
 
       {showWindowsResults && (
-        <WindowsOperationResults
-          key={selectedId}
-          policyId={selectedId}
-        />
+        <WindowsOperationResults key={selectedId} policyId={selectedId} />
       )}
-    </section>
+    </div>
   )
 }

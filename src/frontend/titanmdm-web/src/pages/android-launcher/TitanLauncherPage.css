@@ -1,0 +1,622 @@
+.launcher-page {
+  --launcher-green: #168a48;
+  --launcher-soft: #effcf4;
+}
+
+.launcher-enterprise-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(22, 138, 72, .18);
+  border-radius: 14px;
+  background: rgba(22, 138, 72, .14);
+}
+
+.launcher-enterprise-strip > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  background: #fff;
+}
+
+.launcher-enterprise-strip span,
+.launcher-muted {
+  color: var(--titan-text-3);
+  font-size: 12px;
+}
+
+.launcher-enterprise-strip p {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 16px;
+  color: #991b1b;
+  background: #fff1f2;
+  font-size: 12px;
+}
+
+.launcher-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.launcher-notice.success {
+  border-color: #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.launcher-notice.error {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.launcher-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--titan-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .84);
+}
+
+.launcher-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--titan-text-3);
+  background: transparent;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.launcher-tabs button.active {
+  color: #fff;
+  background: linear-gradient(180deg, #22a75c, #168147);
+  box-shadow: 0 7px 18px rgba(22, 138, 72, .2);
+}
+
+.launcher-dashboard,
+.launcher-action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.launcher-dashboard-grid,
+.launcher-designer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.launcher-workflow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.launcher-workflow li {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--titan-border);
+  border-radius: 11px;
+  background: var(--titan-surface);
+}
+
+.launcher-workflow li > span {
+  display: grid;
+  flex: 0 0 29px;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  color: #a16207;
+  background: #fef9c3;
+}
+
+.launcher-workflow li > span.ready {
+  color: var(--launcher-green);
+  background: #dcfce7;
+}
+
+.launcher-workflow li div,
+.launcher-profile-grid button > div:first-child,
+.launcher-table td:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.launcher-workflow small,
+.launcher-profile-grid small,
+.launcher-table td small,
+.launcher-audit-list small {
+  color: var(--titan-text-4);
+  font-size: 11px;
+}
+
+.launcher-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.launcher-form-grid label,
+.launcher-app-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.launcher-form-grid label > span,
+.launcher-app-row label > span {
+  color: var(--titan-text-3);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.launcher-form-grid input,
+.launcher-form-grid textarea,
+.launcher-app-row input,
+.launcher-app-row select {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border: 1px solid var(--titan-border-strong);
+  border-radius: 10px;
+  color: var(--titan-text);
+  background: #fff;
+  font: inherit;
+}
+
+.launcher-form-grid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.launcher-color-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.launcher-color-control input[type="color"] {
+  width: 46px;
+  min-height: 42px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.launcher-color-control input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.launcher-color-control input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 7px;
+}
+
+.launcher-color-control input:not([type="color"]) {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.launcher-wide {
+  grid-column: 1 / -1;
+}
+
+.launcher-form-grid .launcher-check {
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--launcher-soft);
+}
+
+.launcher-check input {
+  width: 17px;
+  min-height: 17px;
+  accent-color: var(--launcher-green);
+}
+
+.launcher-save {
+  align-self: flex-start;
+}
+
+.launcher-preview-card .titan-section-card__body {
+  align-items: center;
+}
+
+.launcher-phone {
+  width: min(100%, 310px);
+  padding: 10px;
+  border: 3px solid #163126;
+  border-radius: 30px;
+  background: #163126;
+  box-shadow: 0 24px 50px rgba(22, 49, 38, .2);
+}
+
+.launcher-phone-speaker {
+  width: 72px;
+  height: 5px;
+  margin: 0 auto 9px;
+  border-radius: 999px;
+  background: #6b8379;
+}
+
+.launcher-phone-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+  padding: 24px 18px 16px;
+  overflow: hidden;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 90% 5%, rgba(255, 255, 255, .08), transparent 30%),
+    var(--launcher-background, #0b1720);
+}
+
+.launcher-preview-company {
+  color: var(--launcher-primary, #16a36a);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.launcher-phone-screen h3 {
+  margin: 8px 0 24px;
+  color: rgba(255, 255, 255, .92);
+  font-size: 21px;
+}
+
+.launcher-preview-apps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 9px;
+}
+
+.launcher-preview-apps > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+
+.launcher-preview-apps > div > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, var(--launcher-primary, #16a36a) 30%, transparent);
+  border-radius: 15px;
+  color: #fff;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--launcher-primary, #16a36a) 85%, #ffffff),
+    color-mix(in srgb, var(--launcher-primary, #16a36a) 75%, #000000)
+  );
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--launcher-primary, #16a36a) 35%, transparent);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.launcher-preview-apps small {
+  width: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, .78);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-preview-apps p {
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, .62);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.launcher-phone-screen footer {
+  margin-top: auto;
+  color: rgba(255, 255, 255, .55);
+  font-size: 9px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.launcher-app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.launcher-app-row {
+  display: grid;
+  grid-template-columns: 34px minmax(180px, 1.2fr) minmax(140px, .8fr) minmax(150px, .8fr) 94px auto;
+  gap: 9px;
+  align-items: end;
+  padding: 11px;
+  border: 1px solid var(--titan-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.launcher-app-row[draggable="true"] {
+  cursor: grab;
+}
+
+.launcher-app-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.launcher-app-row.drag-over {
+  border-color: var(--launcher-green);
+  box-shadow: 0 0 0 3px var(--launcher-soft);
+}
+
+.launcher-app-order {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 42px;
+  border-radius: 9px;
+  color: var(--launcher-green);
+  background: var(--launcher-soft);
+  font-weight: 850;
+}
+
+.launcher-visibility,
+.launcher-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 9px;
+  border: 1px solid var(--titan-border);
+  border-radius: 9px;
+  color: var(--titan-text-3);
+  background: #fff;
+  cursor: pointer;
+}
+
+.launcher-visibility.visible {
+  border-color: #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.launcher-row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.launcher-row-actions button {
+  width: 35px;
+  padding: 0;
+}
+
+.launcher-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.launcher-profile-grid > button {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--titan-border);
+  border-radius: 13px;
+  color: var(--titan-text);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.launcher-profile-grid > button.selected {
+  border-color: rgba(22, 138, 72, .42);
+  background: var(--launcher-soft);
+  box-shadow: inset 3px 0 var(--launcher-green);
+}
+
+.launcher-profile-grid button > div:first-child span {
+  overflow: hidden;
+  color: var(--titan-text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-profile-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.launcher-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.launcher-tab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.launcher-tab-toolbar input {
+  flex: 1 1 260px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--titan-border-strong);
+  border-radius: 10px;
+  color: var(--titan-text);
+  background: #fff;
+  font: inherit;
+}
+
+.launcher-pagination {
+  justify-content: flex-end;
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.launcher-pagination > span {
+  margin-right: auto;
+  color: var(--titan-text-3);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.launcher-table {
+  min-width: 780px;
+}
+
+.launcher-table-action {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.launcher-audit-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.launcher-audit-list article {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 58px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--titan-border);
+}
+
+.launcher-audit-list article > span {
+  width: 10px;
+  height: 10px;
+  border: 3px solid #bbf7d0;
+  border-radius: 50%;
+  background: var(--launcher-green);
+}
+
+.launcher-audit-list article > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.launcher-spin {
+  animation: launcher-spin 900ms linear infinite;
+}
+
+@keyframes launcher-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 1600px) {
+  .launcher-dashboard-grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(360px, .5fr);
+  }
+
+  .launcher-profile-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .launcher-dashboard-grid,
+  .launcher-designer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .launcher-app-row {
+    grid-template-columns: 34px 1fr 1fr;
+  }
+
+  .launcher-app-row label:nth-of-type(3),
+  .launcher-visibility,
+  .launcher-row-actions {
+    grid-column: span 1;
+  }
+
+  .launcher-profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .launcher-enterprise-strip,
+  .launcher-form-grid,
+  .launcher-workflow,
+  .launcher-profile-grid,
+  .launcher-app-row {
+    grid-template-columns: 1fr;
+  }
+
+  .launcher-enterprise-strip > div {
+    min-height: 46px;
+  }
+
+  .launcher-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .launcher-wide,
+  .launcher-app-row label:nth-of-type(3),
+  .launcher-visibility,
+  .launcher-row-actions {
+    grid-column: auto;
+  }
+
+  .launcher-app-order {
+    width: 100%;
+    height: 30px;
+  }
+
+  .launcher-row-actions button {
+    flex: 1;
+  }
+
+  .launcher-phone-screen {
+    min-height: 430px;
+  }
+}

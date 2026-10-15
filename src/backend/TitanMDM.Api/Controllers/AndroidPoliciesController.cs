@@ -1,22 +1,27 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Android.Policies;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ServiceFilter(typeof(RbacAuditFilter))]
 [Route("api/policies/{policyId:guid}/android")]
 public sealed class AndroidPoliciesController : ControllerBase
 {
     private readonly IAndroidPolicyPublisher _publisher;
     private readonly IAndroidPolicyAssignmentService _assignmentService;
+    private readonly IScopeAccessService _scopeAccessService;
     private readonly ILogger<AndroidPoliciesController> _logger;
 
     public AndroidPoliciesController(
         IAndroidPolicyPublisher publisher,
         IAndroidPolicyAssignmentService assignmentService,
+        IScopeAccessService scopeAccessService,
         ILogger<AndroidPoliciesController> logger)
     {
         _publisher =
@@ -26,6 +31,10 @@ public sealed class AndroidPoliciesController : ControllerBase
         _assignmentService =
             assignmentService ??
             throw new ArgumentNullException(nameof(assignmentService));
+
+        _scopeAccessService =
+            scopeAccessService ??
+            throw new ArgumentNullException(nameof(scopeAccessService));
 
         _logger =
             logger ??
@@ -37,6 +46,8 @@ public sealed class AndroidPoliciesController : ControllerBase
     // ============================================================
 
     [HttpPost("publish")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.Manage)]
     public async Task<IActionResult> Publish(
         Guid policyId,
         CancellationToken cancellationToken)
@@ -94,6 +105,9 @@ public sealed class AndroidPoliciesController : ControllerBase
     }
 
     [HttpGet("publication")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
     public async Task<IActionResult> GetPublication(
         Guid policyId,
         CancellationToken cancellationToken)
@@ -147,6 +161,9 @@ public sealed class AndroidPoliciesController : ControllerBase
     }
 
     [HttpGet("verify")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
     public async Task<IActionResult> Verify(
         Guid policyId,
         CancellationToken cancellationToken)
@@ -202,6 +219,8 @@ public sealed class AndroidPoliciesController : ControllerBase
     // ============================================================
 
     [HttpPost("assign")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.Manage)]
     public async Task<IActionResult> Assign(
         Guid policyId,
         [FromBody] AssignAndroidPolicyRequest request,
@@ -224,11 +243,17 @@ public sealed class AndroidPoliciesController : ControllerBase
 
         try
         {
+            var accessibleSiteIds =
+                await ResolveSiteScopeAsync(
+                    organizationId.Value,
+                    cancellationToken);
+
             var result =
                 await _assignmentService.AssignAsync(
                     organizationId.Value,
                     policyId,
                     request.DeviceId,
+                    accessibleSiteIds,
                     cancellationToken);
 
             return Ok(result);
@@ -272,7 +297,68 @@ public sealed class AndroidPoliciesController : ControllerBase
         }
     }
 
+    [HttpGet("assignments")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public async Task<IActionResult> GetAssignments(
+        Guid policyId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25,
+        CancellationToken cancellationToken = default)
+    {
+        var organizationId = GetOrganizationId();
+
+        if (organizationId is null)
+            return OrganizationNotFound();
+
+        try
+        {
+            var accessibleSiteIds =
+                await ResolveSiteScopeAsync(
+                    organizationId.Value,
+                    cancellationToken);
+
+            var result =
+                await _assignmentService.GetPageAsync(
+                    organizationId.Value,
+                    policyId,
+                    search,
+                    accessibleSiteIds,
+                    page,
+                    pageSize,
+                    cancellationToken);
+
+            return Ok(result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Android assignment page query failed. OrganizationId={OrganizationId}, PolicyId={PolicyId}",
+                organizationId,
+                policyId);
+
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new
+                {
+                    code = "ANDROID_POLICY_ASSIGNMENT_PAGE_FAILED",
+                    message =
+                        "No fue posible consultar los despliegues Android."
+                });
+        }
+    }
+
     [HttpGet("assignments/{deviceId:guid}")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
     public async Task<IActionResult> GetAssignment(
         Guid policyId,
         Guid deviceId,
@@ -285,11 +371,17 @@ public sealed class AndroidPoliciesController : ControllerBase
 
         try
         {
+            var accessibleSiteIds =
+                await ResolveSiteScopeAsync(
+                    organizationId.Value,
+                    cancellationToken);
+
             var result =
                 await _assignmentService.GetAsync(
                     organizationId.Value,
                     policyId,
                     deviceId,
+                    accessibleSiteIds,
                     cancellationToken);
 
             if (result is null)
@@ -342,6 +434,57 @@ public sealed class AndroidPoliciesController : ControllerBase
             out var organizationId)
             ? organizationId
             : null;
+    }
+
+    private Guid? GetUserId()
+    {
+        var value =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        return Guid.TryParse(
+            value,
+            out var userId)
+            ? userId
+            : null;
+    }
+
+    private async Task<IReadOnlyCollection<Guid>?>
+        ResolveSiteScopeAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken)
+    {
+        var userId =
+            GetUserId();
+
+        /*
+         * Sin identidad de usuario no es posible evaluar el
+         * ámbito de sitios; se mantiene el alcance
+         * organizacional para no bloquear flujos ya autorizados.
+         */
+        if (userId is null)
+        {
+            return null;
+        }
+
+        var organizationWide =
+            await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    organizationId,
+                    userId.Value,
+                    cancellationToken);
+
+        if (organizationWide)
+        {
+            return null;
+        }
+
+        return await _scopeAccessService
+            .GetAccessibleSiteIdsAsync(
+                organizationId,
+                userId.Value,
+                cancellationToken);
     }
 
     private UnauthorizedObjectResult OrganizationNotFound()

@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.RestrictionsManager
 import android.content.pm.PackageManager
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
@@ -18,7 +19,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import com.titanmdm.agent.BuildConfig
 import com.titanmdm.agent.ui.theme.TitanMDMAndroidAgentTheme
+import java.io.File
 
 /**
  * Punto de entrada HOME del Titan Launcher.
@@ -32,8 +35,8 @@ import com.titanmdm.agent.ui.theme.TitanMDMAndroidAgentTheme
 class TitanLauncherActivity : ComponentActivity() {
 
     private var policy by mutableStateOf(TitanLauncherPolicy())
-    private var adminStatus by mutableStateOf(TitanLauncherAdminStatus.None)
-    private var installedPackages by mutableStateOf<Set<String>>(emptySet())
+    private var homeStatus by mutableStateOf(TitanLauncherHomeStatus.None)
+    private var appStates by mutableStateOf<Map<String, TitanLauncherAppState>>(emptyMap())
 
     private val restrictionsReceiver =
         object : BroadcastReceiver() {
@@ -73,8 +76,8 @@ class TitanLauncherActivity : ComponentActivity() {
             TitanMDMAndroidAgentTheme {
                 TitanLauncherScreen(
                     policy = policy,
-                    adminStatus = adminStatus,
-                    isInstalled = { it in installedPackages },
+                    homeStatus = homeStatus,
+                    appState = { appStates[it] ?: TitanLauncherAppState.Unavailable },
                     iconProvider = ::loadIcon,
                     onLaunch = ::launchApp
                 )
@@ -120,25 +123,125 @@ class TitanLauncherActivity : ComponentActivity() {
     }
 
     private fun refresh() {
-        val newPolicy = TitanLauncherPolicyReader.read(this)
+        val officialRestrictions = readOfficialRestrictions()
+
+        /*
+         * El perfil local de laboratorio sólo se lee en builds debug.
+         * En release `labEnabled` es falso y nunca se toca el archivo.
+         */
+        val labEnabled = BuildConfig.DEBUG
+
+        val labProfileJson =
+            if (labEnabled) readLabProfile() else null
+
+        val deviceManaged = isManagedByDevicePolicy()
+
+        val resolution =
+            TitanLauncherPolicyResolver.resolve(
+                officialRestrictions = officialRestrictions,
+                labProfileJson = labProfileJson,
+                labEnabled = labEnabled,
+                deviceManaged = deviceManaged
+            )
+
+        val newPolicy = resolution.policy
 
         policy = newPolicy
 
-        installedPackages = newPolicy.applications
-            .asSequence()
-            .map { it.packageName }
-            .filter { isInstalled(it) }
-            .toSet()
+        appStates = newPolicy.applications.associate {
+            it.packageName to resolveAppState(it.packageName)
+        }
 
-        adminStatus = readAdminStatus()
+        homeStatus = readHomeStatus()
     }
 
-    private fun isInstalled(packageName: String): Boolean {
+    /**
+     * Restricciones administradas reales publicadas por Android Device
+     * Policy a través de `RestrictionsManager`.
+     */
+    private fun readOfficialRestrictions(): Map<String, String> {
+        val manager =
+            getSystemService(Context.RESTRICTIONS_SERVICE)
+                as? RestrictionsManager
+                ?: return emptyMap()
+
+        val bundle = manager.applicationRestrictions ?: return emptyMap()
+
+        val result = mutableMapOf<String, String>()
+        for (key in bundle.keySet()) {
+            val value = bundle.get(key) ?: continue
+            result[key] = value.toString()
+        }
+        return result
+    }
+
+    /**
+     * Perfil de laboratorio local (sólo debug).
+     *
+     * Prioriza el archivo persistente en almacenamiento interno
+     * (`filesDir/titan_lab_policy.json`), que sobrevive al reinicio del
+     * emulador, y recurre al activo empaquetado en `src/debug/assets`
+     * como perfil inicial.
+     */
+    private fun readLabProfile(): String? {
+        val file = File(
+            filesDir,
+            TitanLauncherPolicyResolver.LAB_PROFILE_FILE_NAME
+        )
+
+        if (file.isFile) {
+            return runCatching { file.readText() }.getOrNull()
+        }
+
+        return runCatching {
+            assets.open(TitanLauncherPolicyResolver.LAB_PROFILE_FILE_NAME)
+                .bufferedReader()
+                .use { it.readText() }
+        }.getOrNull()
+    }
+
+    /**
+     * Verdadero cuando Titan es la app de administración (device/profile
+     * owner). En ese caso el modo laboratorio nunca se activa.
+     */
+    private fun isManagedByDevicePolicy(): Boolean {
+        val manager =
+            getSystemService(Context.DEVICE_POLICY_SERVICE)
+                as? DevicePolicyManager
+                ?: return false
+
         return try {
-            packageManager.getApplicationInfo(packageName, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
+            manager.isDeviceOwnerApp(packageName) ||
+                manager.isProfileOwnerApp(packageName)
+        } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun resolveAppState(packageName: String): TitanLauncherAppState {
+        val applicationInfo = try {
+            packageManager.getApplicationInfo(
+                packageName,
+                PackageManager.MATCH_DISABLED_COMPONENTS
+            )
+        } catch (_: PackageManager.NameNotFoundException) {
+            return TitanLauncherAppState.NotInstalled
+        } catch (_: Exception) {
+            return TitanLauncherAppState.Unavailable
+        }
+
+        if (!applicationInfo.enabled) {
+            return TitanLauncherAppState.Disabled
+        }
+
+        return try {
+            if (packageManager.getLaunchIntentForPackage(packageName) == null) {
+                TitanLauncherAppState.NotLaunchable
+            } else {
+                TitanLauncherAppState.Launchable
+            }
+        } catch (_: Exception) {
+            TitanLauncherAppState.Unavailable
         }
     }
 
@@ -165,42 +268,40 @@ class TitanLauncherActivity : ComponentActivity() {
             return
         }
 
-        val intent =
+        if (resolveAppState(packageName) != TitanLauncherAppState.Launchable) {
+            refresh()
+            return
+        }
+
+        val intent = try {
             packageManager.getLaunchIntentForPackage(packageName) ?: return
+        } catch (_: Exception) {
+            refresh()
+            return
+        }
 
         try {
             startActivity(intent)
         } catch (_: Exception) {
-            // El estado se recalcula al regresar al launcher.
+            refresh()
         }
     }
 
-    private fun readAdminStatus(): TitanLauncherAdminStatus {
-        val manager =
-            getSystemService(Context.DEVICE_POLICY_SERVICE)
-                as? DevicePolicyManager
-                ?: return TitanLauncherAdminStatus.None
+    private fun readHomeStatus(): TitanLauncherHomeStatus {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = try {
+            packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        } catch (_: Exception) {
+            null
+        }
+        val activityInfo = resolved?.activityInfo
+        val resolvedComponent = activityInfo?.let {
+            ComponentName(it.packageName, it.name)
+        }
+        val launcherComponent = ComponentName(this, TitanLauncherActivity::class.java)
 
-        val isDeviceOwner =
-            runCatching { manager.isDeviceOwnerApp(packageName) }
-                .getOrDefault(false)
-
-        val isProfileOwner =
-            runCatching { manager.isProfileOwnerApp(packageName) }
-                .getOrDefault(false)
-
-        val isDedicated =
-            isDeviceOwner &&
-                runCatching {
-                    manager.isLockTaskPermitted(packageName)
-                }.getOrDefault(false)
-
-        return TitanLauncherAdminStatus(
-            isDeviceOwner = isDeviceOwner,
-            isProfileOwner = isProfileOwner,
-            isAdminActive = false,
-            isFullyManaged = isDeviceOwner || isProfileOwner,
-            isDedicated = isDedicated
+        return TitanLauncherHomeStatus(
+            isDefaultHome = resolvedComponent == launcherComponent
         )
     }
 }

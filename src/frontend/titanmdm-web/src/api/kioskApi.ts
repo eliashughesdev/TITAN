@@ -18,47 +18,22 @@ export type KioskMode =
 export interface AndroidKioskApplication {
   packageName: string
   displayName: string
-
-  installType:
-    | 'FORCE_INSTALLED'
-    | 'AVAILABLE'
-    | 'REQUIRED_FOR_SETUP'
-
-  defaultApp: boolean
 }
 
 export interface AndroidKioskConfiguration {
-  titanProfileType:
-    'kiosk'
-
-  kioskMode:
-    KioskMode
-
-  applications:
-    AndroidKioskApplication[]
-
-  systemNavigation: {
-    homeButton: boolean
-    overviewButton: boolean
-    statusBar: boolean
-    notifications: boolean
-  }
+  application: AndroidKioskApplication
 
   deviceRestrictions: {
     factoryResetDisabled: boolean
     safeBootDisabled: boolean
     screenCaptureDisabled: boolean
     usbFileTransferDisabled: boolean
-    outgoingCallsDisabled: boolean
-    smsDisabled: boolean
     bluetoothDisabled: boolean
     cameraDisabled: boolean
   }
 
-  display: {
-    screenTimeoutSeconds: number
-    stayOnWhilePluggedIn: boolean
-  }
+  disableStatusBar: boolean
+  disableKeyguard: boolean
 }
 
 export interface WindowsKioskApplication {
@@ -120,7 +95,7 @@ export interface CreateWindowsKioskProfile {
     WindowsKioskConfiguration
 }
 
-function isKioskPolicy(
+export function isKioskPolicy(
   configurationJson:
     string,
 ): boolean {
@@ -130,140 +105,56 @@ function isKioskPolicy(
         configurationJson,
       )
 
-    return (
-      configuration
-        ?.titanProfileType ===
-      'kiosk'
-    )
+    return configuration?.titanProfileType === 'kiosk'
   } catch {
     return false
   }
 }
 
-function buildAndroidPolicy(
+export function buildAndroidKioskPolicy(
   configuration:
     AndroidKioskConfiguration,
 ) {
-  const applications =
-    configuration
-      .applications
-      .map(
-        application => ({
-          packageName:
-            application.packageName,
-
-          installType:
-            application.installType,
-
-          lockTaskAllowed:
-            true,
-
-          defaultPermissionPolicy:
-            'GRANT',
-        }),
-      )
-
-  const defaultApp =
-    configuration
-      .applications
-      .find(
-        application =>
-          application.defaultApp,
-      )
-
   return {
-    titanProfileType:
-      'kiosk',
-
-    kioskMode:
-      configuration.kioskMode,
-
-    applications,
-
-    persistentPreferredActivities:
-      defaultApp
-        ? [
-            {
-              receiverActivity:
-                `${defaultApp.packageName}/.MainActivity`,
-
-              actions: [
-                'android.intent.action.MAIN',
-              ],
-
-              categories: [
-                'android.intent.category.HOME',
-                'android.intent.category.DEFAULT',
-              ],
-            },
-          ]
-        : [],
-
-    keyguardDisabled:
-      true,
-
-    statusBarDisabled:
-      !configuration
-        .systemNavigation
-        .statusBar,
-
-    screenCaptureDisabled:
-      configuration
-        .deviceRestrictions
-        .screenCaptureDisabled,
-
-    factoryResetDisabled:
-      configuration
-        .deviceRestrictions
-        .factoryResetDisabled,
-
-    safeBootDisabled:
-      configuration
-        .deviceRestrictions
-        .safeBootDisabled,
-
-    usbFileTransferDisabled:
-      configuration
-        .deviceRestrictions
-        .usbFileTransferDisabled,
-
-    outgoingCallsDisabled:
-      configuration
-        .deviceRestrictions
-        .outgoingCallsDisabled,
-
-    smsDisabled:
-      configuration
-        .deviceRestrictions
-        .smsDisabled,
-
-    bluetoothDisabled:
-      configuration
-        .deviceRestrictions
-        .bluetoothDisabled,
-
-    cameraDisabled:
-      configuration
-        .deviceRestrictions
-        .cameraDisabled,
-
-    maximumTimeToLock:
-      configuration
-        .display
-        .screenTimeoutSeconds
-      *
-      1000,
-
-    stayOnPluggedModes:
-      configuration
-        .display
-        .stayOnWhilePluggedIn
-        ? [
-            'AC',
-            'USB',
-            'WIRELESS',
-          ]
-        : [],
+    schemaVersion: 2,
+    titanProfileType: 'kiosk' as const,
+    android: {
+      kiosk: {
+        enabled: true,
+        applicationId:
+          configuration.application.packageName.trim(),
+        disableStatusBar:
+          configuration.disableStatusBar,
+        disableKeyguard:
+          configuration.disableKeyguard,
+      },
+      applications: {
+        playStoreMode: 'WHITELIST' as const,
+        packages: [
+          {
+            packageName:
+              configuration.application.packageName.trim(),
+            label:
+              configuration.application.displayName.trim(),
+            installType: 'KIOSK' as const,
+          },
+        ],
+      },
+      restrictions: {
+        blockFactoryReset:
+          configuration.deviceRestrictions.factoryResetDisabled,
+        blockSafeBoot:
+          configuration.deviceRestrictions.safeBootDisabled,
+        blockScreenCapture:
+          configuration.deviceRestrictions.screenCaptureDisabled,
+        blockUsbFileTransfer:
+          configuration.deviceRestrictions.usbFileTransferDisabled,
+        blockBluetooth:
+          configuration.deviceRestrictions.bluetoothDisabled,
+        blockCamera:
+          configuration.deviceRestrictions.cameraDisabled,
+      },
+    },
   }
 }
 
@@ -360,7 +251,7 @@ export const kioskApi = {
 
         configurationJson:
           JSON.stringify(
-            buildAndroidPolicy(
+            buildAndroidKioskPolicy(
               request.configuration,
             ),
           ),

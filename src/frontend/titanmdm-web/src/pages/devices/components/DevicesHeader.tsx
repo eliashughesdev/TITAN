@@ -10,6 +10,9 @@ interface Props {
   isAndroidWorkspace:
     boolean
 
+  canSyncAndroid:
+    boolean
+
   isLoading:
     boolean
 
@@ -28,6 +31,7 @@ export function DevicesHeader({
   description,
 
   isAndroidWorkspace,
+  canSyncAndroid,
 
   isLoading,
   isSyncingAndroid,
@@ -76,7 +80,9 @@ export function DevicesHeader({
           Actualizar
         </button>
 
-        {isAndroidWorkspace && (
+        {isAndroidWorkspace
+          && canSyncAndroid
+          && (
           <button
             type="button"
             className="devices-android-sync-button"

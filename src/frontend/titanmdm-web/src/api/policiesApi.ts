@@ -149,6 +149,40 @@ export interface AndroidPolicyAssignment {
   errorMessage: string | null
 }
 
+export interface AndroidPolicyAssignmentDevice {
+  deviceId: string
+  deviceName: string
+  serialNumber: string
+  manufacturer: string | null
+  model: string | null
+  deviceStatus: string
+  complianceStatus: string
+  isManaged: boolean
+
+  assignmentId: string | null
+  policyVersion: number | null
+  assignmentStatus: string
+
+  assignedAtUtc: string | null
+  updatedAtUtc: string | null
+  appliedAtUtc: string | null
+
+  appliedPolicyName: string | null
+  appliedPolicyVersion: number | null
+  appliedPolicyState: string | null
+  lastPolicySyncTimeUtc: string | null
+
+  errorMessage: string | null
+}
+
+export interface AndroidPolicyAssignmentPage {
+  items: AndroidPolicyAssignmentDevice[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 // ============================================================
 // POLICIES API
 // ============================================================
@@ -362,21 +396,46 @@ async getAndroidAssignment(
       error !== null &&
       'response' in error
     ) {
-      const status =
-        (
-          error as {
-            response?: {
-              status?: number
-            }
-          }
-        ).response?.status
+      const status = (error as {
+        response?: { status?: number }
+      }).response?.status
 
       if (status === 404) {
         return null
       }
     }
-
     throw error
   }
+},
+
+async getAndroidAssignmentsPage(
+  policyId: string,
+  parameters: {
+    search?: string
+    page?: number
+    pageSize?: number
+  } = {},
+): Promise<AndroidPolicyAssignmentPage> {
+  const response =
+    await apiClient.get<AndroidPolicyAssignmentPage>(
+      `/policies/${policyId}/android/assignments`,
+      {
+        params: {
+          search:
+            parameters.search
+            || undefined,
+
+          page:
+            parameters.page
+            ?? 1,
+
+          pageSize:
+            parameters.pageSize
+            ?? 25,
+        },
+      },
+    )
+
+  return response.data
 },
 }

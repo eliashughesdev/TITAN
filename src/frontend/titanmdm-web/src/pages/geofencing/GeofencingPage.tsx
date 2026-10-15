@@ -209,10 +209,10 @@ export function GeofencingPage() {
 
   async function createGeofence() {
     const parsedLatitude =
-      Number(latitude)
+      latitude.trim() === '' ? NaN : Number(latitude)
 
     const parsedLongitude =
-      Number(longitude)
+      longitude.trim() === '' ? NaN : Number(longitude)
 
     const parsedRadius =
       Number(radius)

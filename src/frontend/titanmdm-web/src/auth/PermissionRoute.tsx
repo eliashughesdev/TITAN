@@ -115,6 +115,13 @@ function resolveRequiredWorkspacePermission(
 
   if (
     pathname ===
+      '/android'
+    ||
+    pathname.startsWith(
+      '/android/',
+    )
+    ||
+    pathname ===
       '/kiosk'
     ||
     pathname.startsWith(

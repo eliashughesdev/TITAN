@@ -38,6 +38,7 @@ public sealed class AndroidPolicyAssignmentService
         Guid organizationId,
         Guid policyId,
         Guid deviceId,
+        IReadOnlyCollection<Guid>? accessibleSiteIds = null,
         CancellationToken cancellationToken = default)
     {
         ValidateIdentifiers(
@@ -99,6 +100,10 @@ public sealed class AndroidPolicyAssignmentService
                     cancellationToken)
             ?? throw new InvalidOperationException(
                 "El dispositivo TitanMDM no existe.");
+
+        EnsureDeviceInScope(
+            accessibleSiteIds,
+            device.SiteId);
 
         var androidDevice =
             await _dbContext.AndroidDevices
@@ -249,6 +254,7 @@ public sealed class AndroidPolicyAssignmentService
         Guid organizationId,
         Guid policyId,
         Guid deviceId,
+        IReadOnlyCollection<Guid>? accessibleSiteIds = null,
         CancellationToken cancellationToken = default)
     {
         if (organizationId == Guid.Empty ||
@@ -302,6 +308,24 @@ public sealed class AndroidPolicyAssignmentService
             return null;
         }
 
+        var deviceSiteId =
+            await _dbContext.Devices
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId == organizationId &&
+                        x.Id == deviceId)
+                .Select(x => x.SiteId)
+                .SingleOrDefaultAsync(
+                    cancellationToken);
+
+        if (!IsInScope(
+                accessibleSiteIds,
+                deviceSiteId))
+        {
+            return null;
+        }
+
         var publication =
             await _dbContext.AndroidPolicyPublications
                 .AsNoTracking()
@@ -325,6 +349,164 @@ public sealed class AndroidPolicyAssignmentService
             androidDevice,
             publication.GooglePolicyName,
             googleDevice: null);
+    }
+
+    public async Task<AndroidPolicyAssignmentPageDto> GetPageAsync(
+        Guid organizationId,
+        Guid policyId,
+        string? search,
+        IReadOnlyCollection<Guid>? accessibleSiteIds = null,
+        int page = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default)
+    {
+        if (page < 1)
+        {
+            page = 1;
+        }
+
+        pageSize =
+            Math.Clamp(pageSize, 1, 200);
+
+        if (organizationId == Guid.Empty ||
+            policyId == Guid.Empty)
+        {
+            return new AndroidPolicyAssignmentPageDto(
+                Array.Empty<AndroidPolicyAssignmentDeviceDto>(),
+                0,
+                page,
+                pageSize,
+                0);
+        }
+
+        var query =
+            from device in
+                _dbContext.Devices.AsNoTracking()
+            join android in
+                _dbContext.AndroidDevices.AsNoTracking()
+                on device.Id equals android.DeviceId
+            where
+                device.OrganizationId == organizationId &&
+                android.OrganizationId == organizationId &&
+                !device.IsDeleted &&
+                device.Platform == DevicePlatform.Android
+            select new
+            {
+                Device = device,
+                Android = android
+            };
+
+        if (accessibleSiteIds is not null)
+        {
+            var allowedSiteIds =
+                accessibleSiteIds
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToArray();
+
+            query = allowedSiteIds.Length == 0
+                ? query.Where(_ => false)
+                : query.Where(
+                    x =>
+                        x.Device.SiteId.HasValue &&
+                        allowedSiteIds.Contains(
+                            x.Device.SiteId.Value));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term =
+                search.Trim();
+
+            if (term.Length > 200)
+            {
+                term = term[..200];
+            }
+
+            query = query.Where(
+                x =>
+                    x.Device.DeviceName.Contains(term) ||
+                    x.Device.SerialNumber.Contains(term) ||
+                    (x.Device.Manufacturer != null &&
+                        x.Device.Manufacturer.Contains(term)) ||
+                    (x.Device.Model != null &&
+                        x.Device.Model.Contains(term)));
+        }
+
+        var totalCount =
+            await query.CountAsync(cancellationToken);
+
+        var rows =
+            await query
+                .OrderBy(x => x.Device.DeviceName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new
+                {
+                    x.Device,
+                    x.Android,
+                    Assignment =
+                        _dbContext.DevicePolicyAssignments
+                            .AsNoTracking()
+                            .Where(
+                                assignment =>
+                                    assignment.OrganizationId ==
+                                        organizationId &&
+                                    assignment.PolicyId ==
+                                        policyId &&
+                                    assignment.DeviceId ==
+                                        x.Device.Id)
+                            .OrderByDescending(
+                                assignment =>
+                                    assignment.UpdatedAtUtc)
+                            .FirstOrDefault()
+                })
+                .ToListAsync(cancellationToken);
+
+        var items =
+            rows
+                .Select(
+                    row =>
+                    {
+                        var assignment =
+                            row.Assignment;
+
+                        return new AndroidPolicyAssignmentDeviceDto(
+                            row.Device.Id,
+                            row.Device.DeviceName,
+                            row.Device.SerialNumber,
+                            row.Device.Manufacturer,
+                            row.Device.Model,
+                            row.Device.Status.ToString(),
+                            row.Device.ComplianceStatus.ToString(),
+                            row.Device.IsManaged,
+                            assignment?.Id,
+                            assignment?.PolicyVersion,
+                            assignment?.Status.ToString() ??
+                                "NotAssigned",
+                            assignment?.AssignedAtUtc,
+                            assignment?.UpdatedAtUtc,
+                            assignment?.AppliedAtUtc,
+                            row.Android.AppliedPolicyName,
+                            row.Android.AppliedPolicyVersion,
+                            row.Android.AppliedPolicyState,
+                            row.Android.LastPolicySyncTimeUtc,
+                            assignment?.ErrorMessage);
+                    })
+                .ToArray();
+
+        var totalPages =
+            totalCount == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalCount / (double)pageSize);
+
+        return new AndroidPolicyAssignmentPageDto(
+            items,
+            totalCount,
+            page,
+            pageSize,
+            totalPages);
     }
 
     private static AndroidPolicyAssignmentDto MapAssignment(
@@ -359,6 +541,44 @@ public sealed class AndroidPolicyAssignmentService
                 androidDevice.AppliedPolicyState,
             androidDevice.LastPolicySyncTimeUtc,
             assignment.ErrorMessage);
+    }
+
+    private static void EnsureDeviceInScope(
+        IReadOnlyCollection<Guid>? accessibleSiteIds,
+        Guid? deviceSiteId)
+    {
+        if (IsInScope(
+                accessibleSiteIds,
+                deviceSiteId))
+        {
+            return;
+        }
+
+        /*
+         * El llamador solo puede operar sobre dispositivos
+         * dentro de su ámbito de sitios. La falta de permiso se
+         * comunica igual que un dispositivo inexistente para no
+         * filtrar la existencia de dispositivos de otros sitios.
+         */
+        throw new InvalidOperationException(
+            "El dispositivo TitanMDM no existe.");
+    }
+
+    private static bool IsInScope(
+        IReadOnlyCollection<Guid>? accessibleSiteIds,
+        Guid? deviceSiteId)
+    {
+        /*
+         * null = ámbito organizacional (sin restricción de sitio).
+         * Conjunto explícito = solo los sitios autorizados.
+         */
+        if (accessibleSiteIds is null)
+        {
+            return true;
+        }
+
+        return deviceSiteId is Guid siteId &&
+            accessibleSiteIds.Contains(siteId);
     }
 
     private static void ValidateIdentifiers(

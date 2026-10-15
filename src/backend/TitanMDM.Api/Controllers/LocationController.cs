@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Commands;
 using TitanMDM.Application.Location;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -105,6 +107,8 @@ public sealed class LocationController
     }
 
     [HttpPost("geofences")]
+    [RequireAnyPermission(
+        TitanMDM.Application.Security.PermissionCodes.Geofencing.Manage)]
     public async Task<IActionResult> CreateGeofence(
         CreateGeofenceRequest request,
         CancellationToken cancellationToken)
@@ -122,6 +126,8 @@ public sealed class LocationController
     }
 
     [HttpPost("geofences/{geofenceId:guid}/devices")]
+    [RequireAnyPermission(
+        TitanMDM.Application.Security.PermissionCodes.Geofencing.Manage)]
     public async Task<IActionResult> Assign(
         Guid geofenceId,
         AssignGeofenceDevicesRequest request,
@@ -142,6 +148,8 @@ public sealed class LocationController
     }
 
     [HttpDelete("geofences/{geofenceId:guid}")]
+    [RequireAnyPermission(
+        TitanMDM.Application.Security.PermissionCodes.Geofencing.Manage)]
     public async Task<IActionResult> Delete(
         Guid geofenceId,
         CancellationToken cancellationToken)

@@ -67,6 +67,12 @@ export const Permissions = {
     manage: 'geofencing.manage',
   },
 
+  androidEnterprise: {
+    view: 'android.enterprise.view',
+    manage: 'android.enterprise.manage',
+    actions: 'android.enterprise.actions',
+  },
+
   remote: {
     view: 'remote.view',
     manage: 'remote.manage',

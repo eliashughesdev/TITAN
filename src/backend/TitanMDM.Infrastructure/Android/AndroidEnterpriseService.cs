@@ -367,6 +367,14 @@ public sealed class AndroidEnterpriseService
                 "Android Enterprise todavía no está conectado.");
         }
 
+        var googlePolicyName =
+            await ValidateEnrollmentPolicyAsync(
+            organizationId,
+            configuration.EnterpriseName,
+            mode,
+            request.PolicyId,
+            cancellationToken);
+
         var expiresAtUtc =
             DateTime.UtcNow.AddMinutes(
                 request.ExpirationMinutes);
@@ -376,6 +384,13 @@ public sealed class AndroidEnterpriseService
             ["duration"] =
                 $"{request.ExpirationMinutes * 60}s"
         };
+
+        if (!string.IsNullOrWhiteSpace(
+                googlePolicyName))
+        {
+            body["policyName"] =
+                googlePolicyName;
+        }
 
         switch (mode)
         {
@@ -541,6 +556,310 @@ public sealed class AndroidEnterpriseService
             cancellationToken);
 
         return true;
+    }
+
+    // ============================================================
+    // ANDROID AUDIT QUERY
+    // ============================================================
+
+    /*
+     * Los eventos administrativos de Android Enterprise son los
+     * escritos por RbacAuditFilter (RBAC.Android*) y por las
+     * acciones remotas (Android.RemoteAction*).
+     *
+     * La consulta nunca sale de la organización autenticada y se
+     * pagina en servidor para no cargar flotillas completas.
+     */
+    public async Task<AndroidAuditPageDto>
+        GetAuditPageAsync(
+            Guid organizationId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(
+            organizationId);
+
+        var normalizedPage =
+            Math.Max(page, 1);
+
+        var normalizedPageSize =
+            Math.Clamp(pageSize, 1, 100);
+
+        var query =
+            _dbContext
+                .AdministrativeAuditEvents
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId &&
+                        (x.Action.StartsWith(
+                             "Android.") ||
+                         x.Action.StartsWith(
+                             "RBAC.Android")));
+
+        var term =
+            search?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            query =
+                query.Where(
+                    x =>
+                        x.Action.Contains(term) ||
+                        x.TargetType.Contains(term) ||
+                        (x.TargetId != null &&
+                         x.TargetId.Contains(term)) ||
+                        x.Result.Contains(term));
+        }
+
+        var totalCount =
+            await query
+                .CountAsync(
+                    cancellationToken);
+
+        var rows =
+            await query
+                .OrderByDescending(
+                    x =>
+                        x.CreatedAtUtc)
+                .Skip(
+                    (normalizedPage - 1) *
+                    normalizedPageSize)
+                .Take(normalizedPageSize)
+                .ToListAsync(
+                    cancellationToken);
+
+        var actors =
+            await LoadAuditActorsAsync(
+                rows,
+                cancellationToken);
+
+        var items =
+            rows
+                .Select(
+                    x =>
+                    {
+                        var actor =
+                            x.ActorUserId.HasValue &&
+                            actors.TryGetValue(
+                                x.ActorUserId.Value,
+                                out var resolved)
+                                ? resolved
+                                : (
+                                    Name:
+                                        "Usuario desconocido",
+                                    Email: (string?)null);
+
+                        return new AndroidAuditEventDto(
+                            x.Id,
+                            x.Action,
+                            x.TargetType,
+                            x.TargetId,
+                            x.Result,
+                            actor.Name,
+                            actor.Email,
+                            x.CorrelationId,
+                            x.IpAddress,
+                            x.CreatedAtUtc);
+                    })
+                .ToList();
+
+        return new AndroidAuditPageDto(
+            items,
+            totalCount,
+            normalizedPage,
+            normalizedPageSize,
+            totalCount == 0
+                ? 0
+                : (int)Math.Ceiling(
+                    totalCount /
+                    (double)normalizedPageSize));
+    }
+
+    private async Task<
+        IReadOnlyDictionary<
+            Guid,
+            (string Name, string? Email)>>
+        LoadAuditActorsAsync(
+        IReadOnlyCollection<
+            AdministrativeAuditEvent>
+            rows,
+            CancellationToken cancellationToken)
+    {
+        var actorIds =
+            rows
+                .Select(x => x.ActorUserId)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .Distinct()
+                .ToArray();
+
+        var result =
+            new Dictionary<
+                Guid,
+                (string Name, string? Email)>();
+
+        if (actorIds.Length == 0)
+        {
+            return result;
+        }
+
+        var users =
+            await _dbContext
+                .Users
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        actorIds.Contains(x.Id))
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.Id,
+                            x.FirstName,
+                            x.LastName,
+                            x.Email
+                        })
+                .ToListAsync(
+                    cancellationToken);
+
+        foreach (var user in users)
+        {
+            result[user.Id] =
+                (
+                    string.Join(
+                        ' ',
+                        new[]
+                        {
+                            user.FirstName,
+                            user.LastName
+                        }
+                        .Where(
+                            part =>
+                                !string.IsNullOrWhiteSpace(
+                                    part)))
+                        .Trim(),
+                    user.Email);
+        }
+
+        return result;
+    }
+
+    // ============================================================
+    // ENROLLMENT POLICY VALIDATION
+    // ============================================================
+
+    private async Task<string?> ValidateEnrollmentPolicyAsync(
+        Guid organizationId,
+        string enterpriseName,
+        AndroidEnrollmentMode mode,
+        Guid? policyId,
+        CancellationToken cancellationToken)
+    {
+        /*
+         * Un enrollment token solo puede emitirse para una
+         * política Android que pertenezca a la organización y
+         * que YA esté publicada en Google Android Management API.
+         *
+         * Esto evita provisionar dispositivos contra políticas
+         * inexistentes, de otra organización, de otra plataforma
+         * o de la versión actual sin publicar.
+         */
+        if (policyId is null ||
+            policyId.Value == Guid.Empty)
+        {
+            if (mode is
+                AndroidEnrollmentMode.FullyManaged or
+                AndroidEnrollmentMode.Dedicated)
+            {
+                throw new InvalidOperationException(
+                    "Debe seleccionar una política Android publicada para el aprovisionamiento corporativo.");
+            }
+
+            return null;
+        }
+
+        var policy =
+            await _dbContext
+                .Policies
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId &&
+                        x.Id == policyId.Value,
+                    cancellationToken);
+
+        if (policy is null)
+        {
+            throw new InvalidOperationException(
+                "La política Android indicada no existe en la organización.");
+        }
+
+        if (policy.Platform !=
+            PolicyPlatform.Android)
+        {
+            throw new InvalidOperationException(
+                "La política indicada no pertenece a Android.");
+        }
+
+        var publication =
+            await _dbContext
+                .AndroidPolicyPublications
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId &&
+                        x.PolicyId ==
+                            policyId.Value &&
+                        x.PolicyVersion ==
+                            policy.CurrentVersion,
+                    cancellationToken);
+
+        if (publication is null)
+        {
+            throw new InvalidOperationException(
+                "La versión actual de la política todavía no ha sido publicada en Android Enterprise.");
+        }
+
+        if (publication.Status !=
+            AndroidPolicyPublicationStatus.Published)
+        {
+            throw new InvalidOperationException(
+                $"La publicación de la política no está disponible (estado {publication.Status}).");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                publication.GooglePolicyName))
+        {
+            throw new InvalidOperationException(
+                "La publicación Android no contiene el nombre de política de Google.");
+        }
+
+        /*
+         * La política publicada debe pertenecer a la MISMA
+         * empresa Android Enterprise activa de la organización.
+         * Google devuelve nombres con el patrón
+         *   enterprises/{enterpriseId}/policies/{policyId}
+         * por lo que validar el prefijo evita provisionar un
+         * dispositivo contra una política de otra empresa.
+         */
+        var expectedPrefix =
+            $"{enterpriseName.TrimEnd('/')}/policies/";
+
+        if (!publication.GooglePolicyName.StartsWith(
+                expectedPrefix,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "La política publicada no pertenece a la empresa Android Enterprise activa.");
+        }
+
+        return publication.GooglePolicyName;
     }
 
     // ============================================================

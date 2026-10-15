@@ -23,7 +23,11 @@ export function KioskPlatformSelector({
   onChange,
 }: Props) {
   return (
-    <div className="kiosk-platform-tabs">
+    <div
+      className="kiosk-platform-tabs"
+      role="tablist"
+      aria-label="Plataforma de kiosk"
+    >
       <button
         type="button"
         className={
@@ -32,6 +36,8 @@ export function KioskPlatformSelector({
             ? 'active'
             : ''
         }
+        role="tab"
+        aria-selected={value === 'Windows'}
         onClick={() =>
           onChange(
             'Windows',
@@ -59,6 +65,8 @@ export function KioskPlatformSelector({
             ? 'active'
             : ''
         }
+        role="tab"
+        aria-selected={value === 'Android'}
         onClick={() =>
           onChange(
             'Android',

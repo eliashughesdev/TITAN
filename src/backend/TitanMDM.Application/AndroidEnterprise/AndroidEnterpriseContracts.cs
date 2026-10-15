@@ -40,3 +40,33 @@ public sealed record CreatedAndroidEnrollmentDto(
     Guid? PolicyId,
     DateTime ExpiresAtUtc,
     DateTime CreatedAtUtc);
+
+public sealed record AndroidAuditEventDto(
+    Guid Id,
+    string Action,
+    string TargetType,
+    string? TargetId,
+    string Result,
+    string ActorName,
+    string? ActorEmail,
+    string? CorrelationId,
+    string? IpAddress,
+    DateTime CreatedAtUtc);
+
+public sealed record AndroidAuditPageDto(
+    IReadOnlyCollection<AndroidAuditEventDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize,
+    int TotalPages);
+
+public sealed record CreateAndroidWebTokenRequest(
+    string? IframeOrigin = null,
+    string? ReturnUrl = null,
+    string? Target = null);
+
+public sealed record AndroidWebTokenDto(
+    string Token,
+    string Url,
+    DateTime? ExpirationTimeUtc,
+    DateTime CreatedAtUtc);
