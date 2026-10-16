@@ -55,6 +55,16 @@ public sealed class AndroidManagementOptions
 
     public bool EnableKioskManagement { get; set; } = true;
 
+    /// <summary>
+    /// Hosts HTTPS autorizados para fondo y logotipo del launcher.
+    /// Vacío permite cualquier HTTPS público ya validado.
+    /// </summary>
+    public string[] LauncherResourceHosts { get; set; } = [];
+
+    public string LauncherAssetRoot { get; set; } = string.Empty;
+
+    public string LauncherAssetBaseUrl { get; set; } = string.Empty;
+
     public bool EnableComplianceSynchronization { get; set; } = true;
 
     /// <summary>

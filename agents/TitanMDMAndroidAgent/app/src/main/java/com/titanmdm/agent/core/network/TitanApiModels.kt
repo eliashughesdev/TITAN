@@ -117,7 +117,25 @@ data class HeartbeatRequest(
     val agentVersion: String? = null,
 
     @SerialName("operatingSystemVersion")
-    val operatingSystemVersion: String? = null
+    val operatingSystemVersion: String? = null,
+
+    @SerialName("launcherProfileId")
+    val launcherProfileId: String? = null,
+
+    @SerialName("launcherPublicationId")
+    val launcherPublicationId: String? = null,
+
+    @SerialName("launcherConfigVersion")
+    val launcherConfigVersion: Int? = null,
+
+    @SerialName("launcherAppliedAtUtc")
+    val launcherAppliedAtUtc: String? = null,
+
+    @SerialName("launcherSyncStatus")
+    val launcherSyncStatus: String? = null,
+
+    @SerialName("launcherRestrictionsRead")
+    val launcherRestrictionsRead: Boolean? = null
 )
 
 

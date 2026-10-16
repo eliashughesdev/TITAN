@@ -192,7 +192,7 @@ public sealed class AndroidPolicyCompilerLauncherTests
     [Theory]
     [InlineData("0")]
     [InlineData("-1")]
-    [InlineData("2")]
+    [InlineData("3")]
     [InlineData("\"1\"")]
     [InlineData("1.5")]
     [InlineData("null")]
@@ -393,6 +393,157 @@ public sealed class AndroidPolicyCompilerLauncherTests
 
             Assert.False(result.IsValid);
         }
+    }
+
+    [Fact]
+    public void Launcher_CompilesPreviousProfileWithoutNewFields()
+    {
+        const string configuration =
+            """
+            {
+              "android": {
+                "launcher": {
+                  "enabled": true,
+                  "schemaVersion": 1,
+                  "companyName": "Legado"
+                }
+              }
+            }
+            """;
+
+        var result = _compiler.Compile(configuration);
+
+        Assert.True(result.IsValid);
+        var managed = GetLauncherManagedConfiguration(result);
+        Assert.Equal(1, managed["titan_launcher_schema_version"]!.GetValue<int>());
+        Assert.Equal(4, managed["titan_grid_columns"]!.GetValue<int>());
+        Assert.False(managed.ContainsKey("titan_wallpaper_url"));
+    }
+
+    [Fact]
+    public void Launcher_EmitsBrandingResourcesAndPublicationStamp()
+    {
+        const string configuration =
+            """
+            {
+              "android": {
+                "launcher": {
+                  "enabled": true,
+                  "schemaVersion": 2,
+                  "wallpaperUrl": "https://cdn.empresa.com/launcher/fondo.webp",
+                  "logoUrl": "https://cdn.empresa.com/launcher/logo.png",
+                  "gridColumns": 5
+                }
+              }
+            }
+            """;
+
+        var result = _compiler.Compile(configuration);
+        Assert.True(result.IsValid);
+
+        var managed = GetLauncherManagedConfiguration(result);
+        Assert.Equal(2, managed["titan_launcher_schema_version"]!.GetValue<int>());
+        Assert.Equal(5, managed["titan_grid_columns"]!.GetValue<int>());
+        Assert.Equal(
+            "https://cdn.empresa.com/launcher/fondo.webp",
+            managed["titan_wallpaper_url"]!.GetValue<string>());
+
+        var profileId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var publicationId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        AndroidPolicyCompiler.StampLauncherPublication(
+            result.GooglePolicy!,
+            profileId,
+            publicationId,
+            7,
+            new DateTime(2026, 10, 16, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(profileId.ToString("D"), managed["titan_profile_id"]!.GetValue<string>());
+        Assert.Equal(publicationId.ToString("D"), managed["titan_publication_id"]!.GetValue<string>());
+        Assert.Equal(7, managed["titan_config_version"]!.GetValue<int>());
+        Assert.DoesNotContain("base64", result.GooglePolicy!.ToJsonString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("http://cdn.empresa.com/fondo.png")]
+    [InlineData("file:///tmp/fondo.png")]
+    [InlineData("https://10.0.0.8/fondo.png")]
+    [InlineData("https://127.0.0.1/logo.png")]
+    [InlineData("https://user:pass@cdn.empresa.com/logo.png")]
+    [InlineData("data:image/png;base64,AAAA")]
+    public void Launcher_RejectsUnsafeResourceUrls(string url)
+    {
+        var configuration = new JsonObject
+        {
+            ["android"] = new JsonObject
+            {
+                ["launcher"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["wallpaperUrl"] = url
+                }
+            }
+        };
+
+        var result = _compiler.Compile(configuration.ToJsonString());
+        Assert.False(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(6)]
+    public void Launcher_RejectsGridColumnsOutOfRange(int columns)
+    {
+        var configuration = new JsonObject
+        {
+            ["android"] = new JsonObject
+            {
+                ["launcher"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["gridColumns"] = columns
+                }
+            }
+        };
+
+        var result = _compiler.Compile(configuration.ToJsonString());
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("gridColumns", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Launcher_AcceptsPrivateAssetTokenAndRejectsThemeOutOfRange()
+    {
+        var valid = new JsonObject
+        {
+            ["android"] = new JsonObject
+            {
+                ["launcher"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["schemaVersion"] = 2,
+                    ["wallpaperUrl"] = "titan-asset:11111111-1111-1111-1111-111111111111",
+                    ["iconSize"] = 64
+                }
+            }
+        };
+        var compiled = _compiler.Compile(valid.ToJsonString());
+        Assert.True(compiled.IsValid);
+        Assert.Equal(
+            "titan-asset:11111111-1111-1111-1111-111111111111",
+            GetLauncherManagedConfiguration(compiled)["titan_wallpaper_url"]!.GetValue<string>());
+
+        var invalid = new JsonObject
+        {
+            ["android"] = new JsonObject
+            {
+                ["launcher"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["iconSize"] = 10
+                }
+            }
+        };
+        Assert.False(_compiler.Compile(invalid.ToJsonString()).IsValid);
     }
 
     [Fact]

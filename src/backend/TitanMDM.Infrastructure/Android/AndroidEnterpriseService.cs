@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TitanMDM.Application.AndroidEnterprise;
@@ -933,6 +933,83 @@ public sealed class AndroidEnterpriseService
     // VALIDATION
     // ============================================================
 
+    // AE-PLAY: token efimero para Managed Google Play.
+    public async Task<AndroidWebTokenDto> CreateManagedPlayWebTokenAsync(
+        Guid organizationId,
+        Guid userId,
+        CreateAndroidWebTokenRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        if (userId == Guid.Empty)
+            throw new ArgumentException("UserId requerido.", nameof(userId));
+
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.IframeOrigin))
+            throw new ArgumentException("Origen HTTPS requerido.");
+
+        if (!Uri.TryCreate(request.IframeOrigin, UriKind.Absolute, out var origin) ||
+            origin.Scheme != Uri.UriSchemeHttps ||
+            !string.IsNullOrEmpty(origin.UserInfo) ||
+            !string.IsNullOrEmpty(origin.Query) ||
+            !string.IsNullOrEmpty(origin.Fragment) ||
+            origin.AbsolutePath != "/")
+        {
+            throw new ArgumentException("El origen del iframe debe ser HTTPS y no contener ruta, consulta ni fragmento.");
+        }
+
+        var config = await _dbContext.AndroidEnterpriseConfigurations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (config is null ||
+            config.Status != AndroidEnterpriseStatus.Active ||
+            string.IsNullOrWhiteSpace(config.EnterpriseName))
+        {
+            throw new InvalidOperationException(
+                "La organizacion no tiene Android Enterprise activo.");
+        }
+
+        // Permisos y paginas se limitan desde servidor.
+        var features = new JsonArray(
+            "PLAY_SEARCH",
+            "PRIVATE_APPS",
+            "WEB_APPS",
+            "STORE_BUILDER",
+            "MANAGED_CONFIGURATIONS");
+
+        var payload = new JsonObject
+        {
+            ["parentFrameUrl"] = origin.GetLeftPart(UriPartial.Authority),
+            ["enabledFeatures"] = features
+        };
+
+        var response = await _client.CreateWebTokenAsync(
+            config.EnterpriseName,
+            payload,
+            cancellationToken);
+
+        var token = response["value"]?.GetValue<string>();
+
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException(
+                "Google no devolvio un Web Token valido.");
+
+        var url =
+            "https://play.google.com/work/embedded/search" +
+            "?token=" + Uri.EscapeDataString(token) +
+            "&mode=SELECT";
+
+        return new AndroidWebTokenDto(
+            token,
+            url,
+            null,
+            DateTime.UtcNow);
+    }
     private static void ValidateOrganization(
         Guid organizationId)
     {

@@ -43,4 +43,46 @@
         android:restrictionType="integer"
         android:defaultValue="1" />
 
+    <restriction
+        android:key="titan_wallpaper_url"
+        android:title="Fondo del launcher (HTTPS)"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="titan_logo_url"
+        android:title="Logotipo del launcher (HTTPS)"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="titan_grid_columns"
+        android:title="Columnas de la cuadrícula"
+        android:restrictionType="integer"
+        android:defaultValue="4" />
+
+    <restriction
+        android:key="titan_config_version"
+        android:title="Versión de configuración"
+        android:restrictionType="integer"
+        android:defaultValue="0" />
+
+    <restriction
+        android:key="titan_profile_id"
+        android:title="Identificador del perfil"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="titan_publication_id"
+        android:title="Identificador de publicación"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="titan_updated_at"
+        android:title="Última actualización UTC"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
 </restrictions>

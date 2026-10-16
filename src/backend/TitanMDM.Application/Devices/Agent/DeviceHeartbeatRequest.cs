@@ -9,4 +9,10 @@ public sealed record DeviceHeartbeatRequest(
     string? OperatingSystemVersion,
     bool? InteractiveUserObserved = null,
     string? InteractiveUser = null,
-    int? InteractiveSessionId = null);
+    int? InteractiveSessionId = null,
+    string? LauncherProfileId = null,
+    string? LauncherPublicationId = null,
+    int? LauncherConfigVersion = null,
+    DateTime? LauncherAppliedAtUtc = null,
+    string? LauncherSyncStatus = null,
+    bool? LauncherRestrictionsRead = null);

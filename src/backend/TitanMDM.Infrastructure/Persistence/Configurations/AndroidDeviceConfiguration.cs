@@ -75,6 +75,9 @@ public sealed class AndroidDeviceConfiguration
         builder.Property(x => x.SecurityPosture)
             .HasMaxLength(100);
 
+        builder.Property(x => x.LauncherSyncStatus)
+            .HasMaxLength(40);
+
         /*
          * Un Device general solamente puede tener
          * un registro Android Enterprise.

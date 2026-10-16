@@ -789,7 +789,9 @@ public sealed class AndroidPolicyCompiler
     private const string DefaultLauncherActivity =
         "com.titanmdm.agent.launcher.TitanLauncherActivity";
 
-    private const int SupportedLauncherSchemaVersion = 1;
+    private const int MinLauncherSchemaVersion = 1;
+
+    private const int SupportedLauncherSchemaVersion = 2;
 
     private const int MaxLauncherApps = 100;
 
@@ -873,17 +875,18 @@ public sealed class AndroidPolicyCompiler
         }
 
         var schemaVersion =
-            SupportedLauncherSchemaVersion;
+            MinLauncherSchemaVersion;
 
         if (launcher.TryGetPropertyValue(
                 "schemaVersion",
                 out var schemaNode) &&
             (schemaNode is not JsonValue schemaValue ||
              !schemaValue.TryGetValue<int>(out schemaVersion) ||
-             schemaVersion != SupportedLauncherSchemaVersion))
+             schemaVersion < MinLauncherSchemaVersion ||
+             schemaVersion > SupportedLauncherSchemaVersion))
         {
             errors.Add(
-                $"Android: schemaVersion del launcher debe ser exactamente {SupportedLauncherSchemaVersion}.");
+                $"Android: schemaVersion del launcher debe estar entre {MinLauncherSchemaVersion} y {SupportedLauncherSchemaVersion}.");
             return;
         }
 
@@ -940,6 +943,79 @@ public sealed class AndroidPolicyCompiler
         {
             errors.Add(
                 "Android: los colores del launcher deben utilizar el formato #RRGGBB.");
+            return;
+        }
+
+        if (!TryGetLauncherResourceUrl(
+                launcher,
+                "wallpaperUrl",
+                out var wallpaperUrl,
+                out var wallpaperError))
+        {
+            errors.Add(
+                wallpaperError ??
+                "Android: la URL del recurso del launcher no es válida.");
+            return;
+        }
+
+        if (!TryGetLauncherResourceUrl(
+                launcher,
+                "logoUrl",
+                out var logoUrl,
+                out var logoError))
+        {
+            errors.Add(
+                logoError ??
+                "Android: la URL del recurso del launcher no es válida.");
+            return;
+        }
+
+        if (!TryGetGridColumns(
+                launcher,
+                out var gridColumns))
+        {
+            errors.Add(
+                "Android: gridColumns del launcher debe ser 3, 4 o 5.");
+            return;
+        }
+
+        if (!TryGetOptionalGuid(
+                launcher,
+                "profileId",
+                out var profileId) ||
+            !TryGetOptionalGuid(
+                launcher,
+                "publicationId",
+                out var publicationId))
+        {
+            errors.Add(
+                "Android: profileId y publicationId del launcher deben ser identificadores GUID.");
+            return;
+        }
+
+        if (!TryGetOptionalPositiveInt(
+                launcher,
+                "configVersion",
+                out var configVersion))
+        {
+            errors.Add(
+                "Android: configVersion del launcher debe ser un entero positivo.");
+            return;
+        }
+
+        if (!TryGetOptionalUtcTimestamp(
+                launcher,
+                "updatedAt",
+                out var updatedAt))
+        {
+            errors.Add(
+                "Android: updatedAt del launcher debe ser una fecha UTC ISO-8601.");
+            return;
+        }
+
+        if (!TryGetTheme(launcher, out var theme, out var themeError))
+        {
+            errors.Add(themeError ?? "Android: el tema del launcher no es válido.");
             return;
         }
 
@@ -1067,6 +1143,50 @@ public sealed class AndroidPolicyCompiler
                 backgroundColor;
         }
 
+        managedConfiguration["titan_grid_columns"] =
+            gridColumns;
+
+        if (wallpaperUrl is not null)
+        {
+            managedConfiguration["titan_wallpaper_url"] =
+                wallpaperUrl;
+        }
+
+        if (logoUrl is not null)
+        {
+            managedConfiguration["titan_logo_url"] =
+                logoUrl;
+        }
+
+        if (profileId is not null)
+        {
+            managedConfiguration["titan_profile_id"] =
+                profileId;
+        }
+
+        if (publicationId is not null)
+        {
+            managedConfiguration["titan_publication_id"] =
+                publicationId;
+        }
+
+        if (configVersion is not null)
+        {
+            managedConfiguration["titan_config_version"] =
+                configVersion;
+        }
+
+        if (updatedAt is not null)
+        {
+            managedConfiguration["titan_updated_at"] =
+                updatedAt;
+        }
+
+        foreach (var entry in theme)
+        {
+            managedConfiguration[entry.Key] = entry.Value;
+        }
+
         agentEntry["managedConfiguration"] =
             managedConfiguration;
 
@@ -1173,6 +1293,367 @@ public sealed class AndroidPolicyCompiler
         return label.Length == 0
             ? packageName
             : label;
+    }
+
+    public static void StampLauncherPublication(
+        JsonNode googlePolicy,
+        Guid profileId,
+        Guid publicationId,
+        int configVersion,
+        DateTime updatedAtUtc)
+    {
+        if (profileId == Guid.Empty ||
+            publicationId == Guid.Empty ||
+            configVersion < 1 ||
+            googlePolicy is not JsonObject policy ||
+            policy["applications"] is not JsonArray applications)
+        {
+            return;
+        }
+
+        var managedConfiguration =
+            applications
+                .OfType<JsonObject>()
+                .Select(application =>
+                    application["managedConfiguration"] as JsonObject)
+                .FirstOrDefault(configuration =>
+                    configuration?.ContainsKey("titan_launcher_enabled") == true);
+
+        if (managedConfiguration is null)
+        {
+            return;
+        }
+
+        managedConfiguration["titan_profile_id"] =
+            profileId.ToString("D");
+        managedConfiguration["titan_publication_id"] =
+            publicationId.ToString("D");
+        managedConfiguration["titan_config_version"] =
+            configVersion;
+        managedConfiguration["titan_updated_at"] =
+            updatedAtUtc.ToUniversalTime().ToString("O");
+    }
+
+    public static IReadOnlyCollection<string> ReadLauncherResourceUrls(
+        JsonNode googlePolicy)
+    {
+        if (googlePolicy is not JsonObject policy ||
+            policy["applications"] is not JsonArray applications)
+        {
+            return [];
+        }
+
+        return applications
+            .OfType<JsonObject>()
+            .Select(application =>
+                application["managedConfiguration"] as JsonObject)
+            .Where(configuration => configuration is not null)
+            .SelectMany(configuration => new[]
+            {
+                configuration!["titan_wallpaper_url"]?.GetValue<string>(),
+                configuration["titan_logo_url"]?.GetValue<string>()
+            })
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => url!)
+            .ToArray();
+    }
+
+    private static bool TryGetTheme(
+        JsonObject launcher,
+        out Dictionary<string, JsonNode> theme,
+        out string? error)
+    {
+        theme = [];
+        error = null;
+
+        if (!TryCopyColor(launcher, theme, "secondaryColor", "titan_secondary_color", out error) ||
+            !TryCopyColor(launcher, theme, "textColor", "titan_text_color", out error) ||
+            !TryCopyColor(launcher, theme, "cardColor", "titan_card_color", out error) ||
+            !TryCopyColor(launcher, theme, "cardTextColor", "titan_card_text_color", out error) ||
+            !TryCopyColor(launcher, theme, "buttonColor", "titan_button_color", out error))
+        {
+            return false;
+        }
+
+        if (!TryCopyRange(launcher, theme, "borderRadius", "titan_border_radius", 0, 32, out error) ||
+            !TryCopyRange(launcher, theme, "cardOpacity", "titan_card_opacity", 0, 100, out error) ||
+            !TryCopyRange(launcher, theme, "shadowIntensity", "titan_shadow", 0, 100, out error) ||
+            !TryCopyRange(launcher, theme, "iconSize", "titan_icon_size", 40, 96, out error) ||
+            !TryCopyRange(launcher, theme, "gridGap", "titan_grid_gap", 4, 32, out error))
+        {
+            return false;
+        }
+
+        if (!TryCopyChoice(
+                launcher,
+                theme,
+                "imageFit",
+                "titan_image_fit",
+                ["cover", "contain", "center"],
+                out error) ||
+            !TryCopyChoice(
+                launcher,
+                theme,
+                "themePreset",
+                "titan_theme_preset",
+                ["corporate", "dark", "custom"],
+                out error))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryCopyColor(
+        JsonObject launcher,
+        Dictionary<string, JsonNode> theme,
+        string property,
+        string key,
+        out string? error)
+    {
+        error = null;
+        if (!TryGetBrandingColor(launcher, property, out var color))
+        {
+            error = $"Android: {property} del launcher debe utilizar el formato #RRGGBB.";
+            return false;
+        }
+
+        if (color is not null)
+        {
+            theme[key] = color.ToUpperInvariant();
+        }
+
+        return true;
+    }
+
+    private static bool TryCopyRange(
+        JsonObject launcher,
+        Dictionary<string, JsonNode> theme,
+        string property,
+        string key,
+        int minimum,
+        int maximum,
+        out string? error)
+    {
+        error = null;
+        if (!launcher.TryGetPropertyValue(property, out var node) || node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<int>(out var number) ||
+            number < minimum ||
+            number > maximum)
+        {
+            error = $"Android: {property} del launcher está fuera de rango.";
+            return false;
+        }
+
+        theme[key] = number;
+        return true;
+    }
+
+    private static bool TryCopyChoice(
+        JsonObject launcher,
+        Dictionary<string, JsonNode> theme,
+        string property,
+        string key,
+        string[] allowed,
+        out string? error)
+    {
+        error = null;
+        if (!launcher.TryGetPropertyValue(property, out var node) || node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<string>(out var raw) ||
+            !allowed.Contains(raw.Trim().ToLowerInvariant()))
+        {
+            error = $"Android: {property} del launcher no es un valor permitido.";
+            return false;
+        }
+
+        theme[key] = raw.Trim().ToLowerInvariant();
+        return true;
+    }
+
+    private static bool TryGetLauncherResourceUrl(
+        JsonObject launcher,
+        string property,
+        out string? normalized,
+        out string? error)
+    {
+        normalized = null;
+        error = null;
+
+        if (!launcher.TryGetPropertyValue(property, out var node) ||
+            node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<string>(out var raw))
+        {
+            error =
+                $"Android: {property} del launcher debe ser una URL HTTPS.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (LauncherAssetStore.AssetToken(raw) is not null)
+        {
+            normalized = "titan-asset:" + LauncherAssetStore.AssetToken(raw);
+            return true;
+        }
+
+        if (raw.Contains("base64", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            error =
+                "Android: los recursos del launcher no se almacenan en Base64 dentro de la política.";
+            return false;
+        }
+
+        if (!LauncherResourceUrlRules.TryValidate(
+                raw,
+                out normalized,
+                out var validationError))
+        {
+            error =
+                $"Android: {property} no es un recurso HTTPS autorizado. {validationError}";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetGridColumns(
+        JsonObject launcher,
+        out int gridColumns)
+    {
+        gridColumns = 4;
+
+        if (!launcher.TryGetPropertyValue(
+                "gridColumns",
+                out var node) ||
+            node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<int>(out gridColumns) ||
+            gridColumns is not (3 or 4 or 5))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetOptionalGuid(
+        JsonObject launcher,
+        string property,
+        out string? normalized)
+    {
+        normalized = null;
+
+        if (!launcher.TryGetPropertyValue(property, out var node) ||
+            node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<string>(out var raw))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (!Guid.TryParse(raw.Trim(), out var parsed) ||
+            parsed == Guid.Empty)
+        {
+            return false;
+        }
+
+        normalized = parsed.ToString("D");
+        return true;
+    }
+
+    private static bool TryGetOptionalPositiveInt(
+        JsonObject launcher,
+        string property,
+        out int? parsed)
+    {
+        parsed = null;
+
+        if (!launcher.TryGetPropertyValue(property, out var node) ||
+            node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<int>(out var number) ||
+            number < 1)
+        {
+            return false;
+        }
+
+        parsed = number;
+        return true;
+    }
+
+    private static bool TryGetOptionalUtcTimestamp(
+        JsonObject launcher,
+        string property,
+        out string? normalized)
+    {
+        normalized = null;
+
+        if (!launcher.TryGetPropertyValue(property, out var node) ||
+            node is null)
+        {
+            return true;
+        }
+
+        if (node is not JsonValue value ||
+            !value.TryGetValue<string>(out var raw))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        if (!DateTime.TryParse(
+                raw,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal |
+                System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            return false;
+        }
+
+        normalized = parsed.ToUniversalTime().ToString("O");
+        return true;
     }
 
     private static bool TryGetBrandingColor(

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TitanMDM.Application.Android.Policies;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
@@ -18,12 +19,16 @@ public sealed class AndroidPolicyPublisher
     private readonly TitanMdmDbContext _dbContext;
     private readonly IAndroidPolicyCompiler _compiler;
     private readonly AndroidManagementClient _androidManagementClient;
+    private readonly AndroidManagementOptions _options;
+    private readonly LauncherAssetStore _assets;
     private readonly ILogger<AndroidPolicyPublisher> _logger;
 
     public AndroidPolicyPublisher(
         TitanMdmDbContext dbContext,
         IAndroidPolicyCompiler compiler,
         AndroidManagementClient androidManagementClient,
+        IOptions<AndroidManagementOptions> options,
+        LauncherAssetStore assets,
         ILogger<AndroidPolicyPublisher> logger)
     {
         _dbContext =
@@ -40,6 +45,16 @@ public sealed class AndroidPolicyPublisher
             androidManagementClient ??
             throw new ArgumentNullException(
                 nameof(androidManagementClient));
+
+        _options =
+            options?.Value ??
+            throw new ArgumentNullException(
+                nameof(options));
+
+        _assets =
+            assets ??
+            throw new ArgumentNullException(
+                nameof(assets));
 
         _logger =
             logger ??
@@ -208,12 +223,31 @@ public sealed class AndroidPolicyPublisher
         }
 
         // --------------------------------------------------------
-        // 8. Guardar payload compilado antes de enviar a Google
+        // 8. Sellar identidad de publicación en managed config
+        //    Google aceptar el upsert no marca la política aplicada.
         // --------------------------------------------------------
 
-        var compiledPolicyJson =
+        var googlePolicy =
             compilation.GooglePolicy
-                .ToJsonString();
+            ?? throw new InvalidOperationException(
+                "La política Android compilada no contiene payload.");
+
+        AndroidPolicyCompiler.StampLauncherPublication(
+            googlePolicy,
+            policy.Id,
+            publication.Id,
+            policyVersion.VersionNumber,
+            policyVersion.CreatedAtUtc);
+
+        ResolveLauncherAssets(organizationId, googlePolicy);
+
+        await EnsureLauncherResourcesAuthorizedAsync(
+            organizationId,
+            googlePolicy,
+            cancellationToken);
+
+        var compiledPolicyJson =
+            googlePolicy.ToJsonString();
 
         publication.BeginPublication(
             compiledPolicyJson);
@@ -232,7 +266,7 @@ public sealed class AndroidPolicyPublisher
                     .UpsertPolicyAsync(
                         enterprise.EnterpriseName!,
                         googlePolicyId,
-                        compilation.GooglePolicy,
+                        googlePolicy,
                         updateMask: null,
                         cancellationToken);
 
@@ -501,6 +535,111 @@ public sealed class AndroidPolicyPublisher
     // ============================================================
     // OBTENER ANDROID ENTERPRISE ACTIVO
     // ============================================================
+
+    private void ResolveLauncherAssets(
+        Guid organizationId,
+        JsonNode googlePolicy)
+    {
+        if (googlePolicy is not JsonObject policy ||
+            policy["applications"] is not JsonArray applications)
+        {
+            return;
+        }
+
+        foreach (var configuration in applications
+                     .OfType<JsonObject>()
+                     .Select(application => application["managedConfiguration"] as JsonObject)
+                     .Where(configuration => configuration is not null))
+        {
+            ResolveAssetKey(organizationId, configuration!, "titan_wallpaper_url");
+            ResolveAssetKey(organizationId, configuration!, "titan_logo_url");
+        }
+    }
+
+    private void ResolveAssetKey(
+        Guid organizationId,
+        JsonObject configuration,
+        string key)
+    {
+        var raw = configuration[key]?.GetValue<string>();
+        var token = LauncherAssetStore.AssetToken(raw);
+        if (token is null)
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(token, out var assetId))
+        {
+            throw new InvalidOperationException("El recurso del launcher no es válido.");
+        }
+
+        var asset = _assets.Find(organizationId, assetId)
+            ?? throw new InvalidOperationException(
+                "El recurso del launcher no pertenece a esta organización.");
+
+        if (!Uri.TryCreate(_options.LauncherAssetBaseUrl, UriKind.Absolute, out var baseUri) ||
+            baseUri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                "LauncherAssetBaseUrl debe ser HTTPS público para distribuir el recurso.");
+        }
+
+        var download = new Uri(
+            baseUri,
+            $"api/device/launcher-assets/{asset.Id:D}.{asset.Format}");
+        if (!LauncherResourceUrlRules.TryValidate(download.ToString(), out var normalized, out var error))
+        {
+            throw new InvalidOperationException(error ?? "La URL de distribución del recurso no es válida.");
+        }
+
+        configuration[key] = normalized;
+    }
+
+    private async Task EnsureLauncherResourcesAuthorizedAsync(
+        Guid organizationId,
+        JsonNode googlePolicy,
+        CancellationToken cancellationToken)
+    {
+        var urls =
+            AndroidPolicyCompiler.ReadLauncherResourceUrls(
+                googlePolicy);
+
+        if (urls.Count == 0)
+        {
+            return;
+        }
+
+        var organization =
+            await _dbContext.Organizations
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x => x.Id == organizationId,
+                    cancellationToken);
+
+        var authorizedHosts =
+            _options.LauncherResourceHosts
+                .Append(organization?.PrimaryDomain ?? string.Empty)
+                .ToArray();
+
+        if (authorizedHosts.All(string.IsNullOrWhiteSpace))
+        {
+            _logger.LogWarning(
+                "Launcher resources published without a corporate host allowlist. OrganizationId={OrganizationId}",
+                organizationId);
+            return;
+        }
+
+        foreach (var url in urls)
+        {
+            if (!LauncherResourceUrlRules.HostIsAuthorized(
+                    url,
+                    authorizedHosts))
+            {
+                throw new InvalidOperationException(
+                    "El recurso del launcher no pertenece a un host corporativo autorizado.");
+            }
+        }
+    }
 
     private async Task<AndroidEnterpriseConfiguration>
         GetActiveEnterpriseAsync(

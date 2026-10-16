@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useState,
@@ -49,6 +49,8 @@ import {
   useDevicesInventory,
 } from './hooks/useDevicesInventory'
 
+import { AndroidFleetCommandCenter } from './components/AndroidFleetCommandCenter'
+import { AndroidPolicyAppOrchestrator } from './components/AndroidPolicyAppOrchestrator'
 import './DevicesPage.css'
 import './WindowsDevicesPremium.css'
 
@@ -391,6 +393,12 @@ export function DevicesPage() {
         />
       )}
 
+      {isAndroidWorkspace && (
+        <AndroidFleetCommandCenter />
+      )}
+      {isAndroidWorkspace && (
+        <AndroidPolicyAppOrchestrator />
+      )}
       <section className="devices-panel">
         <DevicesToolbar
           search={

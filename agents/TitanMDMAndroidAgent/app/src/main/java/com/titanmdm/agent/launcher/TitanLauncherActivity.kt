@@ -10,6 +10,7 @@ import android.content.RestrictionsManager
 import android.content.pm.PackageManager
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
+import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -17,6 +18,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.titanmdm.agent.BuildConfig
@@ -37,6 +43,11 @@ class TitanLauncherActivity : ComponentActivity() {
     private var policy by mutableStateOf(TitanLauncherPolicy())
     private var homeStatus by mutableStateOf(TitanLauncherHomeStatus.None)
     private var appStates by mutableStateOf<Map<String, TitanLauncherAppState>>(emptyMap())
+    private var wallpaper by mutableStateOf<ImageBitmap?>(null)
+    private var logo by mutableStateOf<ImageBitmap?>(null)
+    private var syncStatus by mutableStateOf("Sin sincronizar")
+    private var resourceJob: Job? = null
+    private var policyOrigin = TitanLauncherPolicyOrigin.None
 
     private val restrictionsReceiver =
         object : BroadcastReceiver() {
@@ -79,7 +90,10 @@ class TitanLauncherActivity : ComponentActivity() {
                     homeStatus = homeStatus,
                     appState = { appStates[it] ?: TitanLauncherAppState.Unavailable },
                     iconProvider = ::loadIcon,
-                    onLaunch = ::launchApp
+                    onLaunch = ::launchApp,
+                    wallpaper = wallpaper,
+                    logo = logo,
+                    syncStatus = syncStatus
                 )
             }
         }
@@ -145,8 +159,22 @@ class TitanLauncherActivity : ComponentActivity() {
             )
 
         val newPolicy = resolution.policy
-
+        policyOrigin = resolution.origin
         policy = newPolicy
+
+        if (newPolicy.state != TitanLauncherPolicyState.Valid) {
+            wallpaper = null
+            logo = null
+        }
+
+        val acknowledgement = TitanLauncherAcknowledgementStore.fromPolicy(
+            policy = newPolicy,
+            origin = resolution.origin,
+            resourceFailed = !newPolicy.resourceError.isNullOrBlank()
+        )
+        TitanLauncherAcknowledgementStore.write(filesDir, acknowledgement)
+        syncStatus = syncLabel(acknowledgement, newPolicy)
+        loadCorporateResources(newPolicy, resolution.origin)
 
         appStates = newPolicy.applications.associate {
             it.packageName to resolveAppState(it.packageName)
@@ -303,5 +331,79 @@ class TitanLauncherActivity : ComponentActivity() {
         return TitanLauncherHomeStatus(
             isDefaultHome = resolvedComponent == launcherComponent
         )
+    }
+
+    private fun loadCorporateResources(
+        current: TitanLauncherPolicy,
+        origin: TitanLauncherPolicyOrigin
+    ) {
+        resourceJob?.cancel()
+        if (current.state != TitanLauncherPolicyState.Valid) {
+            return
+        }
+
+        resourceJob = lifecycleScope.launch {
+            val cache = TitanLauncherResourceCache(File(filesDir, "launcher-cache"))
+            val fetcher = TitanLauncherResourceFetcher(
+                TitanLauncherOkHttpTransport(),
+                cache
+            )
+            val wallpaperResult = current.wallpaperUrl?.let { url ->
+                withContext(Dispatchers.IO) {
+                    fetcher.fetch(
+                        url,
+                        "wallpaper",
+                        TitanLauncherImageSignatures.MAX_WALLPAPER_BYTES
+                    )
+                }
+            }
+            val logoResult = current.logoUrl?.let { url ->
+                withContext(Dispatchers.IO) {
+                    fetcher.fetch(
+                        url,
+                        "logo",
+                        TitanLauncherImageSignatures.MAX_LOGO_BYTES
+                    )
+                }
+            }
+
+            if (policy.state != TitanLauncherPolicyState.Valid ||
+                policy.wallpaperUrl != current.wallpaperUrl ||
+                policy.logoUrl != current.logoUrl ||
+                policyOrigin != origin
+            ) {
+                return@launch
+            }
+
+            wallpaper = wallpaperResult?.bytes?.let(::decodeResource)
+            logo = logoResult?.bytes?.let(::decodeResource)
+            val failed = wallpaperResult?.error != null || logoResult?.error != null
+            val acknowledgement = TitanLauncherAcknowledgementStore.fromPolicy(
+                policy = current,
+                origin = origin,
+                resourceFailed = failed || !current.resourceError.isNullOrBlank()
+            )
+            TitanLauncherAcknowledgementStore.write(filesDir, acknowledgement)
+            syncStatus = syncLabel(acknowledgement, current)
+        }
+    }
+
+    private fun decodeResource(bytes: ByteArray): ImageBitmap? {
+        if (TitanLauncherImageSignatures.detect(bytes) == null) return null
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    }
+
+    private fun syncLabel(
+        acknowledgement: com.titanmdm.agent.launcher.TitanLauncherAcknowledgement,
+        current: TitanLauncherPolicy
+    ): String {
+        return when (acknowledgement.syncStatus) {
+            "Applied" -> "Aplicado v${current.configVersion ?: "-"}"
+            "ResourceError" -> "Aplicado con error de recurso"
+            "Revoked" -> "Configuración revocada"
+            "Invalid" -> "Configuración no válida"
+            "Absent" -> if (current.isLabProfile) "Laboratorio" else "Sin política administrada"
+            else -> "Sin sincronizar"
+        }
     }
 }

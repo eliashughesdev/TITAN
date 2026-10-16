@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,12 +66,28 @@ fun TitanLauncherScreen(
     homeStatus: TitanLauncherHomeStatus,
     appState: (String) -> TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
-    onLaunch: (String) -> Unit
+    onLaunch: (String) -> Unit,
+    wallpaper: ImageBitmap? = null,
+    logo: ImageBitmap? = null,
+    syncStatus: String = "Sin sincronizar"
 ) {
     val primaryColor = policyColor(policy.primaryColor, TitanGreen)
     val backgroundColor = policyColor(policy.backgroundColor, TitanDark)
 
     Scaffold(containerColor = backgroundColor) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (wallpaper != null && policy.state == TitanLauncherPolicyState.Valid) {
+                Image(
+                    bitmap = wallpaper,
+                    contentDescription = null,
+                    contentScale = when (policy.imageFit) {
+                        "contain" -> ContentScale.Fit
+                        "center" -> ContentScale.Inside
+                        else -> ContentScale.Crop
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -78,7 +95,7 @@ fun TitanLauncherScreen(
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            CorporateHeader(policy, homeStatus, primaryColor)
+            CorporateHeader(policy, homeStatus, primaryColor, logo, syncStatus)
 
             if (policy.isLabProfile) {
                 StatusBanner(
@@ -110,6 +127,16 @@ fun TitanLauncherScreen(
 
                 else -> AwaitingPolicy(primaryColor)
             }
+
+            if (!policy.resourceError.isNullOrBlank() &&
+                policy.state == TitanLauncherPolicyState.Valid
+            ) {
+                StatusBanner(
+                    text = policy.resourceError,
+                    color = TitanWarn
+                )
+            }
+        }
         }
     }
 }
@@ -118,7 +145,9 @@ fun TitanLauncherScreen(
 private fun CorporateHeader(
     policy: TitanLauncherPolicy,
     homeStatus: TitanLauncherHomeStatus,
-    primaryColor: Color
+    primaryColor: Color,
+    logo: ImageBitmap?,
+    syncStatus: String
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -135,7 +164,17 @@ private fun CorporateHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                CompanyMark(policy.companyName, primaryColor)
+                if (logo != null) {
+                    Image(
+                        bitmap = logo,
+                        contentDescription = "Logotipo corporativo",
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    )
+                } else {
+                    CompanyMark(policy.companyName, primaryColor)
+                }
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -178,6 +217,12 @@ private fun CorporateHeader(
                 StatusChip(
                     text = homeStatus.label,
                     positive = homeStatus.isDefaultHome,
+                    positiveColor = primaryColor
+                )
+
+                StatusChip(
+                    text = syncStatus,
+                    positive = syncStatus.startsWith("Aplicado"),
                     positiveColor = primaryColor
                 )
             }
@@ -373,10 +418,10 @@ private fun ApplicationGrid(
         }
 
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 152.dp),
+            columns = GridCells.Fixed(policy.gridColumns.coerceIn(3, 5)),
             contentPadding = PaddingValues(bottom = 30.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(policy.gridGap.dp),
+            verticalArrangement = Arrangement.spacedBy(policy.gridGap.dp),
             modifier = Modifier.fillMaxSize()
         ) {
             items(policy.applications, key = { it.packageName }) { app ->

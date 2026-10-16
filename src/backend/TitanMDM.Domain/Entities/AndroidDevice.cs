@@ -95,6 +95,18 @@ public sealed class AndroidDevice
 
     public DateTime? LastPolicySyncTimeUtc { get; private set; }
 
+    public Guid? LauncherProfileId { get; private set; }
+
+    public Guid? LauncherPublicationId { get; private set; }
+
+    public int? LauncherConfigVersion { get; private set; }
+
+    public DateTime? LauncherAppliedAtUtc { get; private set; }
+
+    public string? LauncherSyncStatus { get; private set; }
+
+    public bool LauncherRestrictionsRead { get; private set; }
+
     public DateTime LastSynchronizedAtUtc { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
@@ -195,6 +207,50 @@ public sealed class AndroidDevice
         DeletedInGoogleAtUtc = null;
 
         LastSynchronizedAtUtc = DateTime.UtcNow;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void RecordLauncherAcknowledgement(
+        Guid? profileId,
+        Guid? publicationId,
+        int? configVersion,
+        DateTime? appliedAtUtc,
+        string? syncStatus,
+        bool restrictionsRead)
+    {
+        if (!restrictionsRead)
+        {
+            return;
+        }
+
+        var status = Normalize(syncStatus);
+        LauncherRestrictionsRead = true;
+        LauncherSyncStatus = status;
+
+        var policyWasRead =
+            status is "Applied" or "ResourceError" &&
+            configVersion is >= 1;
+
+        if (policyWasRead)
+        {
+            LauncherProfileId = profileId == Guid.Empty
+                ? null
+                : profileId;
+            LauncherPublicationId = publicationId == Guid.Empty
+                ? null
+                : publicationId;
+            LauncherConfigVersion = configVersion;
+            LauncherAppliedAtUtc = NormalizeUtc(
+                appliedAtUtc ?? DateTime.UtcNow);
+        }
+        else
+        {
+            LauncherProfileId = null;
+            LauncherPublicationId = null;
+            LauncherConfigVersion = null;
+            LauncherAppliedAtUtc = null;
+        }
+
         UpdatedAtUtc = DateTime.UtcNow;
     }
 

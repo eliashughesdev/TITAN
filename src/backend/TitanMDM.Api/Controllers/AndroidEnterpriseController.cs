@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -6,6 +6,7 @@ using TitanMDM.Api.Security;
 using TitanMDM.Application.AndroidEnterprise;
 using TitanMDM.Application.Security;
 using TitanMDM.Infrastructure.Android;
+using TitanMDM.Infrastructure.Android.Policies;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -18,13 +19,16 @@ public sealed class AndroidEnterpriseController
 {
     private readonly IAndroidEnterpriseService _service;
     private readonly AndroidManagementOptions _options;
+    private readonly LauncherAssetStore _assets;
 
     public AndroidEnterpriseController(
         IAndroidEnterpriseService service,
-        IOptions<AndroidManagementOptions> options)
+        IOptions<AndroidManagementOptions> options,
+        LauncherAssetStore assets)
     {
         _service = service;
         _options = options.Value;
+        _assets = assets;
     }
 
     [HttpGet("status")]
@@ -242,6 +246,189 @@ public sealed class AndroidEnterpriseController
             });
         }
     }
+
+    [HttpPost("managed-play/web-token")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> CreateManagedPlayToken(
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+        var userId = GetUserId();
+
+        if (organizationId is null || userId is null)
+            return Unauthorized();
+
+        // No aceptar origen arbitrario desde el JSON del cliente.
+        // Usar el host del frontend validado por el proxy HTTPS.
+        // La solicitud debe llegar mediante el mismo origen de la consola.
+        var originHeader = Request.Headers.Origin.ToString();
+
+        if (!Uri.TryCreate(originHeader, UriKind.Absolute, out var origin) ||
+            origin.Scheme != Uri.UriSchemeHttps ||
+            !string.IsNullOrEmpty(origin.UserInfo) ||
+            origin.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(origin.Query) ||
+            !string.IsNullOrEmpty(origin.Fragment))
+        {
+            return BadRequest(new
+            {
+                message = "Managed Google Play requiere un origen frontend HTTPS."
+            });
+        }
+
+        // Comparar con la lista de orÃ­genes del frontend aprobados.
+        // No confiar Ãºnicamente en un encabezado Origin proporcionado
+        // por el cliente: debe coincidir con configuraciÃ³n del servidor.
+        var allowed = HttpContext.RequestServices
+            .GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()
+            .GetSection("AndroidManagement:ManagedPlayAllowedOrigins")
+            .Get<string[]>() ?? Array.Empty<string>();
+
+        if (!allowed.Any(value =>
+            string.Equals(
+                value.TrimEnd('/'),
+                origin.GetLeftPart(UriPartial.Authority),
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            return Forbid();
+        }
+
+        var result = await _service.CreateManagedPlayWebTokenAsync(
+            organizationId.Value,
+            userId.Value,
+            new CreateAndroidWebTokenRequest(
+                origin.GetLeftPart(UriPartial.Authority)),
+            cancellationToken);
+
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.Pragma = "no-cache";
+
+        return Ok(result);
+    }
+
+    [HttpPost("launcher-assets")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    [RequestSizeLimit(4 * 1024 * 1024)]
+    public async Task<IActionResult> UploadLauncherAsset(
+        [FromForm] string kind,
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+        if (organizationId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Adjunta una imagen PNG, JPEG o WebP." });
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var asset = await _assets.SaveAsync(
+                organizationId.Value,
+                kind,
+                stream,
+                cancellationToken);
+            return Ok(new
+            {
+                id = asset.Id,
+                kind = asset.Kind,
+                format = asset.Format,
+                size = asset.Size,
+                sha256 = asset.Sha256,
+                token = "titan-asset:" + asset.Id.ToString("D"),
+                createdAtUtc = asset.CreatedAtUtc
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [HttpGet("launcher-assets")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public IActionResult ListLauncherAssets()
+    {
+        var organizationId = GetOrganizationId();
+        return organizationId is null
+            ? Unauthorized()
+            : Ok(_assets.List(organizationId.Value).Select(asset => new
+            {
+                id = asset.Id,
+                kind = asset.Kind,
+                format = asset.Format,
+                size = asset.Size,
+                sha256 = asset.Sha256,
+                token = "titan-asset:" + asset.Id.ToString("D"),
+                createdAtUtc = asset.CreatedAtUtc
+            }));
+    }
+
+    [HttpGet("launcher-assets/{assetId:guid}")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public IActionResult DownloadLauncherAsset(Guid assetId)
+    {
+        var organizationId = GetOrganizationId();
+        if (organizationId is null)
+        {
+            return Unauthorized();
+        }
+
+        var content = _assets.ReadBytes(organizationId.Value, assetId);
+        if (content is null)
+        {
+            return NotFound();
+        }
+
+        return File(content.Value.Bytes, ContentType(content.Value.Info.Format));
+    }
+
+    [HttpDelete("launcher-assets/{assetId:guid}")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    public IActionResult DeleteLauncherAsset(Guid assetId)
+    {
+        var organizationId = GetOrganizationId();
+        if (organizationId is null)
+        {
+            return Unauthorized();
+        }
+
+        return _assets.Delete(organizationId.Value, assetId)
+            ? NoContent()
+            : NotFound();
+    }
+
+    [HttpPost("launcher-assets/cleanup")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    public async Task<IActionResult> CleanupLauncherAssets(
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+        if (organizationId is null)
+        {
+            return Unauthorized();
+        }
+
+        var removed = await _assets.CleanupAsync(organizationId.Value, cancellationToken);
+        return Ok(new { removed });
+    }
+
+    private static string ContentType(string format) => format switch
+    {
+        "png" => "image/png",
+        "webp" => "image/webp",
+        _ => "image/jpeg"
+    };
 
     private Guid? GetOrganizationId()
     {

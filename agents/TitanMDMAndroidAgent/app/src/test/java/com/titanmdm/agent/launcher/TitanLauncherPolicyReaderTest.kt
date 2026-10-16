@@ -119,7 +119,7 @@ class TitanLauncherPolicyReaderTest {
 
     @Test
     fun `esquema presente debe ser entero v1 exacto`() {
-        listOf("", "malformado", "0", "-1", "2", "99").forEach { schema ->
+        listOf("", "malformado", "0", "-1", "3", "99").forEach { schema ->
             val policy = TitanLauncherPolicyReader.read(
                 mapOf(
                     TitanLauncherPolicyReader.KEY_SCHEMA_VERSION to schema,
@@ -293,6 +293,93 @@ class TitanLauncherPolicyReaderTest {
         assertEquals(TitanLauncherPolicy.DEFAULT_COMPANY, policy.companyName)
         assertEquals(TitanLauncherPolicy.DEFAULT_MESSAGE, policy.welcomeMessage)
         assertNull(policy.error)
+    }
+
+    @Test
+    fun `perfil anterior sin campos nuevos sigue siendo valido`() {
+        val policy = TitanLauncherPolicyReader.read(explicitPolicy(apps = "[]"))
+
+        assertEquals(TitanLauncherPolicyState.Valid, policy.state)
+        assertEquals(4, policy.gridColumns)
+        assertNull(policy.wallpaperUrl)
+        assertNull(policy.logoUrl)
+        assertNull(policy.configVersion)
+    }
+
+    @Test
+    fun `esquema 2 acepta recursos y columnas`() {
+        val policy = TitanLauncherPolicyReader.read(
+            explicitPolicy(apps = "[]") + mapOf(
+                TitanLauncherPolicyReader.KEY_SCHEMA_VERSION to "2",
+                TitanLauncherPolicyReader.KEY_WALLPAPER_URL to
+                    "https://cdn.empresa.com/launcher/fondo.webp",
+                TitanLauncherPolicyReader.KEY_LOGO_URL to
+                    "https://cdn.empresa.com/launcher/logo.png",
+                TitanLauncherPolicyReader.KEY_GRID_COLUMNS to "3",
+                TitanLauncherPolicyReader.KEY_CONFIG_VERSION to "8"
+            )
+        )
+
+        assertEquals(TitanLauncherPolicyState.Valid, policy.state)
+        assertEquals(3, policy.gridColumns)
+        assertEquals(8, policy.configVersion)
+        assertEquals(
+            "https://cdn.empresa.com/launcher/fondo.webp",
+            policy.wallpaperUrl
+        )
+    }
+
+    @Test
+    fun `columnas fuera de rango invalidan la politica`() {
+        val policy = TitanLauncherPolicyReader.read(
+            explicitPolicy(apps = "[]") + mapOf(
+                TitanLauncherPolicyReader.KEY_GRID_COLUMNS to "9"
+            )
+        )
+
+        assertEquals(TitanLauncherPolicyState.Invalid, policy.state)
+    }
+
+    @Test
+    fun `recurso inseguro se rechaza sin tumbar las aplicaciones`() {
+        val policy = TitanLauncherPolicyReader.read(
+            explicitPolicy(apps = """[{"packageName":"com.acme.mail","label":"Mail"}]""") +
+                mapOf(TitanLauncherPolicyReader.KEY_WALLPAPER_URL to "http://10.0.0.8/fondo.png")
+        )
+
+        assertEquals(TitanLauncherPolicyState.Valid, policy.state)
+        assertNull(policy.wallpaperUrl)
+        assertEquals("Recurso HTTPS rechazado.", policy.resourceError)
+        assertEquals(1, policy.applications.size)
+    }
+
+    @Test
+    fun `launcher deshabilitado no conserva una politica anterior`() {
+        val policy = TitanLauncherPolicyReader.read(
+            explicitPolicy(enabled = "false", apps = "[]") + mapOf(
+                TitanLauncherPolicyReader.KEY_CONFIG_VERSION to "4",
+                TitanLauncherPolicyReader.KEY_WALLPAPER_URL to
+                    "https://cdn.empresa.com/launcher/fondo.webp"
+            )
+        )
+
+        assertEquals(TitanLauncherPolicyState.Absent, policy.state)
+        assertNull(policy.configVersion)
+        assertNull(policy.wallpaperUrl)
+        assertFalse(policy.managed)
+    }
+
+    @Test
+    fun `json corrupto sigue siendo invalido`() {
+        val policy = TitanLauncherPolicyReader.read(
+            mapOf(
+                TitanLauncherPolicyReader.KEY_ENABLED to "true",
+                TitanLauncherPolicyReader.KEY_APPS to "{no-es-json",
+                TitanLauncherPolicyReader.KEY_GRID_COLUMNS to "4"
+            )
+        )
+
+        assertEquals(TitanLauncherPolicyState.Invalid, policy.state)
     }
 
     private fun explicitPolicy(

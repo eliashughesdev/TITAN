@@ -8,6 +8,7 @@ export interface LauncherApplication {
   label: string
   installType: LauncherInstallType
   visible: boolean
+  availability?: 'selected' | 'manual'
 }
 
 export interface LauncherDraft {
@@ -15,10 +16,29 @@ export interface LauncherDraft {
   welcomeMessage: string
   primaryColor: string
   backgroundColor: string
+  wallpaperUrl?: string
+  logoUrl?: string
+  gridColumns?: number
+  secondaryColor?: string
+  textColor?: string
+  cardColor?: string
+  cardTextColor?: string
+  buttonColor?: string
+  borderRadius?: number
+  cardOpacity?: number
+  shadowIntensity?: number
+  iconSize?: number
+  gridGap?: number
+  imageFit?: 'cover' | 'contain' | 'center'
+  themePreset?: 'corporate' | 'dark' | 'custom'
+  profileId?: string
+  publicationId?: string
+  configVersion?: number
+  updatedAt?: string
   packageName: string
   activityName: string
   requiredForSetup: boolean
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   applications: LauncherApplication[]
 }
 
@@ -30,14 +50,111 @@ export const createLauncherDraft = (): LauncherDraft => ({
   welcomeMessage: 'Dispositivo corporativo',
   primaryColor: DEFAULT_PRIMARY_COLOR,
   backgroundColor: DEFAULT_BACKGROUND_COLOR,
+  wallpaperUrl: '',
+  logoUrl: '',
+  gridColumns: 4,
+  secondaryColor: '#0E7C54',
+  textColor: '#F4F7F8',
+  cardColor: '#142831',
+  cardTextColor: '#F4F7F8',
+  buttonColor: '#16A36A',
+  borderRadius: 18,
+  cardOpacity: 100,
+  shadowIntensity: 24,
+  iconSize: 56,
+  gridGap: 12,
+  imageFit: 'cover',
+  themePreset: 'corporate',
   packageName: 'com.titanmdm.agent',
   activityName: 'com.titanmdm.agent.launcher.TitanLauncherActivity',
   requiredForSetup: true,
-  schemaVersion: 1,
+  schemaVersion: 2,
   applications: [],
 })
 
 const brandingColorPattern = /^#[0-9A-Fa-f]{6}$/
+const blockedHostSuffixes = [
+  'localhost',
+  'local',
+  'internal',
+  'localdomain',
+  'lan',
+  'home',
+  'home.arpa',
+  'intranet',
+]
+const imageExtensionPattern = /\.(png|jpe?g|webp)$/i
+
+export function isAssetToken(value: string): boolean {
+  return /^titan-asset:[0-9a-fA-F-]{36}$/.test(value.trim())
+}
+
+export function contrastRatio(foreground: string, background: string): number {
+  const fg = relativeLuminance(foreground)
+  const bg = relativeLuminance(background)
+  const lighter = Math.max(fg, bg)
+  const darker = Math.min(fg, bg)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+export function hasReadableContrast(foreground: string, background: string): boolean {
+  return contrastRatio(foreground, background) >= 4.5
+}
+
+function relativeLuminance(color: string): number {
+  const hex = color.replace('#', '')
+  const channels = [0, 2, 4].map((offset) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
+
+export function isValidLauncherResourceUrl(value: string): boolean {
+  const raw = value.trim()
+  if (!raw) return true
+  if (isAssetToken(raw)) return true
+  if (raw.length > 2048 || raw.includes('\\') || raw.includes('@') || raw.includes(' ')) {
+    return false
+  }
+  if (/^data:/i.test(raw) || /base64/i.test(raw)) return false
+
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' || url.username || url.password) return false
+    const host = url.hostname.replace(/\.$/, '').toLowerCase()
+    if (!host || /^\d+$/.test(host) || isBlockedHost(host) || isPrivateAddress(host)) {
+      return false
+    }
+    return imageExtensionPattern.test(decodeURIComponent(url.pathname))
+  } catch {
+    return false
+  }
+}
+
+function isBlockedHost(host: string): boolean {
+  if (host === 'metadata' || host === 'metadata.google.internal') return true
+  if (host.endsWith('.nip.io') || host.endsWith('.sslip.io')) return true
+  return blockedHostSuffixes.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`),
+  )
+}
+
+function isPrivateAddress(host: string): boolean {
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!ipv4) {
+    return host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')
+  }
+  const octets = ipv4.slice(1).map(Number)
+  if (octets.some((octet) => octet > 255)) return true
+  const [a, b] = octets
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+}
 
 export function isValidBrandingColor(value: string): boolean {
   return brandingColorPattern.test(value.trim())
@@ -82,8 +199,29 @@ export function buildLauncherConfiguration(draft: LauncherDraft) {
         welcomeMessage: draft.welcomeMessage.trim(),
         primaryColor: draft.primaryColor.trim().toUpperCase(),
         backgroundColor: draft.backgroundColor.trim().toUpperCase(),
+        wallpaperUrl: (draft.wallpaperUrl || '').trim(),
+        logoUrl: (draft.logoUrl || '').trim(),
+        gridColumns: draft.gridColumns || 4,
+        secondaryColor: draft.secondaryColor,
+        textColor: draft.textColor,
+        cardColor: draft.cardColor,
+        cardTextColor: draft.cardTextColor,
+        buttonColor: draft.buttonColor,
+        borderRadius: draft.borderRadius,
+        cardOpacity: draft.cardOpacity,
+        shadowIntensity: draft.shadowIntensity,
+        iconSize: draft.iconSize,
+        gridGap: draft.gridGap,
+        imageFit: draft.imageFit || 'cover',
+        themePreset: draft.themePreset || 'corporate',
+        profileId: (draft.profileId || '').trim(),
+        publicationId: (draft.publicationId || '').trim(),
+        configVersion: draft.configVersion && draft.configVersion > 0
+          ? draft.configVersion
+          : undefined,
+        updatedAt: (draft.updatedAt || '').trim(),
         requiredForSetup: draft.requiredForSetup,
-        schemaVersion: 1,
+        schemaVersion: 2,
       },
     },
   }
@@ -97,6 +235,11 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
+}
+
+function bounded(value: unknown, minimum: number, maximum: number, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback
 }
 
 function isInstallType(value: unknown): value is LauncherInstallType {
@@ -126,12 +269,31 @@ export function parseLauncherConfiguration(
       welcomeMessage: asString(launcher.welcomeMessage, defaults.welcomeMessage),
       primaryColor: normalizeBrandingColor(launcher.primaryColor, defaults.primaryColor),
       backgroundColor: normalizeBrandingColor(launcher.backgroundColor, defaults.backgroundColor),
+      wallpaperUrl: asString(launcher.wallpaperUrl, ''),
+      logoUrl: asString(launcher.logoUrl, ''),
+      gridColumns: [3, 4, 5].includes(Number(launcher.gridColumns)) ? Number(launcher.gridColumns) : 4,
+      secondaryColor: normalizeBrandingColor(launcher.secondaryColor, '#0E7C54'),
+      textColor: normalizeBrandingColor(launcher.textColor, '#F4F7F8'),
+      cardColor: normalizeBrandingColor(launcher.cardColor, '#142831'),
+      cardTextColor: normalizeBrandingColor(launcher.cardTextColor, '#F4F7F8'),
+      buttonColor: normalizeBrandingColor(launcher.buttonColor, '#16A36A'),
+      borderRadius: bounded(launcher.borderRadius, 0, 32, 18),
+      cardOpacity: bounded(launcher.cardOpacity, 0, 100, 100),
+      shadowIntensity: bounded(launcher.shadowIntensity, 0, 100, 24),
+      iconSize: bounded(launcher.iconSize, 40, 96, 56),
+      gridGap: bounded(launcher.gridGap, 4, 32, 12),
+      imageFit: launcher.imageFit === 'contain' || launcher.imageFit === 'center' ? launcher.imageFit : 'cover',
+      themePreset: launcher.themePreset === 'dark' || launcher.themePreset === 'custom' ? launcher.themePreset : 'corporate',
+      profileId: asString(launcher.profileId, ''),
+      publicationId: asString(launcher.publicationId, ''),
+      configVersion: Number(launcher.configVersion) > 0 ? Number(launcher.configVersion) : undefined,
+      updatedAt: asString(launcher.updatedAt, ''),
       packageName: asString(launcher.packageName, defaults.packageName),
       activityName: asString(launcher.activityName, defaults.activityName),
       requiredForSetup: typeof launcher.requiredForSetup === 'boolean'
         ? launcher.requiredForSetup
         : defaults.requiredForSetup,
-      schemaVersion: 1,
+      schemaVersion: launcher.schemaVersion === 1 ? 1 : 2,
       applications: packages.flatMap((value) => {
         const application = asObject(value)
         const packageName = asString(application?.packageName, '').trim()

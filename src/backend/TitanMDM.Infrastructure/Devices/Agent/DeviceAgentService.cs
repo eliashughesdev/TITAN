@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Devices;
 using TitanMDM.Infrastructure.Persistence;
@@ -235,6 +236,11 @@ public sealed class DeviceAgentService
             }
         }
 
+        await RecordLauncherAcknowledgementAsync(
+            device,
+            request,
+            cancellationToken);
+
         // ============================================================
         // PERSIST
         // ============================================================
@@ -462,6 +468,83 @@ public sealed class DeviceAgentService
                 .ToString(),
             DateTime.UtcNow,
             device.LastSeenAtUtc);
+    }
+
+    private async Task RecordLauncherAcknowledgementAsync(
+        Device device,
+        DeviceHeartbeatRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.LauncherRestrictionsRead != true)
+        {
+            return;
+        }
+
+        var status = NormalizeLauncherStatus(
+            request.LauncherSyncStatus);
+
+        if (status is null)
+        {
+            return;
+        }
+
+        var androidDevice =
+            await _dbContext.AndroidDevices
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.DeviceId == device.Id &&
+                        x.OrganizationId == device.OrganizationId,
+                    cancellationToken);
+
+        if (androidDevice is null)
+        {
+            return;
+        }
+
+        Guid? profileId = ParseOptionalGuid(request.LauncherProfileId);
+        Guid? publicationId = ParseOptionalGuid(request.LauncherPublicationId);
+
+        androidDevice.RecordLauncherAcknowledgement(
+            profileId,
+            publicationId,
+            request.LauncherConfigVersion,
+            request.LauncherAppliedAtUtc,
+            status,
+            restrictionsRead: true);
+
+        _dbContext.AdministrativeAuditEvents.Add(
+            new AdministrativeAuditEvent(
+                device.OrganizationId,
+                actorUserId: null,
+                action: "android.launcher.restrictions-read",
+                targetType: "AndroidDevice",
+                targetId: device.Id.ToString("D"),
+                result: status,
+                correlationId: publicationId?.ToString("D")
+                    ?? profileId?.ToString("D")
+                    ?? device.Id.ToString("D"),
+                ipAddress: Normalize(request.IpAddress)));
+    }
+
+    private static string? NormalizeLauncherStatus(string? status)
+    {
+        return status?.Trim() switch
+        {
+            "Applied" => "Applied",
+            "ResourceError" => "ResourceError",
+            "Revoked" => "Revoked",
+            "Invalid" => "Invalid",
+            "Absent" => "Absent",
+            _ => null
+        };
+    }
+
+    private static Guid? ParseOptionalGuid(string? value)
+    {
+        return Guid.TryParse(value, out var parsed) &&
+               parsed != Guid.Empty
+            ? parsed
+            : null;
     }
 
     // ================================================================

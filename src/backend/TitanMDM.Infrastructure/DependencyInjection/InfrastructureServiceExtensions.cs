@@ -388,6 +388,8 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient<
             AndroidManagementClient>();
 
+        services.AddScoped<LauncherAssetStore>();
+
         services.AddScoped<
             IAndroidEnterpriseService,
             AndroidEnterpriseService>();

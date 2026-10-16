@@ -6,6 +6,7 @@ import com.titanmdm.agent.core.network.HeartbeatRequest
 import com.titanmdm.agent.core.network.TitanApiClient
 import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
+import com.titanmdm.agent.launcher.TitanLauncherAcknowledgementStore
 
 sealed interface HeartbeatResult {
 
@@ -43,6 +44,10 @@ class HeartbeatRepository(
             val inventory =
                 inventoryProvider.collect()
 
+            val acknowledgement =
+                TitanLauncherAcknowledgementStore.read(appContext.filesDir)
+                    ?.toHeartbeatFields()
+
             val request =
                 HeartbeatRequest(
                     deviceId = identity.deviceId,
@@ -51,7 +56,13 @@ class HeartbeatRepository(
                     batteryLevel = inventory.batteryLevel,
                     agentVersion = AgentConfig.AGENT_VERSION,
                     operatingSystemVersion =
-                        inventory.operatingSystemVersion
+                        inventory.operatingSystemVersion,
+                    launcherProfileId = acknowledgement?.get("profileId"),
+                    launcherPublicationId = acknowledgement?.get("publicationId"),
+                    launcherConfigVersion = acknowledgement?.get("configVersion")?.toIntOrNull(),
+                    launcherAppliedAtUtc = acknowledgement?.get("appliedAtUtc"),
+                    launcherSyncStatus = acknowledgement?.get("syncStatus"),
+                    launcherRestrictionsRead = acknowledgement != null
                 )
 
             val response =

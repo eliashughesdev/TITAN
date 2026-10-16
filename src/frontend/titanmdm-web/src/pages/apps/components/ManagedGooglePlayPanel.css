@@ -1,0 +1,144 @@
+
+.managed-play {
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+}
+
+.managed-play-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  background: linear-gradient(115deg, #ffffff, #eaf9f0);
+  border: 1px solid #cdebd9;
+  border-radius: 18px;
+}
+
+.managed-play-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  color: #168653;
+}
+
+.managed-play-header h1 {
+  color: #12263a;
+  font-size: clamp(22px, 2.5vw, 30px);
+  margin: 8px 0;
+}
+
+.managed-play-header p,
+.managed-play-card p,
+.managed-play-card small {
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.managed-play button {
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid #cde0d5;
+  background: #fff;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.managed-play-header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #19965b;
+  color: white;
+  border-color: #19965b;
+}
+
+.managed-play button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.managed-play-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 16px;
+  align-items: start;
+}
+
+.managed-play-card {
+  background: white;
+  border: 1px solid #dce7e1;
+  border-radius: 16px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.managed-play-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #153c2b;
+  margin-bottom: 14px;
+}
+
+.managed-play-frame {
+  min-height: 760px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f5f9f6;
+}
+
+.managed-play-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 300px;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+}
+
+.managed-play-app {
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #e7ede9;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.managed-play-app button {
+  flex-shrink: 0;
+}
+
+.managed-play-card small {
+  display: block;
+  margin-top: 16px;
+}
+
+.managed-play-error {
+  padding: 14px;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+  border-radius: 10px;
+}
+
+@media (max-width: 950px) {
+  .managed-play-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .managed-play {
+    padding: 12px;
+  }
+
+  .managed-play-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

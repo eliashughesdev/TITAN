@@ -491,7 +491,13 @@ public sealed class AndroidPolicyAssignmentService
                             row.Android.AppliedPolicyVersion,
                             row.Android.AppliedPolicyState,
                             row.Android.LastPolicySyncTimeUtc,
-                            assignment?.ErrorMessage);
+                            assignment?.ErrorMessage,
+                            row.Android.LauncherProfileId,
+                            row.Android.LauncherPublicationId,
+                            row.Android.LauncherConfigVersion,
+                            row.Android.LauncherAppliedAtUtc,
+                            row.Android.LauncherSyncStatus,
+                            row.Android.LauncherRestrictionsRead);
                     })
                 .ToArray();
 
@@ -540,7 +546,13 @@ public sealed class AndroidPolicyAssignmentService
                 "appliedPolicyState") ??
                 androidDevice.AppliedPolicyState,
             androidDevice.LastPolicySyncTimeUtc,
-            assignment.ErrorMessage);
+            assignment.ErrorMessage,
+            androidDevice.LauncherProfileId,
+            androidDevice.LauncherPublicationId,
+            androidDevice.LauncherConfigVersion,
+            androidDevice.LauncherAppliedAtUtc,
+            androidDevice.LauncherSyncStatus,
+            androidDevice.LauncherRestrictionsRead);
     }
 
     private static void EnsureDeviceInScope(

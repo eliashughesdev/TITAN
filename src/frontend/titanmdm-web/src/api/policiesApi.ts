@@ -147,6 +147,13 @@ export interface AndroidPolicyAssignment {
   lastPolicySyncTimeUtc: string | null
 
   errorMessage: string | null
+
+  launcherProfileId?: string | null
+  launcherPublicationId?: string | null
+  launcherConfigVersion?: number | null
+  launcherAppliedAtUtc?: string | null
+  launcherSyncStatus?: string | null
+  launcherRestrictionsRead?: boolean
 }
 
 export interface AndroidPolicyAssignmentDevice {
@@ -173,6 +180,13 @@ export interface AndroidPolicyAssignmentDevice {
   lastPolicySyncTimeUtc: string | null
 
   errorMessage: string | null
+
+  launcherProfileId?: string | null
+  launcherPublicationId?: string | null
+  launcherConfigVersion?: number | null
+  launcherAppliedAtUtc?: string | null
+  launcherSyncStatus?: string | null
+  launcherRestrictionsRead?: boolean
 }
 
 export interface AndroidPolicyAssignmentPage {

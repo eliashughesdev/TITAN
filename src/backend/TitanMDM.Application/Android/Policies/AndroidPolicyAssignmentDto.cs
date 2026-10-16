@@ -16,4 +16,10 @@ public sealed record AndroidPolicyAssignmentDto(
     long? AppliedPolicyVersion,
     string? AppliedPolicyState,
     DateTime? LastPolicySyncTimeUtc,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    Guid? LauncherProfileId = null,
+    Guid? LauncherPublicationId = null,
+    int? LauncherConfigVersion = null,
+    DateTime? LauncherAppliedAtUtc = null,
+    string? LauncherSyncStatus = null,
+    bool LauncherRestrictionsRead = false);
