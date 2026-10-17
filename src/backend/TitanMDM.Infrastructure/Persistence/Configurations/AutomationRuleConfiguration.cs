@@ -39,6 +39,21 @@ public sealed class AutomationRuleConfiguration
             .HasColumnType("nvarchar(max)")
             .IsRequired();
 
+        builder.Property(x => x.Module)
+            .HasMaxLength(50);
+
+        builder.Property(x => x.DefinitionJson)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(x => x.ScopeSiteIdsJson)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(x => x.Priority)
+            .IsRequired();
+
+        builder.Property(x => x.ConsecutiveFailures)
+            .IsRequired();
+
         builder.HasIndex(
             x => new
             {

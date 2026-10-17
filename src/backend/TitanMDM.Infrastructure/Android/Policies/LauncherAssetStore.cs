@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Android.Policies;
@@ -16,6 +17,15 @@ public sealed record LauncherAssetInfo(
     long Size,
     string Sha256,
     DateTime CreatedAtUtc);
+
+public sealed record LauncherAssetUsage(
+    LauncherAssetInfo Info,
+    bool IsReferenced,
+    bool IsPublished);
+
+internal sealed record LauncherAssetReferences(
+    HashSet<Guid> All,
+    HashSet<Guid> Published);
 
 public sealed class LauncherAssetStore
 {
@@ -137,28 +147,76 @@ public sealed class LauncherAssetStore
         return existed;
     }
 
+    public async Task<IReadOnlyList<LauncherAssetUsage>> ListWithUsageAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var referenced = await CollectReferencedAssetIdsAsync(
+            organizationId,
+            cancellationToken);
+
+        return List(organizationId)
+            .Select(info => new LauncherAssetUsage(
+                info,
+                referenced.All.Contains(info.Id),
+                referenced.Published.Contains(info.Id)))
+            .ToArray();
+    }
+
     public async Task<int> CleanupAsync(
         Guid organizationId,
         CancellationToken cancellationToken)
     {
+        var referenced = await CollectReferencedAssetIdsAsync(
+            organizationId,
+            cancellationToken);
+
+        return DeleteUnreferenced(organizationId, referenced.All);
+    }
+
+    private async Task<LauncherAssetReferences> CollectReferencedAssetIdsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var publishedVersionIds = await _dbContext.AndroidPolicyPublications
+            .AsNoTracking()
+            .Where(publication =>
+                publication.OrganizationId == organizationId &&
+                publication.Status == AndroidPolicyPublicationStatus.Published &&
+                publication.DeletedAtUtc == null)
+            .Select(publication => publication.PolicyVersionId)
+            .ToListAsync(cancellationToken);
+
+        var publishedVersions = publishedVersionIds.ToHashSet();
+
         var versions = await _dbContext.PolicyVersions
             .AsNoTracking()
             .Where(version => version.OrganizationId == organizationId)
-            .Select(version => version.ConfigurationJson)
+            .Select(version => new { version.Id, version.ConfigurationJson })
             .ToListAsync(cancellationToken);
-        var referenced = new List<Guid>();
-        foreach (var json in versions)
+
+        var all = new HashSet<Guid>();
+        var published = new HashSet<Guid>();
+
+        foreach (var version in versions)
         {
-            foreach (Match match in AssetReferencePattern.Matches(json))
+            foreach (Match match in AssetReferencePattern.Matches(version.ConfigurationJson))
             {
-                if (Guid.TryParse(match.Groups[1].Value, out var id))
+                if (!Guid.TryParse(match.Groups[1].Value, out var id))
                 {
-                    referenced.Add(id);
+                    continue;
+                }
+
+                all.Add(id);
+
+                if (publishedVersions.Contains(version.Id))
+                {
+                    published.Add(id);
                 }
             }
         }
 
-        return DeleteUnreferenced(organizationId, referenced);
+        return new LauncherAssetReferences(all, published);
     }
 
     public int DeleteUnreferenced(Guid organizationId, IEnumerable<Guid> referenced)

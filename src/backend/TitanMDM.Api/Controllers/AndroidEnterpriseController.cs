@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TitanMDM.Api.Security;
 using TitanMDM.Application.AndroidEnterprise;
@@ -260,35 +261,27 @@ public sealed class AndroidEnterpriseController
             return Unauthorized();
 
         // No aceptar origen arbitrario desde el JSON del cliente.
-        // Usar el host del frontend validado por el proxy HTTPS.
-        // La solicitud debe llegar mediante el mismo origen de la consola.
+        // Usar el encabezado Origin del navegador y validarlo contra la
+        // lista de origenes del frontend aprobados por el servidor.
         var originHeader = Request.Headers.Origin.ToString();
 
-        if (!Uri.TryCreate(originHeader, UriKind.Absolute, out var origin) ||
-            origin.Scheme != Uri.UriSchemeHttps ||
-            !string.IsNullOrEmpty(origin.UserInfo) ||
-            origin.AbsolutePath != "/" ||
-            !string.IsNullOrEmpty(origin.Query) ||
-            !string.IsNullOrEmpty(origin.Fragment))
+        if (!TryResolveOrigin(originHeader, out var originAuthority))
         {
             return BadRequest(new
             {
-                message = "Managed Google Play requiere un origen frontend HTTPS."
+                message = "Managed Google Play requiere un origen frontend valido."
             });
         }
 
-        // Comparar con la lista de orÃ­genes del frontend aprobados.
-        // No confiar Ãºnicamente en un encabezado Origin proporcionado
-        // por el cliente: debe coincidir con configuraciÃ³n del servidor.
-        var allowed = HttpContext.RequestServices
-            .GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()
-            .GetSection("AndroidManagement:ManagedPlayAllowedOrigins")
-            .Get<string[]>() ?? Array.Empty<string>();
+        // Comparar con la lista de origenes del frontend aprobados.
+        // No confiar unicamente en un encabezado Origin proporcionado
+        // por el cliente: debe coincidir con configuracion del servidor.
+        var allowed = ResolveManagedPlayAllowedOrigins();
 
         if (!allowed.Any(value =>
             string.Equals(
                 value.TrimEnd('/'),
-                origin.GetLeftPart(UriPartial.Authority),
+                originAuthority,
                 StringComparison.OrdinalIgnoreCase)))
         {
             return Forbid();
@@ -297,14 +290,85 @@ public sealed class AndroidEnterpriseController
         var result = await _service.CreateManagedPlayWebTokenAsync(
             organizationId.Value,
             userId.Value,
-            new CreateAndroidWebTokenRequest(
-                origin.GetLeftPart(UriPartial.Authority)),
+            new CreateAndroidWebTokenRequest(originAuthority),
             cancellationToken);
 
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
 
         return Ok(result);
+    }
+
+    [HttpGet("managed-play/applications")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public async Task<IActionResult> GetManagedPlayApplications(
+        [FromQuery] string? search,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+
+        if (organizationId is null)
+            return Unauthorized();
+
+        var result = await _service.GetManagedPlayApplicationsAsync(
+            organizationId.Value,
+            search,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
+    [HttpPost("managed-play/applications")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    public async Task<IActionResult> RegisterManagedPlayApplication(
+        [FromBody] RegisterAndroidManagedPlayApplicationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+        var userId = GetUserId();
+
+        if (organizationId is null || userId is null)
+            return Unauthorized();
+
+        try
+        {
+            var result = await _service.RegisterManagedPlayApplicationAsync(
+                organizationId.Value,
+                userId.Value,
+                request ?? throw new ArgumentNullException(nameof(request)),
+                cancellationToken);
+
+            return Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { message = exception.Message });
+        }
+    }
+
+    [HttpDelete("managed-play/applications/{applicationId:guid}")]
+    [RequireAnyPermission(PermissionCodes.AndroidEnterprise.Manage)]
+    public async Task<IActionResult> RemoveManagedPlayApplication(
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = GetOrganizationId();
+
+        if (organizationId is null)
+            return Unauthorized();
+
+        var removed = await _service.RemoveManagedPlayApplicationAsync(
+            organizationId.Value,
+            applicationId,
+            cancellationToken);
+
+        return removed ? NoContent() : NotFound();
     }
 
     [HttpPost("launcher-assets")]
@@ -355,21 +419,31 @@ public sealed class AndroidEnterpriseController
     [RequireAnyPermission(
         PermissionCodes.AndroidEnterprise.View,
         PermissionCodes.Workspaces.AndroidView)]
-    public IActionResult ListLauncherAssets()
+    public async Task<IActionResult> ListLauncherAssets(
+        CancellationToken cancellationToken)
     {
         var organizationId = GetOrganizationId();
-        return organizationId is null
-            ? Unauthorized()
-            : Ok(_assets.List(organizationId.Value).Select(asset => new
-            {
-                id = asset.Id,
-                kind = asset.Kind,
-                format = asset.Format,
-                size = asset.Size,
-                sha256 = asset.Sha256,
-                token = "titan-asset:" + asset.Id.ToString("D"),
-                createdAtUtc = asset.CreatedAtUtc
-            }));
+        if (organizationId is null)
+        {
+            return Unauthorized();
+        }
+
+        var assets = await _assets.ListWithUsageAsync(
+            organizationId.Value,
+            cancellationToken);
+
+        return Ok(assets.Select(usage => new
+        {
+            id = usage.Info.Id,
+            kind = usage.Info.Kind,
+            format = usage.Info.Format,
+            size = usage.Info.Size,
+            sha256 = usage.Info.Sha256,
+            isReferenced = usage.IsReferenced,
+            isPublished = usage.IsPublished,
+            token = "titan-asset:" + usage.Info.Id.ToString("D"),
+            createdAtUtc = usage.Info.CreatedAtUtc
+        }));
     }
 
     [HttpGet("launcher-assets/{assetId:guid}")]
@@ -429,6 +503,47 @@ public sealed class AndroidEnterpriseController
         "webp" => "image/webp",
         _ => "image/jpeg"
     };
+
+    private string[] ResolveManagedPlayAllowedOrigins()
+    {
+        var configuration = HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>();
+
+        var configured = configuration
+            .GetSection("AndroidManagement:ManagedPlayAllowedOrigins")
+            .Get<string[]>();
+
+        if (configured is { Length: > 0 })
+        {
+            return configured;
+        }
+
+        // Fallback: reutilizar los origenes de CORS del frontend.
+        return configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? Array.Empty<string>();
+    }
+
+    private static bool TryResolveOrigin(
+        string? raw,
+        out string authority)
+    {
+        authority = string.Empty;
+
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var origin) ||
+            (origin.Scheme != Uri.UriSchemeHttps &&
+             origin.Scheme != Uri.UriSchemeHttp) ||
+            !string.IsNullOrEmpty(origin.UserInfo) ||
+            origin.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(origin.Query) ||
+            !string.IsNullOrEmpty(origin.Fragment))
+        {
+            return false;
+        }
+
+        authority = origin.GetLeftPart(UriPartial.Authority);
+        return authority.Length > 0;
+    }
 
     private Guid? GetOrganizationId()
     {

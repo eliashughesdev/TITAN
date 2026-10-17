@@ -13,6 +13,7 @@ interface Props {
   draft: LauncherDraft
   disabled: boolean
   onChange: (patch: Partial<LauncherDraft>) => void
+  showPreview?: boolean
 }
 
 interface StoredAsset {
@@ -46,10 +47,11 @@ const presets = {
   },
 }
 
-export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
+export function LauncherBrandingStudio({ draft, disabled, onChange, showPreview = true }: Props) {
   const [previous, setPrevious] = useState<StoredAsset[]>([])
   const [preview, setPreview] = useState<{ wallpaper?: string; logo?: string }>({})
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState<'wallpaper' | 'logo' | null>(null)
   const wallpaper = draft.wallpaperUrl || ''
   const logo = draft.logoUrl || ''
   const wallpaperValid = isValidLauncherResourceUrl(wallpaper)
@@ -73,6 +75,7 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
 
   async function upload(kind: 'wallpaper' | 'logo', file: File) {
     setUploadError(null)
+    setUploading(kind)
     const localPreview = URL.createObjectURL(file)
     setPreview((current) => ({ ...current, [kind]: localPreview }))
     const body = new FormData()
@@ -88,7 +91,9 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
         ? { wallpaperUrl: response.data.token }
         : { logoUrl: response.data.token })
     } catch {
-      setUploadError('No se pudo guardar la imagen. Usa PNG, JPEG o WebP dentro del límite.')
+      setUploadError('No se pudo guardar la imagen. Usa PNG, JPEG o WebP dentro del limite.')
+    } finally {
+      setUploading(null)
     }
   }
 
@@ -118,7 +123,7 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => drop('wallpaper', event)}
         >
-          <span>Adjuntar fondo</span>
+          <span>{uploading === 'wallpaper' ? 'Subiendo fondo...' : 'Adjuntar fondo'}</span>
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -134,7 +139,7 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => drop('logo', event)}
         >
-          <span>Adjuntar logotipo</span>
+          <span>{uploading === 'logo' ? 'Subiendo logotipo...' : 'Adjuntar logotipo'}</span>
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -254,7 +259,7 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
           : 'Un perfil anterior puede conservar una URL HTTPS. Sustituyela adjuntando un archivo.'}
       </p>
 
-      <div
+      {showPreview && <div
         className="tlsp-preview"
         style={{
           backgroundColor: draft.backgroundColor,
@@ -299,7 +304,7 @@ export function LauncherBrandingStudio({ draft, disabled, onChange }: Props) {
           ))}
         </div>
         <footer>Administrado por TitanMDM</footer>
-      </div>
+      </div>}
     </section>
   )
 }

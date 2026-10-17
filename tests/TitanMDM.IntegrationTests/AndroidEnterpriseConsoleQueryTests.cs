@@ -524,7 +524,9 @@ public sealed class AndroidEnterpriseConsoleQueryTests
             db,
             CreateClient(options),
             new StubTokenProvider(),
-            Options.Create(options));
+            Options.Create(options),
+            NullLogger<
+                AndroidEnterpriseService>.Instance);
     }
 
     private static AndroidManagementClient CreateClient(

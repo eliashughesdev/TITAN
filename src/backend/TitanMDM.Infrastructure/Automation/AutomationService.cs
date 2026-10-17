@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Commands;
 using TitanMDM.Domain.Automation;
+using TitanMDM.Infrastructure.Automation.Enterprise.Events;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Automation;
@@ -13,12 +15,25 @@ public sealed class AutomationService
     private readonly TitanMdmDbContext _db;
     private readonly IDeviceCommandService _commands;
 
+    /*
+     * AUT-1 — Motor empresarial opcional.
+     *
+     * Se resuelve de forma tolerante (GetService) para no
+     * romper el arranque si AddTitanAutomationPlatform no se
+     * ha registrado todavía (integración pendiente en Program.cs).
+     * Las reglas legacy siguen ejecutándose en línea.
+     */
+    private readonly IAutomationEventIngest? _ingest;
+
     public AutomationService(
         TitanMdmDbContext db,
-        IDeviceCommandService commands)
+        IDeviceCommandService commands,
+        IServiceProvider services)
     {
         _db = db;
         _commands = commands;
+        _ingest = services
+            .GetService<IAutomationEventIngest>();
     }
 
     public async Task<
@@ -264,6 +279,21 @@ public sealed class AutomationService
                 ruleId,
                 cancellationToken);
 
+        if (rule.HasDefinition &&
+            _ingest is not null)
+        {
+            await _ingest.ExecuteRuleNowAsync(
+                rule,
+                request.DeviceId,
+                NormalizeJson(
+                    request.TriggerPayloadJson),
+                userId,
+                simulated: false,
+                cancellationToken);
+
+            return;
+        }
+
         await ExecuteInternalAsync(
             rule,
             request.DeviceId,
@@ -297,7 +327,32 @@ public sealed class AutomationService
                 .ToListAsync(
                     cancellationToken);
 
-        foreach (var rule in rules)
+        /*
+         * Reglas empresariales (con definición): pasan por la
+         * cola persistente, con reintentos, idempotencia y
+         * anti-ciclos. Si el motor no está registrado, no se
+         * procesan (integración pendiente documentada).
+         */
+        if (_ingest is not null)
+        {
+            var enterpriseRules = rules
+                .Where(x => x.HasDefinition)
+                .ToArray();
+
+            if (enterpriseRules.Length > 0)
+            {
+                await _ingest.IngestForRulesAsync(
+                    automationEvent,
+                    enterpriseRules,
+                    cancellationToken);
+            }
+        }
+
+        /*
+         * Reglas legacy: se mantiene la ejecución en línea.
+         */
+        foreach (var rule in rules.Where(
+            x => !x.HasDefinition))
         {
             if (!ConditionsMatch(
                     rule.ConditionsJson,

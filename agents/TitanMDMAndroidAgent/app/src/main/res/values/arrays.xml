@@ -1,0 +1,22 @@
+<resources>
+    <string-array name="titan_image_fit_labels">
+        <item>Cubrir</item>
+        <item>Contener</item>
+        <item>Centrar</item>
+    </string-array>
+    <string-array name="titan_image_fit_values">
+        <item>cover</item>
+        <item>contain</item>
+        <item>center</item>
+    </string-array>
+    <string-array name="titan_theme_preset_labels">
+        <item>Corporativo</item>
+        <item>Oscuro</item>
+        <item>Personalizado</item>
+    </string-array>
+    <string-array name="titan_theme_preset_values">
+        <item>corporate</item>
+        <item>dark</item>
+        <item>custom</item>
+    </string-array>
+</resources>

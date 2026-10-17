@@ -45,4 +45,22 @@ public interface IAndroidEnterpriseService
         Guid userId,
         CreateAndroidWebTokenRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<AndroidManagedPlayApplicationDto>>
+        GetManagedPlayApplicationsAsync(
+            Guid organizationId,
+            string? search,
+            CancellationToken cancellationToken = default);
+
+    Task<AndroidManagedPlayApplicationDto>
+        RegisterManagedPlayApplicationAsync(
+            Guid organizationId,
+            Guid userId,
+            RegisterAndroidManagedPlayApplicationRequest request,
+            CancellationToken cancellationToken = default);
+
+    Task<bool> RemoveManagedPlayApplicationAsync(
+        Guid organizationId,
+        Guid applicationId,
+        CancellationToken cancellationToken = default);
 }

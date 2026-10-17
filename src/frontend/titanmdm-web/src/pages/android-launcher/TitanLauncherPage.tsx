@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowDown,
   ArrowUp,
   Boxes,
@@ -26,7 +26,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react'
 
@@ -58,18 +57,15 @@ import type {
 import {
   buildLauncherConfiguration,
   createLauncherDraft,
-  DEFAULT_BACKGROUND_COLOR,
-  DEFAULT_PRIMARY_COLOR,
   isValidBrandingColor,
   isValidLauncherResourceUrl,
   moveLauncherApplication,
-  normalizeBrandingColor,
   parseLauncherConfiguration,
   type LauncherApplication,
   type LauncherDraft,
   type LauncherInstallType,
 } from './launcherModel'
-import { LauncherBrandingStudio } from './LauncherBrandingStudio'
+import { TitanLauncherStudioV3, type StudioTool } from './TitanLauncherStudioV3'
 import { ManagedGooglePlayPanel } from '../apps/components/ManagedGooglePlayPanel'
 import './TitanLauncherPage.css'
 
@@ -101,9 +97,13 @@ const tabs: Array<{ id: LauncherTab; label: string; icon: ReactNode }> = [
 function getErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = (error as {
-      response?: { data?: { message?: string } }
+      response?: { status?: number; data?: { message?: string } }
     }).response
-    if (response?.data?.message) return response.data.message
+    const status = response?.status
+    const message = response?.data?.message
+    if (message && status) return `${message} (HTTP ${status})`
+    if (message) return message
+    if (status) return `${fallback} HTTP ${status}.`
   }
   return error instanceof Error ? error.message : fallback
 }
@@ -125,7 +125,8 @@ function badgeTone(status: string | null | undefined) {
 export function TitanLauncherPage() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('android.enterprise.manage') && hasPermission('policies.manage')
-  const [activeTab, setActiveTab] = useState<LauncherTab>('dashboard')
+  const [activeTab, setActiveTab] = useState<LauncherTab>('designer')
+  const [studioTool, setStudioTool] = useState<StudioTool>('identity')
   const [profiles, setProfiles] = useState<LauncherProfile[]>([])
   const [enterprise, setEnterprise] = useState<AndroidEnterpriseStatus | null>(null)
   const [enterpriseUnavailable, setEnterpriseUnavailable] = useState(false)
@@ -147,6 +148,7 @@ export function TitanLauncherPage() {
   const [deploymentPageIndex, setDeploymentPageIndex] = useState(1)
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([])
   const [loadingDeployments, setLoadingDeployments] = useState(false)
+  const [deploymentError, setDeploymentError] = useState<string | null>(null)
   const loadRequest = useRef(0)
   const deploymentRequest = useRef(0)
 
@@ -237,6 +239,7 @@ export function TitanLauncherPage() {
     }
 
     setLoadingDeployments(true)
+    setDeploymentError(null)
     try {
       const result = await policiesApi.getAndroidAssignmentsPage(
         selectedPolicyId,
@@ -251,8 +254,10 @@ export function TitanLauncherPage() {
       setSelectedDeviceIds([])
     } catch (deployError) {
       if (request === deploymentRequest.current) {
-        setDeploymentPage(null)
-        setError(getErrorMessage(deployError, 'No fue posible cargar los despliegues.'))
+        setDeploymentError(getErrorMessage(
+          deployError,
+          'No fue posible consultar los despliegues Android.',
+        ))
       }
     } finally {
       if (request === deploymentRequest.current) {
@@ -497,27 +502,39 @@ export function TitanLauncherPage() {
             />
           )}
 
-          {activeTab === 'designer' && (
-            <DesignerTab
+          {(activeTab === 'designer' || activeTab === 'apps') && (
+            <TitanLauncherStudioV3
               name={name}
               description={description}
               draft={draft}
               dirty={dirty}
               canManage={canManage}
               working={working}
-              selected={selectedProfile}
+              saved={Boolean(selectedProfile)}
+              active={selectedProfile?.policy.status === 'Active'}
+              published={selectedProfile?.publication?.status === 'Published'}
+              assigned={(selectedProfile?.policy.assignedDevices ?? 0) > 0}
+              applied={appliedDeployments > 0}
+              version={selectedProfile ? String(selectedProfile.policy.currentVersion) : 'nueva'}
+              tool={activeTab === 'apps' ? 'apps' : studioTool}
+              onTool={(tool) => {
+                setStudioTool(tool)
+                setActiveTab('designer')
+              }}
               onName={(value) => { setName(value); setDirty(true) }}
               onDescription={(value) => { setDescription(value); setDirty(true) }}
               onDraft={updateDraft}
+              onApplications={(applications) => updateDraft({ applications })}
               onSave={saveProfile}
-            />
-          )}
-
-          {activeTab === 'apps' && (
-            <AppsTab
-              applications={draft.applications}
-              canManage={canManage}
-              onChange={(applications) => updateDraft({ applications })}
+              onPublish={publishProfile}
+              onDeployments={() => setActiveTab('deployments')}
+              appsPanel={(
+                <AppsTab
+                  applications={draft.applications}
+                  canManage={canManage}
+                  onChange={(applications) => updateDraft({ applications })}
+                />
+              )}
             />
           )}
 
@@ -540,6 +557,8 @@ export function TitanLauncherPage() {
               working={working}
               deployable={deployable}
               searchQuery={deploymentQuery}
+              error={deploymentError}
+              onRetry={() => void loadDeployments()}
               selectedIds={selectedDeviceIds}
               onSearchChange={setDeploymentQuery}
               onSearchSubmit={() => {
@@ -644,7 +663,9 @@ function LauncherDashboard({
               <WorkflowStep label="Guardado" value={dirty ? 'Cambios pendientes' : `Versión ${selected.policy.currentVersion}`} ready={!dirty} />
               <WorkflowStep label="Activado" value={selected.policy.status} ready={selected.policy.status === 'Active'} />
               <WorkflowStep label="Publicado" value={selected.publication?.status ?? 'Pendiente'} ready={selected.publication?.status === 'Published'} />
-              <WorkflowStep label="Verificado" value={verification ? (verification.existsInGoogle ? 'Existe en Google' : 'No encontrado') : 'Sin verificar'} ready={verification?.existsInGoogle === true} />
+              <WorkflowStep label="Asignado" value={selected.policy.assignedDevices > 0 ? `${selected.policy.assignedDevices} dispositivos` : 'Sin asignar'} ready={selected.policy.assignedDevices > 0} />
+              <WorkflowStep label="Aplicado" value={applied > 0 ? `${applied} con RestrictionsManager` : 'Sin confirmacion del launcher'} ready={applied > 0} />
+              <WorkflowStep label="Verificado en Google" value={verification ? (verification.existsInGoogle ? 'La politica existe en Google' : 'No encontrado') : 'Sin verificar'} ready={verification?.existsInGoogle === true} />
             </ol>
           )}
         </TitanSectionCard>
@@ -671,132 +692,6 @@ function WorkflowStep({ label, value, ready }: { label: string; value: string; r
   )
 }
 
-function DesignerTab({
-  name,
-  description,
-  draft,
-  dirty,
-  canManage,
-  working,
-  selected,
-  onName,
-  onDescription,
-  onDraft,
-  onSave,
-}: {
-  name: string
-  description: string
-  draft: LauncherDraft
-  dirty: boolean
-  canManage: boolean
-  working: boolean
-  selected: LauncherProfile | null
-  onName: (value: string) => void
-  onDescription: (value: string) => void
-  onDraft: (patch: Partial<LauncherDraft>) => void
-  onSave: () => Promise<void>
-}) {
-  const visibleApps = draft.applications.filter((app) => app.visible)
-  return (
-    <div className="launcher-designer-grid">
-      <TitanSectionCard
-        title={selected ? 'Editar perfil' : 'Nuevo perfil'}
-        description="Modelo de configuracion Titan Launcher schema v2, compatible con perfiles anteriores."
-        icon={<LayoutGrid size={20} />}
-        action={<TitanStatusBadge label={dirty ? 'Cambios pendientes' : 'Sin cambios'} tone={dirty ? 'warning' : 'success'} />}
-      >
-        <div className="launcher-form-grid">
-          <label><span>Nombre del perfil</span><input disabled={!canManage} value={name} onChange={(event) => onName(event.target.value)} placeholder="Launcher tiendas" /></label>
-          <label><span>Schema</span><input readOnly value="Titan Launcher v2" /></label>
-          <label className="launcher-wide"><span>Descripción</span><textarea disabled={!canManage} value={description} onChange={(event) => onDescription(event.target.value)} /></label>
-          <label><span>Compañía</span><input disabled={!canManage} value={draft.companyName} onChange={(event) => onDraft({ companyName: event.target.value })} /></label>
-          <label><span>Mensaje de bienvenida</span><input disabled={!canManage} value={draft.welcomeMessage} onChange={(event) => onDraft({ welcomeMessage: event.target.value })} /></label>
-          <label className="launcher-color">
-            <span>Color primario</span>
-            <span className="launcher-color-control">
-              <input
-                type="color"
-                disabled={!canManage}
-                value={normalizeBrandingColor(draft.primaryColor, DEFAULT_PRIMARY_COLOR)}
-                onChange={(event) => onDraft({ primaryColor: event.target.value })}
-                aria-label="Selector de color primario"
-              />
-              <input
-                disabled={!canManage}
-                value={draft.primaryColor}
-                onChange={(event) => onDraft({ primaryColor: event.target.value })}
-                aria-label="Color primario en hexadecimal"
-              />
-            </span>
-          </label>
-          <label className="launcher-color">
-            <span>Color de fondo</span>
-            <span className="launcher-color-control">
-              <input
-                type="color"
-                disabled={!canManage}
-                value={normalizeBrandingColor(draft.backgroundColor, DEFAULT_BACKGROUND_COLOR)}
-                onChange={(event) => onDraft({ backgroundColor: event.target.value })}
-                aria-label="Selector de color de fondo"
-              />
-              <input
-                disabled={!canManage}
-                value={draft.backgroundColor}
-                onChange={(event) => onDraft({ backgroundColor: event.target.value })}
-                aria-label="Color de fondo en hexadecimal"
-              />
-            </span>
-          </label>
-          <div className="launcher-wide">
-            <LauncherBrandingStudio
-              draft={draft}
-              disabled={!canManage}
-              onChange={onDraft}
-            />
-          </div>
-          <label><span>Paquete del agente</span><input disabled={!canManage} value={draft.packageName} onChange={(event) => onDraft({ packageName: event.target.value })} /></label>
-          <label><span>Actividad HOME</span><input disabled={!canManage} value={draft.activityName} onChange={(event) => onDraft({ activityName: event.target.value })} /></label>
-          <label className="launcher-check launcher-wide"><input type="checkbox" disabled={!canManage} checked={draft.requiredForSetup} onChange={(event) => onDraft({ requiredForSetup: event.target.checked })} /><span>Requerida durante el aprovisionamiento</span></label>
-        </div>
-        <button type="button" className="titan-btn titan-btn--primary launcher-save" disabled={!canManage || working || !dirty} onClick={() => void onSave()}><Save size={16} /> Guardar y activar</button>
-      </TitanSectionCard>
-
-      <TitanSectionCard title="Vista previa" description="Representación responsive de las apps visibles." icon={<Smartphone size={20} />} className="launcher-preview-card">
-        <div className="launcher-phone">
-          <div className="launcher-phone-speaker" />
-          <div
-            className="launcher-phone-screen"
-            style={{
-              '--launcher-primary': normalizeBrandingColor(draft.primaryColor, DEFAULT_PRIMARY_COLOR),
-              '--launcher-background': normalizeBrandingColor(draft.backgroundColor, DEFAULT_BACKGROUND_COLOR),
-            } as CSSProperties}
-          >
-            <span className="launcher-preview-company">{draft.companyName || 'Compañía'}</span>
-            <h3>{draft.welcomeMessage || 'Bienvenido'}</h3>
-            <div className="launcher-preview-apps">
-              {visibleApps.length ? visibleApps.map((app) => (
-                <div key={app.packageName}>
-                  <span>{(app.label || app.packageName).slice(0, 1).toUpperCase()}</span>
-                  <small>{app.label || app.packageName}</small>
-                </div>
-              )) : <p>Agrega aplicaciones visibles para completar la pantalla.</p>}
-            </div>
-            <footer>Administrado por TitanMDM</footer>
-          </div>
-        </div>
-      </TitanSectionCard>
-    </div>
-  )
-}
-
-const localCatalog = [
-  { query: 'outlook', label: 'Outlook', packageName: 'com.microsoft.office.outlook' },
-  { query: 'teams', label: 'Microsoft Teams', packageName: 'com.microsoft.teams' },
-  { query: 'whatsapp', label: 'WhatsApp', packageName: 'com.whatsapp' },
-  { query: 'chrome', label: 'Chrome', packageName: 'com.android.chrome' },
-  { query: 'authenticator', label: 'Microsoft Authenticator', packageName: 'com.azure.authenticator' },
-]
-
 function AppsTab({
   applications,
   canManage,
@@ -808,13 +703,8 @@ function AppsTab({
 }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
-  const [query, setQuery] = useState('')
   const [manualPackage, setManualPackage] = useState('')
-  const suggestions = localCatalog.filter((item) =>
-    query.trim().length > 1 &&
-    (item.label.toLowerCase().includes(query.trim().toLowerCase()) ||
-      item.packageName.includes(query.trim().toLowerCase())),
-  )
+  const [manualLabel, setManualLabel] = useState('')
 
   function addApp(packageName: string, label: string) {
     if (applications.some((app) => app.packageName.toLowerCase() === packageName.toLowerCase())) return
@@ -851,27 +741,18 @@ function AppsTab({
     >
       <div className="launcher-tab-toolbar">
         <label>
-          <span>Buscar aplicacion</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Outlook, Teams, Chrome" disabled={!canManage} />
-        </label>
-        <label>
-          <span>Package manual</span>
+          <span>Alta manual validada</span>
           <input value={manualPackage} onChange={(event) => setManualPackage(event.target.value)} placeholder="com.empresa.app" disabled={!canManage} />
         </label>
-        <button type="button" className="titan-btn titan-btn--secondary" disabled={!canManage || !/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(manualPackage.trim())} onClick={() => addApp(manualPackage.trim(), manualPackage.trim())}>Validar y agregar</button>
+        <label>
+          <span>Nombre visible</span>
+          <input value={manualLabel} onChange={(event) => setManualLabel(event.target.value)} placeholder="Nombre en el launcher" disabled={!canManage} />
+        </label>
+        <button type="button" className="titan-btn titan-btn--secondary" disabled={!canManage || !/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(manualPackage.trim())} onClick={() => addApp(manualPackage.trim(), manualLabel.trim() || manualPackage.trim())}>Agregar paquete</button>
       </div>
-      {query.trim().length > 1 && (
-        <div className="launcher-app-list">
-          <p>Sugerencias locales. No son resultados en vivo de Google Play.</p>
-          {suggestions.length === 0 ? <p>Sin coincidencias locales. Abre Managed Google Play o escribe el package name.</p> : suggestions.map((item) => (
-            <button key={item.packageName} type="button" disabled={!canManage} onClick={() => addApp(item.packageName, item.label)}>
-              {item.label} · {item.packageName} · seleccion local
-            </button>
-          ))}
-        </div>
-      )}
+      <p className="launcher-muted">La busqueda oficial es el iframe de Managed Google Play. Esta consola no inventa resultados ni iconos de Play.</p>
       <ManagedGooglePlayPanel onSelect={(app) => addApp(app.packageName, app.packageName)} />
-      <p>Seleccionar no aprueba, no publica, no asigna ni instala. La instalacion se confirma solo tras sincronizar el dispositivo.</p>
+      <p>Seleccionar no aprueba, no publica, no asigna ni instala. El icono oficial no llega en el evento actual del iframe.</p>
       {!applications.length ? (
         <TitanEmptyState icon={<Boxes size={28} />} title="Sin aplicaciones" description="Agrega las apps autorizadas para este launcher." />
       ) : (
@@ -900,7 +781,11 @@ function AppsTab({
               <span className="launcher-app-order" title={canManage ? 'Arrastra para reordenar' : undefined}>{index + 1}</span>
               <label><span>Package name</span><input disabled={!canManage} value={app.packageName} onChange={(event) => update(index, { packageName: event.target.value })} placeholder="com.empresa.app" /></label>
               <label><span>Etiqueta</span><input disabled={!canManage} value={app.label} onChange={(event) => update(index, { label: event.target.value })} placeholder="Nombre visible" /></label>
-              <label><span>Instalación</span><select disabled={!canManage} value={app.installType} onChange={(event) => update(index, { installType: event.target.value as LauncherInstallType })}><option value="AVAILABLE">Disponible</option><option value="FORCE_INSTALLED">Forzada</option><option value="REQUIRED_FOR_SETUP">Requerida en setup</option></select></label>
+              <label><span>Instalacion</span><select disabled={!canManage} value={app.visible ? app.installType : 'BLOCKED'} onChange={(event) => {
+                const value = event.target.value
+                if (value === 'BLOCKED') update(index, { visible: false })
+                else update(index, { visible: true, installType: value as LauncherInstallType })
+              }}><option value="AVAILABLE">Disponible</option><option value="FORCE_INSTALLED">Obligatoria</option><option value="REQUIRED_FOR_SETUP">Requerida en setup</option><option value="BLOCKED">Bloqueada</option></select></label>
               <button type="button" className={app.visible ? 'launcher-visibility visible' : 'launcher-visibility'} disabled={!canManage} onClick={() => update(index, { visible: !app.visible })}>{app.visible ? <Eye size={16} /> : <EyeOff size={16} />}{app.visible ? 'Visible' : 'Oculta'}</button>
               <div className="launcher-row-actions">
                 <button type="button" disabled={!canManage || index === 0} aria-label="Mover arriba" onClick={() => onChange(moveLauncherApplication(applications, index, -1))}><ArrowUp size={15} /></button>
@@ -960,6 +845,8 @@ function DeploymentsTab({
   working,
   deployable,
   searchQuery,
+  error,
+  onRetry,
   selectedIds,
   onSearchChange,
   onSearchSubmit,
@@ -977,6 +864,8 @@ function DeploymentsTab({
   working: boolean
   deployable: boolean
   searchQuery: string
+  error: string | null
+  onRetry: () => void
   selectedIds: string[]
   onSearchChange: (value: string) => void
   onSearchSubmit: () => void
@@ -1038,7 +927,15 @@ function DeploymentsTab({
             )}
           </form>
 
-          {!rows.length ? (
+          {error && (
+            <div className="launcher-notice error" role="alert">
+              <p>{error}</p>
+              <p>Endpoint: GET /api/policies/{'{policyId}'}/android/assignments. Reintenta; un fallo no es una lista vacia.</p>
+              <button type="button" className="titan-btn titan-btn--secondary" onClick={onRetry}>Reintentar</button>
+            </div>
+          )}
+
+          {error && !page ? null : !rows.length ? (
             <TitanEmptyState
               icon={<Smartphone size={28} />}
               title={searchQuery ? 'Sin resultados' : 'Sin dispositivos administrados'}

@@ -97,6 +97,71 @@ public sealed class AutomationRule
 
     public int ExecutionCount { get; private set; }
 
+    public string? Module { get; private set; }
+
+    public int Priority { get; private set; } = 100;
+
+    public string? ScopeSiteIdsJson { get; private set; }
+
+    public string? DefinitionJson { get; private set; }
+
+    public Guid? ModifiedByUserId { get; private set; }
+
+    public int ConsecutiveFailures { get; private set; }
+
+    public bool HasDefinition =>
+        !string.IsNullOrWhiteSpace(
+            DefinitionJson);
+
+    public void ApplyDefinition(
+        string definitionJson,
+        AutomationTriggerType triggerType,
+        string? module,
+        int priority,
+        string? scopeSiteIdsJson,
+        Guid modifiedByUserId)
+    {
+        if (string.IsNullOrWhiteSpace(
+                definitionJson))
+            throw new ArgumentException(
+                "Definition JSON is required.",
+                nameof(definitionJson));
+
+        DefinitionJson =
+            definitionJson.Trim();
+
+        TriggerType = triggerType;
+
+        Module = Normalize(module);
+
+        Priority = Math.Clamp(priority, 0, 1000);
+
+        ScopeSiteIdsJson =
+            string.IsNullOrWhiteSpace(scopeSiteIdsJson)
+                ? null
+                : scopeSiteIdsJson.Trim();
+
+        if (modifiedByUserId != Guid.Empty)
+            ModifiedByUserId = modifiedByUserId;
+
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void RegisterFailure()
+    {
+        ConsecutiveFailures++;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void ResetFailures()
+    {
+        if (ConsecutiveFailures == 0)
+            return;
+
+        ConsecutiveFailures = 0;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public void Update(
         string name,
         string? description,

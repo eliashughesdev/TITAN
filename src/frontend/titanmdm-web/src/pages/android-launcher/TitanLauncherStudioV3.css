@@ -1,0 +1,478 @@
+.lx3 {
+  --lx-green: #168a48;
+  --lx-green-2: #0f6d38;
+  --lx-blue: #0f3f73;
+  --lx-ink: #10231b;
+  --lx-muted: #5d7268;
+  --lx-line: #d7e5de;
+  --lx-paper: #f4f7f8;
+  --lx-card: #ffffff;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  color: var(--lx-ink);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.lx3-top,
+.lx3-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lx3-top {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff, #f7fbf8);
+}
+
+.lx3-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lx3-identity strong,
+.lx3-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx3-identity span,
+.lx3-note {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.lx3-actions,
+.lx3-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lx3 button,
+.lx3 select,
+.lx3 input,
+.lx3 textarea {
+  font: inherit;
+}
+
+.lx3-btn {
+  min-height: 36px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--lx-blue);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.lx3-btn:hover:not(:disabled) {
+  border-color: #9dceB4;
+  background: #f3fbf6;
+}
+
+.lx3-btn:focus-visible,
+.lx3-side button:focus-visible,
+.lx3-field input:focus-visible,
+.lx3-field select:focus-visible,
+.lx3-field textarea:focus-visible {
+  outline: 2px solid var(--lx-green);
+  outline-offset: 2px;
+}
+
+.lx3-btn:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.lx3-btn.primary {
+  border-color: var(--lx-green-2);
+  background: var(--lx-green);
+  color: #fff;
+}
+
+.lx3-chip {
+  border-radius: 999px;
+  background: #eef6f1;
+  color: var(--lx-green-2);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lx3-chip.warn { background: #fff7e8; color: #92400e; }
+.lx3-chip.danger { background: #fef2f2; color: #991b1b; }
+.lx3-chip.ok { background: #dcfce7; color: #166534; }
+
+.lx3-progress {
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.lx3-progress span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--lx-line);
+  color: var(--lx-muted);
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.lx3-progress span.on {
+  border-color: #b7e4c7;
+  background: #f0fdf4;
+  color: var(--lx-green-2);
+  font-weight: 700;
+}
+
+.lx3-workspace {
+  display: grid;
+  grid-template-columns: clamp(180px, 15vw, 220px) minmax(0, 1fr) clamp(340px, 26vw, 440px);
+  gap: 12px;
+  min-width: 0;
+  min-height: 760px;
+  height: min(78vh, 920px);
+  align-items: stretch;
+}
+
+.lx3-side,
+.lx3-inspector,
+.lx3-stage {
+  min-width: 0;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-card);
+}
+
+.lx3-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+.lx3-side button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-blue);
+  text-align: left;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.lx3-side button.active {
+  background: #e8f6ee;
+  color: var(--lx-green-2);
+  font-weight: 700;
+}
+
+.lx3-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 0%, #e7f6ee, transparent 42%),
+    var(--lx-paper);
+}
+
+.lx3-device {
+  width: auto;
+  height: min(94%, 820px);
+  max-width: 100%;
+  aspect-ratio: 9 / 19.2;
+  border: 10px solid #10231b;
+  border-radius: 32px;
+  background: #10231b;
+  box-shadow: 0 18px 40px rgba(16, 35, 27, .18);
+  transition: height .2s ease;
+}
+
+.lx3-device.large {
+  height: min(98%, 900px);
+}
+
+.lx3-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 16px;
+}
+
+.lx3-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lx3-logo,
+.lx3-app i {
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .14);
+  color: inherit;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.lx3-logo {
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+}
+
+.lx3-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lx3-apps {
+  display: grid;
+  margin-top: auto;
+}
+
+.lx3-app {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
+}
+
+.lx3-app small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lx3-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-height: 100%;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.lx3-inspector h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.lx3-field {
+  display: grid;
+  gap: 6px;
+}
+
+.lx3-field span {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lx3-field input,
+.lx3-field select,
+.lx3-field textarea {
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--lx-ink);
+  padding: 8px 10px;
+}
+
+.lx3-field input[type="color"] {
+  min-height: 42px;
+  padding: 4px;
+}
+
+.lx3-field input[type="range"] {
+  padding: 0;
+  accent-color: var(--lx-green);
+}
+
+.lx3-block {
+  border: 1px solid #f3d19c;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #7c4a03;
+  padding: 12px;
+}
+
+.lx3 .managed-play,
+.lx3 .tlsp,
+.lx3 .launcher-app-list,
+.lx3 .launcher-app-row,
+.lx3 .launcher-tab-toolbar {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.lx3 .managed-play {
+  gap: 12px;
+  padding: 0;
+}
+
+.lx3 .managed-play-header,
+.lx3 .managed-play-layout {
+  min-width: 0;
+}
+
+.lx3 .managed-play-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+}
+
+.lx3 .managed-play-header h1 {
+  margin: 4px 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.lx3 .managed-play-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lx3 .managed-play-frame {
+  min-height: 220px;
+  height: 300px;
+}
+
+.lx3 .managed-play-card,
+.lx3 .managed-play-app,
+.lx3 .managed-play-app strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lx3 .tlsp {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.lx3 .tlsp-fields,
+.lx3 .tlsp-theme,
+.lx3 .tlsp-actions,
+.lx3 .tlsp-previous {
+  min-width: 0;
+}
+
+.lx3 .launcher-app-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lx3 .launcher-app-row label,
+.lx3 .launcher-app-row .launcher-row-actions,
+.lx3 .launcher-app-row .launcher-visibility,
+.lx3 .launcher-app-order {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.lx3 .launcher-tab-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lx3 .launcher-tab-toolbar input,
+.lx3 .launcher-tab-toolbar button,
+.lx3 .lx3-btn,
+.lx3 .lx3-field input,
+.lx3 .lx3-field select,
+.lx3 .lx3-field textarea {
+  max-width: 100%;
+}
+
+.lx3-side button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .lx3 {
+    height: auto;
+    min-height: 0;
+  }
+
+  .lx3-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .lx3-side {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .lx3-inspector {
+    max-height: none;
+  }
+
+  .lx3-stage {
+    min-height: 640px;
+  }
+
+  .lx3-device,
+  .lx3-device.large {
+    height: min(72vh, 720px);
+  }
+}
+
+@media (min-width: 1366px) and (max-width: 1600px) {
+  .lx3-workspace {
+    grid-template-columns: 180px minmax(0, 1fr) 340px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .lx3-workspace {
+    grid-template-columns: 210px minmax(0, 1fr) 420px;
+  }
+}
+
+@media (min-width: 2560px) {
+  .lx3-workspace {
+    grid-template-columns: 220px minmax(0, 1fr) 440px;
+  }
+
+  .lx3-device {
+    height: min(86%, 900px);
+  }
+}

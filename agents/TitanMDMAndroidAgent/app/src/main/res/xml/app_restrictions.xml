@@ -62,6 +62,82 @@
         android:defaultValue="4" />
 
     <restriction
+        android:key="titan_secondary_color"
+        android:title="Color secundario (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#0F7A50" />
+
+    <restriction
+        android:key="titan_text_color"
+        android:title="Color del texto (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#F4F7F8" />
+
+    <restriction
+        android:key="titan_card_color"
+        android:title="Color de tarjeta (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#142831" />
+
+    <restriction
+        android:key="titan_card_text_color"
+        android:title="Color del texto de tarjeta (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#F4F7F8" />
+
+    <restriction
+        android:key="titan_button_color"
+        android:title="Color de botones (#RRGGBB)"
+        android:restrictionType="string"
+        android:defaultValue="#16A36A" />
+
+    <restriction
+        android:key="titan_border_radius"
+        android:title="Radio de borde"
+        android:restrictionType="integer"
+        android:defaultValue="16" />
+
+    <restriction
+        android:key="titan_card_opacity"
+        android:title="Opacidad de tarjeta"
+        android:restrictionType="integer"
+        android:defaultValue="100" />
+
+    <restriction
+        android:key="titan_shadow"
+        android:title="Intensidad de sombra"
+        android:restrictionType="integer"
+        android:defaultValue="40" />
+
+    <restriction
+        android:key="titan_icon_size"
+        android:title="Tamaño de icono"
+        android:restrictionType="integer"
+        android:defaultValue="56" />
+
+    <restriction
+        android:key="titan_grid_gap"
+        android:title="Separación de la cuadrícula"
+        android:restrictionType="integer"
+        android:defaultValue="12" />
+
+    <restriction
+        android:key="titan_image_fit"
+        android:title="Ajuste de imagen"
+        android:restrictionType="choice"
+        android:entries="@array/titan_image_fit_labels"
+        android:entryValues="@array/titan_image_fit_values"
+        android:defaultValue="cover" />
+
+    <restriction
+        android:key="titan_theme_preset"
+        android:title="Preajuste de tema"
+        android:restrictionType="choice"
+        android:entries="@array/titan_theme_preset_labels"
+        android:entryValues="@array/titan_theme_preset_values"
+        android:defaultValue="corporate" />
+
+    <restriction
         android:key="titan_config_version"
         android:title="Versión de configuración"
         android:restrictionType="integer"

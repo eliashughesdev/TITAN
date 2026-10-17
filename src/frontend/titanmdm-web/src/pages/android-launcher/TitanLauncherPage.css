@@ -1,6 +1,7 @@
 .launcher-page {
   --launcher-green: #168a48;
   --launcher-soft: #effcf4;
+  padding-bottom: 132px;
 }
 
 .launcher-enterprise-strip {
@@ -58,6 +59,12 @@
   border-color: #fecaca;
   color: #991b1b;
   background: #fef2f2;
+}
+
+@media (max-width: 980px) {
+  .launcher-studio {
+    grid-template-columns: 1fr;
+  }
 }
 
 .launcher-tabs {
@@ -470,6 +477,7 @@
 
 .launcher-table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -596,7 +604,54 @@
     min-height: 46px;
   }
 
-  .launcher-tabs button {
+.launcher-page input:not([type='checkbox']):not([type='color']):not([type='range']),
+.launcher-page select,
+.launcher-page textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d5e3dc;
+  border-radius: 10px;
+  background: #fff;
+  color: #10231b;
+  padding: 8px 10px;
+}
+
+.launcher-page input:focus,
+.launcher-page select:focus,
+.launcher-page textarea:focus {
+  outline: 2px solid #168a48;
+  outline-offset: 1px;
+}
+
+.launcher-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, .7fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.launcher-studio-nav {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.launcher-studio-nav button {
+  min-height: 36px;
+  border: 1px solid #d5e3dc;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 14px;
+}
+
+.launcher-studio-nav button.active {
+  background: #168a48;
+  color: #fff;
+  border-color: #168a48;
+}
+
+.launcher-tabs button {
     flex: 0 0 auto;
   }
 

@@ -66,6 +66,34 @@ public sealed class AutomationExecution
 
     public DateTime? CompletedAtUtc { get; private set; }
 
+    public int RetryCount { get; private set; }
+
+    public long? DurationMs { get; private set; }
+
+    public bool Simulated { get; private set; }
+
+    public int CycleDepth { get; private set; }
+
+    public Guid? ActorUserId { get; private set; }
+
+    public void Configure(
+        int cycleDepth,
+        Guid? actorUserId,
+        bool simulated)
+    {
+        CycleDepth = Math.Max(0, cycleDepth);
+        ActorUserId =
+            actorUserId == Guid.Empty
+                ? null
+                : actorUserId;
+        Simulated = simulated;
+    }
+
+    public void SetRetryCount(int retryCount)
+    {
+        RetryCount = Math.Max(0, retryCount);
+    }
+
     public void Complete(
         string? resultJson = null)
     {
@@ -78,6 +106,7 @@ public sealed class AutomationExecution
                 : resultJson;
 
         CompletedAtUtc = DateTime.UtcNow;
+        DurationMs = ComputeDuration();
     }
 
     public void Fail(string error)
@@ -91,6 +120,7 @@ public sealed class AutomationExecution
                 : error.Trim();
 
         CompletedAtUtc = DateTime.UtcNow;
+        DurationMs = ComputeDuration();
     }
 
     public void Skip(string reason)
@@ -100,5 +130,21 @@ public sealed class AutomationExecution
 
         ResultJson = reason;
         CompletedAtUtc = DateTime.UtcNow;
+        DurationMs = ComputeDuration();
+    }
+
+    private long ComputeDuration()
+    {
+        var completedAt =
+            CompletedAtUtc ??
+            DateTime.UtcNow;
+
+        var duration =
+            (completedAt -
+                StartedAtUtc).TotalMilliseconds;
+
+        return duration < 0
+            ? 0
+            : (long)duration;
     }
 }

@@ -1,5 +1,7 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Net;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TitanMDM.Application.AndroidEnterprise;
 using TitanMDM.Domain.Entities;
@@ -15,17 +17,20 @@ public sealed class AndroidEnterpriseService
     private readonly AndroidManagementClient _client;
     private readonly IGoogleAndroidAccessTokenProvider _tokenProvider;
     private readonly AndroidManagementOptions _options;
+    private readonly ILogger<AndroidEnterpriseService> _logger;
 
     public AndroidEnterpriseService(
         TitanMdmDbContext dbContext,
         AndroidManagementClient client,
         IGoogleAndroidAccessTokenProvider tokenProvider,
-        IOptions<AndroidManagementOptions> options)
+        IOptions<AndroidManagementOptions> options,
+        ILogger<AndroidEnterpriseService> logger)
     {
         _dbContext = dbContext;
         _client = client;
         _tokenProvider = tokenProvider;
         _options = options.Value;
+        _logger = logger;
     }
 
     // ============================================================
@@ -948,16 +953,19 @@ public sealed class AndroidEnterpriseService
         ArgumentNullException.ThrowIfNull(request);
 
         if (string.IsNullOrWhiteSpace(request.IframeOrigin))
-            throw new ArgumentException("Origen HTTPS requerido.");
+            throw new ArgumentException("Origen del frontend requerido.");
 
+        // El origen ya fue validado contra la lista de origenes aprobados
+        // en la capa de API. Aqui solo se comprueba su estructura.
         if (!Uri.TryCreate(request.IframeOrigin, UriKind.Absolute, out var origin) ||
-            origin.Scheme != Uri.UriSchemeHttps ||
+            (origin.Scheme != Uri.UriSchemeHttps &&
+             origin.Scheme != Uri.UriSchemeHttp) ||
             !string.IsNullOrEmpty(origin.UserInfo) ||
             !string.IsNullOrEmpty(origin.Query) ||
             !string.IsNullOrEmpty(origin.Fragment) ||
             origin.AbsolutePath != "/")
         {
-            throw new ArgumentException("El origen del iframe debe ser HTTPS y no contener ruta, consulta ni fragmento.");
+            throw new ArgumentException("El origen del iframe no es valido: no debe contener credenciales, ruta, consulta ni fragmento.");
         }
 
         var config = await _dbContext.AndroidEnterpriseConfigurations
@@ -1010,6 +1018,268 @@ public sealed class AndroidEnterpriseService
             null,
             DateTime.UtcNow);
     }
+    // ============================================================
+    // MANAGED GOOGLE PLAY - CATALOGO CORPORATIVO
+    // ============================================================
+
+    public async Task<IReadOnlyCollection<AndroidManagedPlayApplicationDto>>
+        GetManagedPlayApplicationsAsync(
+            Guid organizationId,
+            string? search,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        var query = _dbContext.AndroidManagedPlayApplications
+            .AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.RemovedAtUtc == null);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x =>
+                x.PackageName.Contains(term) ||
+                (x.DisplayTitle != null && x.DisplayTitle.Contains(term)));
+        }
+
+        var rows = await query
+            .OrderBy(x => x.PackageName)
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(MapApplication)
+            .ToArray();
+    }
+
+    public async Task<AndroidManagedPlayApplicationDto>
+        RegisterManagedPlayApplicationAsync(
+            Guid organizationId,
+            Guid userId,
+            RegisterAndroidManagedPlayApplicationRequest request,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        if (userId == Guid.Empty)
+            throw new ArgumentException("UserId requerido.", nameof(userId));
+
+        ArgumentNullException.ThrowIfNull(request);
+
+        var packageName =
+            AndroidManagedPlayApplication.NormalizePackageName(request.PackageName);
+
+        var enterprise =
+            await GetActiveEnterpriseNameAsync(organizationId, cancellationToken);
+
+        var application = await _dbContext.AndroidManagedPlayApplications
+            .SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId &&
+                     x.PackageName == packageName,
+                cancellationToken);
+
+        if (application is null)
+        {
+            application = new AndroidManagedPlayApplication(
+                organizationId,
+                packageName,
+                AndroidManagedPlayApplicationSource.ManagedPlayIframe,
+                userId,
+                request.ProductId,
+                request.InstallationType);
+
+            _dbContext.AndroidManagedPlayApplications.Add(application);
+        }
+        else
+        {
+            if (application.IsRemoved)
+            {
+                application.Reactivate();
+            }
+
+            application.UpdateSource(
+                AndroidManagedPlayApplicationSource.ManagedPlayIframe);
+        }
+
+        await TryFetchMetadataAsync(
+            enterprise,
+            application,
+            cancellationToken);
+
+        var persisted = await SaveApplicationAsync(
+            application,
+            cancellationToken);
+
+        return MapApplication(persisted);
+    }
+
+    public async Task<bool> RemoveManagedPlayApplicationAsync(
+        Guid organizationId,
+        Guid applicationId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        if (applicationId == Guid.Empty)
+            throw new ArgumentException("ApplicationId requerido.", nameof(applicationId));
+
+        var application = await _dbContext.AndroidManagedPlayApplications
+            .SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId &&
+                     x.Id == applicationId &&
+                     x.RemovedAtUtc == null,
+                cancellationToken);
+
+        if (application is null)
+        {
+            return false;
+        }
+
+        application.Remove();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
+    private async Task<string> GetActiveEnterpriseNameAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        var config = await _dbContext.AndroidEnterpriseConfigurations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (config is null ||
+            config.Status != AndroidEnterpriseStatus.Active ||
+            string.IsNullOrWhiteSpace(config.EnterpriseName))
+        {
+            throw new InvalidOperationException(
+                "La organizacion no tiene Android Enterprise activo.");
+        }
+
+        return config.EnterpriseName;
+    }
+
+    private async Task TryFetchMetadataAsync(
+        string enterpriseName,
+        AndroidManagedPlayApplication application,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resource = await _client.GetApplicationAsync(
+                enterpriseName,
+                application.PackageName,
+                cancellationToken: cancellationToken);
+
+            application.ApplyOfficialMetadata(
+                ReadString(resource, "title"),
+                ReadString(resource, "iconUrl"),
+                ReadString(resource, "description"),
+                ReadLatestVersion(resource),
+                DateTime.UtcNow);
+        }
+        catch (AndroidManagementApiException exception)
+            when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Respuesta autoritativa: la aplicacion no esta disponible
+            // en Managed Google Play para esta empresa.
+            application.MarkMetadataUnavailable(
+                "La aplicacion no esta disponible en Managed Google Play para esta empresa.",
+                DateTime.UtcNow);
+        }
+        catch (Exception exception)
+        {
+            // Fallo transitorio (red/autenticacion): no se inventan datos.
+            // La entrada permanece en estado Pending y es reintentable.
+            _logger.LogWarning(
+                exception,
+                "No se pudieron obtener metadatos oficiales de Managed Google Play. OrganizationId={OrganizationId}, PackageName={PackageName}",
+                application.OrganizationId,
+                application.PackageName);
+        }
+    }
+
+    private async Task<AndroidManagedPlayApplication> SaveApplicationAsync(
+        AndroidManagedPlayApplication application,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return application;
+        }
+        catch (DbUpdateException)
+        {
+            // Carrera sobre el indice unico (OrganizationId, PackageName).
+            // Se recarga la fila ya persistida para devolver el estado real.
+            _dbContext.Entry(application).State = EntityState.Detached;
+
+            return await _dbContext.AndroidManagedPlayApplications
+                .AsNoTracking()
+                .SingleAsync(
+                    x => x.OrganizationId == application.OrganizationId &&
+                         x.PackageName == application.PackageName,
+                    cancellationToken);
+        }
+    }
+
+    private static string? ReadString(
+        JsonNode? node,
+        string property)
+    {
+        return node?[property]?.GetValue<string>();
+    }
+
+    private static string? ReadLatestVersion(
+        JsonNode? node)
+    {
+        if (node?["appVersions"] is not JsonArray versions)
+        {
+            return null;
+        }
+
+        for (var index = versions.Count - 1; index >= 0; index--)
+        {
+            var version =
+                versions[index]?["versionString"]?.GetValue<string>();
+
+            if (!string.IsNullOrWhiteSpace(version))
+            {
+                return version;
+            }
+        }
+
+        return null;
+    }
+
+    private static AndroidManagedPlayApplicationDto MapApplication(
+        AndroidManagedPlayApplication application)
+    {
+        return new AndroidManagedPlayApplicationDto(
+            application.Id,
+            application.PackageName,
+            application.Source.ToString(),
+            application.ApprovalState.ToString(),
+            application.DisplayTitle,
+            application.IconUrl,
+            application.Description,
+            application.LatestVersionName,
+            application.ProductId,
+            application.InstallationType,
+            application.MetadataError,
+            application.HasOfficialMetadata,
+            application.MetadataFetchedAtUtc,
+            application.CreatedByUserId,
+            application.CreatedAtUtc,
+            application.UpdatedAtUtc,
+            application.RemovedAtUtc);
+    }
+
     private static void ValidateOrganization(
         Guid organizationId)
     {

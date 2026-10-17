@@ -119,6 +119,10 @@ public sealed class TitanMdmDbContext
         AndroidDevices =>
             Set<AndroidDevice>();
 
+    public DbSet<AndroidManagedPlayApplication>
+        AndroidManagedPlayApplications =>
+            Set<AndroidManagedPlayApplication>();
+
     // ============================================================
     // SECURITY / COMPLIANCE
     // ============================================================

@@ -70,3 +70,27 @@ public sealed record AndroidWebTokenDto(
     string Url,
     DateTime? ExpirationTimeUtc,
     DateTime CreatedAtUtc);
+
+public sealed record RegisterAndroidManagedPlayApplicationRequest(
+    string PackageName,
+    string? ProductId = null,
+    string? InstallationType = null);
+
+public sealed record AndroidManagedPlayApplicationDto(
+    Guid Id,
+    string PackageName,
+    string Source,
+    string ApprovalState,
+    string? DisplayTitle,
+    string? IconUrl,
+    string? Description,
+    string? LatestVersionName,
+    string? ProductId,
+    string? InstallationType,
+    string? MetadataError,
+    bool HasOfficialMetadata,
+    DateTime? MetadataFetchedAtUtc,
+    Guid CreatedByUserId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
+    DateTime? RemovedAtUtc);

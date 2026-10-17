@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Options;
 
+using TitanMDM.Api.AI.Assistant;
+
 namespace TitanMDM.Api.AI;
 
 public static class OpenRouterServiceExtensions
@@ -50,6 +52,13 @@ public static class OpenRouterServiceExtensions
                             10,
                             180));
             });
+
+        // Núcleo del asistente empresarial (herramientas de
+        // lectura, sesiones, orquestador y proveedores).
+        // Se registra aquí para no modificar el registro global
+        // de Program.cs ni el contenedor de Android.
+        services.AddTitanAssistant(
+            configuration);
 
         return services;
     }

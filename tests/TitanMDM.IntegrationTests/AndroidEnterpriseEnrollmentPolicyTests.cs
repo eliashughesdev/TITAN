@@ -488,7 +488,9 @@ public sealed class AndroidEnterpriseEnrollmentPolicyTests
             db,
             client,
             new StubTokenProvider(),
-            Options.Create(options));
+            Options.Create(options),
+            NullLogger<
+                AndroidEnterpriseService>.Instance);
     }
 
     private static TitanMdmDbContext Open()

@@ -35,6 +35,17 @@ public sealed class AutomationExecutionConfiguration
         builder.Property(x => x.ErrorMessage)
             .HasMaxLength(2000);
 
+        builder.Property(x => x.RetryCount)
+            .IsRequired();
+
+        builder.Property(x => x.DurationMs);
+
+        builder.Property(x => x.Simulated)
+            .IsRequired();
+
+        builder.Property(x => x.CycleDepth)
+            .IsRequired();
+
         builder.HasIndex(
             x => new
             {

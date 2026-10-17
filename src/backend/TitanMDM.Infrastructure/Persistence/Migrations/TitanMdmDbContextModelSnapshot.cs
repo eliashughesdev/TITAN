@@ -286,6 +286,25 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastSynchronizedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("LauncherAppliedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("LauncherConfigVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("LauncherProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("LauncherPublicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("LauncherRestrictionsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LauncherSyncStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("ManagementMode")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -498,6 +517,81 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId", "CreatedAtUtc");
 
                     b.ToTable("AndroidEnterpriseSignupSessions", (string)null);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.AndroidManagedPlayApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ApprovalState")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DisplayTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("InstallationType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("LatestVersionName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("MetadataError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("MetadataFetchedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PackageName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("ProductId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("RemovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("OrganizationId", "ApprovalState");
+
+                    b.HasIndex("OrganizationId", "PackageName")
+                        .IsUnique();
+
+                    b.ToTable("AndroidManagedPlayApplications", (string)null);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.AndroidPolicyPublication", b =>
@@ -3634,6 +3728,15 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.AndroidManagedPlayApplication", b =>
+                {
                     b.HasOne("TitanMDM.Domain.Entities.Organization", null)
                         .WithMany()
                         .HasForeignKey("OrganizationId")
