@@ -1,14 +1,17 @@
 import {
   Activity,
+  Bell,
   CheckCircle2,
   Clock3,
   Edit3,
+  Gauge,
   History,
   MapPin,
   Pause,
   Play,
   RefreshCw,
   Save,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   Trash2,
@@ -39,7 +42,24 @@ import {
 
 import type {
   DeviceListItem,
+  DeviceListResult,
 } from '../../types/device'
+
+import {
+  AutomationDashboardPanel,
+} from './AutomationDashboardPanel'
+
+import {
+  AutomationEnterprisePanel,
+} from './AutomationEnterprisePanel'
+
+import {
+  AutomationNotificationsPanel,
+} from './AutomationNotificationsPanel'
+
+import {
+  formatDate,
+} from './automationUi'
 
 import './AutomationPage.css'
 
@@ -285,9 +305,16 @@ export function AutomationPage() {
     useState<string | null>(null)
 
   const [activeView, setActiveView] =
-    useState<'rules' | 'history'>(
-      'rules',
-    )
+    useState<
+      | 'rules'
+      | 'history'
+      | 'dashboard'
+      | 'enterprise'
+      | 'notifications'
+    >('rules')
+
+  const [unreadNotifications, setUnreadNotifications] =
+    useState(0)
 
   const [loading, setLoading] =
     useState(true)
@@ -301,17 +328,10 @@ export function AutomationPage() {
   const [error, setError] =
     useState<string | null>(null)
 
-  const loadData =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const [
-          ruleData,
-          executionData,
-          deviceData,
-        ] = await Promise.all([
+  const fetchData =
+    useCallback(
+      () =>
+        Promise.all([
           automationApi.getRules(),
 
           automationApi.getExecutions(
@@ -322,12 +342,32 @@ export function AutomationPage() {
             page: 1,
             pageSize: 100,
           }),
-        ])
+        ]),
+      [],
+    )
 
+  const applyData =
+    useCallback(
+      ([
+        ruleData,
+        executionData,
+        deviceData,
+      ]: [
+        AutomationRule[],
+        AutomationExecution[],
+        DeviceListResult,
+      ]) => {
         setRules(ruleData)
         setExecutions(executionData)
         setDevices(deviceData.items)
-      } catch (loadError) {
+        setError(null)
+      },
+      [],
+    )
+
+  const applyError =
+    useCallback(
+      (loadError: unknown) => {
         console.error(
           'Automation load error:',
           loadError,
@@ -336,14 +376,53 @@ export function AutomationPage() {
         setError(
           'No fue posible cargar Automation Engine.',
         )
-      } finally {
-        setLoading(false)
-      }
-    }, [])
+      },
+      [],
+    )
+
+  const loadData =
+    useCallback(
+      () => {
+        setLoading(true)
+
+        return fetchData()
+          .then((data) => {
+            applyData(data)
+          })
+          .catch((loadError) => {
+            applyError(loadError)
+          })
+          .finally(() => {
+            setLoading(false)
+          })
+      },
+      [fetchData, applyData, applyError],
+    )
 
   useEffect(() => {
-    void loadData()
-  }, [loadData])
+    let active = true
+
+    fetchData()
+      .then((data) => {
+        if (active) {
+          applyData(data)
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          applyError(loadError)
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [fetchData, applyData, applyError])
 
   useEffect(() => {
     document.title =
@@ -1179,6 +1258,57 @@ export function AutomationPage() {
             {executions.length}
           </span>
         </button>
+
+        <button
+          type="button"
+          className={
+            activeView === 'enterprise'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveView('enterprise')
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Empresarial
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === 'dashboard'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveView('dashboard')
+          }
+        >
+          <Gauge size={16} />
+          Panel
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === 'notifications'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveView('notifications')
+          }
+        >
+          <Bell size={16} />
+          Notificaciones
+
+          {unreadNotifications > 0 && (
+            <span>
+              {unreadNotifications}
+            </span>
+          )}
+        </button>
       </div>
 
       {activeView === 'rules' && (
@@ -1507,6 +1637,24 @@ export function AutomationPage() {
           </div>
         </section>
       )}
+
+      {activeView === 'enterprise' && (
+        <AutomationEnterprisePanel
+          devices={devices}
+        />
+      )}
+
+      {activeView === 'dashboard' && (
+        <AutomationDashboardPanel />
+      )}
+
+      {activeView === 'notifications' && (
+        <AutomationNotificationsPanel
+          onUnreadChange={
+            setUnreadNotifications
+          }
+        />
+      )}
     </div>
   )
 }
@@ -1584,25 +1732,4 @@ function ExecutionStatus({
       {status}
     </span>
   )
-}
-
-function formatDate(
-  value: string | null,
-): string {
-  if (!value) {
-    return 'Nunca'
-  }
-
-  const date =
-    new Date(value)
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return 'N/D'
-  }
-
-  return date.toLocaleString()
 }

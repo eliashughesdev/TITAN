@@ -647,3 +647,632 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   AUT-1 — Consola empresarial (panel, notificaciones, builder)
+   ============================================================ */
+
+.automation-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 17px;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.automation-panel-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.automation-panel-header svg {
+  color: #4f63d8;
+}
+
+.automation-panel-header strong,
+.automation-panel-header span {
+  display: block;
+}
+
+.automation-panel-header strong {
+  color: #172554;
+}
+
+.automation-panel-header span {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.automation-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-panel-loading {
+  padding: 40px 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #94a3b8;
+  text-align: center;
+  background: #fff;
+}
+
+.automation-dashboard,
+.automation-notifications,
+.automation-enterprise {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.automation-kpi-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.automation-kpi {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  padding: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.automation-kpi > div {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  color: #4f63d8;
+  background: #eef2ff;
+}
+
+.automation-kpi span {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.automation-kpi strong {
+  color: #172554;
+  font-size: 19px;
+}
+
+.automation-dashboard-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.automation-dashboard-block {
+  padding: 15px;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.automation-block-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #4f63d8;
+}
+
+.automation-block-title strong {
+  color: #172554;
+}
+
+.automation-queue-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.automation-queue-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.automation-queue-cell span {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.automation-queue-cell strong {
+  color: #172554;
+  font-size: 18px;
+}
+
+.automation-queue-cell.danger {
+  background: #fef2f2;
+}
+
+.automation-queue-cell.danger strong {
+  color: #b91c1c;
+}
+
+.automation-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automation-alert {
+  padding: 10px 12px;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.automation-alert > span {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.automation-alert p {
+  margin: 3px 0;
+  color: #334155;
+  font-size: 11px;
+}
+
+.automation-alert small {
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.automation-alert.info {
+  border-left-color: #93c5fd;
+}
+
+.automation-alert.warning {
+  border-left-color: #fcd34d;
+}
+
+.automation-alert.critical,
+.automation-alert.error {
+  border-left-color: #fca5a5;
+}
+
+.automation-inline-empty {
+  padding: 14px;
+  border-radius: 9px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+  background: #f8fafc;
+}
+
+.automation-notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automation-notification {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #dce3ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.automation-notification.read {
+  opacity: .68;
+}
+
+.automation-notification-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  color: #4f63d8;
+  background: #eef2ff;
+}
+
+.automation-notification-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.automation-notification-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-notification-top strong {
+  color: #172554;
+}
+
+.automation-notification-body p {
+  margin: 0;
+  color: #475569;
+  font-size: 11px;
+}
+
+.automation-notification-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.automation-severity {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.automation-severity.warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.automation-severity.critical,
+.automation-severity.error {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.automation-severity.info {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.automation-enterprise-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.automation-enterprise-builder {
+  width: 100%;
+}
+
+.automation-enterprise-section {
+  margin-top: 16px;
+  padding: 15px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.automation-enterprise-section > h3,
+.automation-enterprise-section .automation-section-head h3 {
+  margin: 0 0 10px;
+  color: #172554;
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.automation-enterprise-section > select,
+.automation-enterprise-section > small {
+  display: block;
+  width: 100%;
+}
+
+.automation-enterprise-section > small {
+  margin-top: 6px;
+  color: #94a3b8;
+}
+
+.automation-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.automation-section-head h3 {
+  margin: 0;
+}
+
+.automation-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-condition-list,
+.automation-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.automation-condition-row {
+  display: grid;
+  grid-template-columns:
+    2fr 1.4fr 2fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.automation-condition-row input,
+.automation-condition-row select,
+.automation-enterprise-section select,
+.automation-simulator-form select,
+.automation-simulator-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #dbe2ef;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.automation-simulator-form textarea {
+  padding: 9px 10px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.automation-condition-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 38px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fff;
+  cursor: pointer;
+}
+
+.automation-action-row {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.automation-action-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-action-head select {
+  min-width: 220px;
+}
+
+.automation-action-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #dbe2ef;
+  border-radius: 7px;
+  color: #475569;
+  background: #fff;
+  cursor: pointer;
+}
+
+.automation-action-head button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.automation-action-head button.automation-delete {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.automation-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.automation-inline-check input {
+  width: auto;
+  min-height: 0;
+}
+
+.automation-impact {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.automation-impact.high {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.automation-impact.medium {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.automation-impact.low {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.automation-action-params,
+.automation-policy-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 11px;
+}
+
+.automation-action-params label,
+.automation-policy-grid label,
+.automation-simulator-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.automation-action-params input,
+.automation-policy-grid input,
+.automation-policy-grid select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #dbe2ef;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.automation-simulator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 0;
+}
+
+.automation-simulator-form {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  align-items: end;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.automation-simulator-result {
+  padding: 14px;
+  border: 1px solid #dce3ee;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.automation-simulator-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.automation-simulator-result h4 {
+  margin: 14px 0 8px;
+  color: #172554;
+  font-size: 12px;
+}
+
+.automation-warning-list {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: #92400e;
+  font-size: 11px;
+}
+
+.automation-planned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automation-planned-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.automation-planned-list strong {
+  color: #172554;
+}
+
+.automation-planned-list small {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+@media (max-width: 1150px) {
+  .automation-kpi-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .automation-enterprise-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .automation-dashboard-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .automation-kpi-grid,
+  .automation-enterprise-grid,
+  .automation-dashboard-columns,
+  .automation-queue-grid,
+  .automation-action-params,
+  .automation-policy-grid,
+  .automation-condition-row,
+  .automation-simulator-form {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-notification {
+    grid-template-columns: 1fr;
+  }
+}

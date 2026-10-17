@@ -211,9 +211,37 @@ principal **sin modificar** `TitanMdmSeeder.cs`.
 
 La consola vive en `src/frontend/titanmdm-web/src/pages/automation/`.
 El cliente de API (`src/api/automationApi.ts`) expone los
-endpoints `platform/*`. La consola consume el tablero, las
-notificaciones y las ejecuciones; incluye acciones de simulación
-y reintento.
+endpoints `platform/*` (catálogos, validación, reglas
+empresariales, simulación, tablero, cola, notificaciones y
+programaciones). La página `AutomationPage.tsx` conserva las
+pestañas legacy **Reglas** e **Historial** y añade tres pestañas
+empresariales, manteniendo intacto el constructor clásico.
+
+Módulos creados (subcomponentes modulares):
+
+- `AutomationDashboardPanel.tsx` — tablero del motor: KPIs
+  (reglas activas, ejecuciones 24 h, fallos, tasa de éxito,
+  duración media), estado de la cola y alertas recientes.
+- `AutomationNotificationsPanel.tsx` — bandeja de notificaciones
+  con marcar leída / marcar todo leído; informa el contador de no
+  leídas a la pestaña.
+- `AutomationEnterprisePanel.tsx` — listado de reglas
+  empresariales, activar/pausar (vía `PUT`) y lanzar simulación.
+- `AutomationRuleBuilder.tsx` — constructor de definiciones
+  versionadas: módulo, prioridad, evento disparador (catálogo),
+  grupo de condiciones AND/OR, lista ordenada de acciones con
+  parámetros y continuar-si-falla, políticas y programación.
+- `AutomationSimulatorPanel.tsx` — simulación por regla con
+  trazas de condiciones y acciones planificadas.
+- `automationUi.ts` — utilidades de formato y traducción de
+  errores (incluye detección del HTTP 503 del motor no
+  registrado).
+
+Todas las peticiones `platform/*` resuelven el error 503 con un
+aviso explícito («motor no registrado») en lugar de fallar en
+silencio. Verificación: `npm run build` (`tsc -b && vite build`) y
+`npx eslint src/pages/automation src/api/automationApi.ts` sin
+errores.
 
 ## 9. Pruebas
 
