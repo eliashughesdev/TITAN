@@ -1,5 +1,8 @@
-import type {
-  CSSProperties,
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
 } from 'react'
 
 import './TitanLoginRobot.css'
@@ -13,10 +16,36 @@ export type TitanLoginRobotMode =
   | 'success'
   | 'launch'
 
+type RobotReaction =
+  | 'none'
+  | 'field'
+  | 'pulse'
+
 interface TitanLoginRobotProps {
   mode: TitanLoginRobotMode
   emailValue: string
   showPassword: boolean
+}
+
+const BOOT_DURATION_MS = 900
+const REACTION_FIELD_MS = 520
+const REACTION_PULSE_MS = 420
+
+/** Tiempo maximo de la secuencia de encendido (0 si el usuario prefiere
+ *  movimiento reducido, para no retrasar el acceso). */
+function bootDuration(): number {
+  if (
+    typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function'
+  ) {
+    return BOOT_DURATION_MS
+  }
+
+  return window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches
+    ? 0
+    : BOOT_DURATION_MS
 }
 
 function getMessage(
@@ -54,11 +83,100 @@ export function TitanLoginRobot({
   emailValue,
   showPassword,
 }: TitanLoginRobotProps) {
+  const [bootMs] = useState(bootDuration)
+
+  const [booting, setBooting] =
+    useState(bootMs > 0)
+
+  const [reaction, setReaction] =
+    useState<RobotReaction>('none')
+
+  const previousMode =
+    useRef<TitanLoginRobotMode>(mode)
+
+  // Secuencia de encendido del robot: solo se ejecuta al montar y
+  // termina sola, sin dejar temporizadores vivos.
+  useEffect(() => {
+    if (bootMs <= 0) {
+      return
+    }
+
+    const timer = window.setTimeout(
+      () => setBooting(false),
+      bootMs,
+    )
+
+    return () => window.clearTimeout(timer)
+  }, [bootMs])
+
+  // La secuencia de encendido nunca debe solaparse con una
+  // autenticación real: si el operador ya envio credenciales, se
+  // interrumpe de inmediato para no enmascarar el estado real.
+  useEffect(() => {
+    if (!booting) {
+      return
+    }
+
+    if (
+      mode === 'authenticating' ||
+      mode === 'success' ||
+      mode === 'launch'
+    ) {
+      setBooting(false)
+    }
+  }, [mode, booting])
+
+  // Reacción breve al cambiar de campo (correo <-> contraseña) o al
+  // entrar en un estado de atención. No lee ni usa el contenido de la
+  // contraseña: solo observa la transición de estado.
+  useEffect(() => {
+    const previous = previousMode.current
+
+    if (previous === mode) {
+      return
+    }
+
+    previousMode.current = mode
+
+    if (bootMs <= 0) {
+      return
+    }
+
+    const fieldSwap =
+      (previous === 'email' &&
+        mode === 'password') ||
+      (previous === 'password' &&
+        mode === 'email')
+
+    setReaction(fieldSwap ? 'field' : 'pulse')
+
+    const timer = window.setTimeout(
+      () => setReaction('none'),
+      fieldSwap
+        ? REACTION_FIELD_MS
+        : REACTION_PULSE_MS,
+    )
+
+    return () => window.clearTimeout(timer)
+  }, [mode, bootMs])
+
   const eyeShift =
     Math.min(
       emailValue.length * 0.45,
       8,
     )
+
+  const reactClass =
+    reaction === 'field'
+      ? ' titan-mech--react-field'
+      : reaction === 'pulse'
+        ? ' titan-mech--react-pulse'
+        : ''
+
+  const bootClass =
+    booting
+      ? ' titan-mech--booting'
+      : ''
 
   const style = {
     ['--eye-shift' as string]:
@@ -69,7 +187,9 @@ export function TitanLoginRobot({
     <div
       className={
         `titan-mech ` +
-        `titan-mech--${mode}`
+        `titan-mech--${mode}` +
+        bootClass +
+        reactClass
       }
       style={style}
       aria-hidden="true"
@@ -77,10 +197,12 @@ export function TitanLoginRobot({
       <div className="titan-mech__message">
         <span className="titan-mech__message-dot" />
 
-        {getMessage(
-          mode,
-          showPassword,
-        )}
+        {booting
+          ? 'Sistema Titan encendiendo...'
+          : getMessage(
+              mode,
+              showPassword,
+            )}
       </div>
 
       <div className="titan-mech__energy-field" />

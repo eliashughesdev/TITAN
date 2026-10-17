@@ -1590,6 +1590,335 @@
 }
 
 /* ============================================================
+   BOOT / ENCENDIDO
+   ============================================================ */
+
+@keyframes titanBootUnit {
+  0% {
+    transform:
+      translateY(8px)
+      scale(.985);
+  }
+
+  55% {
+    transform:
+      translateY(-3px)
+      scale(1.006);
+  }
+
+  100% {
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+@keyframes titanBootVisor {
+  0% {
+    opacity: .3;
+
+    filter:
+      brightness(.5);
+  }
+
+  50% {
+    opacity: 1;
+
+    filter:
+      brightness(1.3);
+  }
+
+  100% {
+    opacity: 1;
+
+    filter:
+      brightness(1);
+  }
+}
+
+@keyframes titanBootCore {
+  0% {
+    transform:
+      scale(.35);
+
+    opacity: .15;
+  }
+
+  55% {
+    transform:
+      scale(1.22);
+
+    opacity: 1;
+  }
+
+  100% {
+    transform:
+      scale(1);
+
+    opacity: 1;
+  }
+}
+
+@keyframes titanBootField {
+  0% {
+    opacity: 0;
+
+    transform:
+      translateX(-50%)
+      scale(.6);
+  }
+
+  100% {
+    opacity: .6;
+
+    transform:
+      translateX(-50%)
+      scale(1);
+  }
+}
+
+@keyframes titanBootMessage {
+  0% {
+    opacity: 0;
+
+    transform:
+      translateY(6px);
+  }
+
+  100% {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+}
+
+.titan-mech.titan-mech--booting
+.titan-mech__unit {
+  animation:
+    titanBootUnit
+    .9s
+    cubic-bezier(.34, 1.2, .64, 1)
+    both;
+}
+
+.titan-mech.titan-mech--booting
+.titan-mech__visor {
+  animation:
+    titanBootVisor
+    .9s
+    ease
+    both;
+}
+
+.titan-mech.titan-mech--booting
+.titan-mech__core {
+  animation:
+    titanBootCore
+    .9s
+    cubic-bezier(.34, 1.4, .64, 1)
+    both;
+}
+
+.titan-mech.titan-mech--booting
+.titan-mech__energy-field {
+  animation:
+    titanBootField
+    .9s
+    ease
+    both;
+}
+
+.titan-mech.titan-mech--booting
+.titan-mech__message {
+  animation:
+    titanBootMessage
+    .5s
+    ease
+    .18s
+    both;
+}
+
+/* ============================================================
+   REACCIONES (cambio de campo / atención)
+   ============================================================ */
+
+@keyframes titanReactSweep {
+  0% {
+    opacity: 0;
+
+    transform:
+      translateX(-26px);
+  }
+
+  35% {
+    opacity: .9;
+  }
+
+  100% {
+    opacity: 0;
+
+    transform:
+      translateX(26px);
+  }
+}
+
+@keyframes titanReactGlint {
+  0%,
+  100% {
+    filter:
+      brightness(1);
+  }
+
+  45% {
+    filter:
+      brightness(1.4);
+  }
+}
+
+@keyframes titanReactPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 12px
+      rgba(
+        255,
+        92,
+        121,
+        .30
+      );
+  }
+
+  50% {
+    box-shadow:
+      0 0 22px
+      rgba(
+        255,
+        92,
+        121,
+        .68
+      );
+  }
+}
+
+.titan-mech.titan-mech--react-field
+.titan-mech__scanner {
+  opacity: 1;
+
+  animation:
+    titanReactSweep
+    .52s
+    ease
+    both;
+}
+
+.titan-mech.titan-mech--react-field
+.titan-mech__visor,
+.titan-mech.titan-mech--react-pulse
+.titan-mech__visor {
+  animation:
+    titanReactGlint
+    .42s
+    ease
+    both;
+}
+
+.titan-mech.titan-mech--react-pulse
+.titan-mech__antenna {
+  animation:
+    titanReactPulse
+    .42s
+    ease
+    both;
+}
+
+/* ============================================================
+   ACTIVACIÓN GRADUAL DE TURBINAS
+   ============================================================ */
+
+@keyframes titanEngineCharge {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0
+      rgba(
+        126,
+        215,
+        255,
+        0
+      );
+  }
+
+  60% {
+    box-shadow:
+      0 0 22px
+      rgba(
+        126,
+        215,
+        255,
+        .75
+      );
+  }
+}
+
+@keyframes titanSpoolUp {
+  0% {
+    opacity: 0;
+
+    transform:
+      scaleY(.6);
+  }
+
+  100% {
+    opacity: .55;
+
+    transform:
+      scaleY(1);
+  }
+}
+
+.titan-mech.titan-mech--authenticating
+.titan-mech__engine {
+  animation:
+    titanEngineCharge
+    .9s
+    ease-in-out
+    infinite;
+}
+
+.titan-mech.titan-mech--success
+.titan-mech__thrusters {
+  opacity: .55;
+
+  transform-origin:
+    50% 0;
+
+  animation:
+    titanSpoolUp
+    .62s
+    ease
+    forwards;
+}
+
+.titan-mech.titan-mech--success
+.titan-mech__thruster {
+  animation:
+    titanThruster
+    .18s
+    ease-in-out
+    infinite;
+}
+
+.titan-mech.titan-mech--success
+.titan-mech__engine {
+  animation:
+    titanEngineCharge
+    .62s
+    ease
+    both;
+}
+
+/* ============================================================
    IDLE
    ============================================================ */
 

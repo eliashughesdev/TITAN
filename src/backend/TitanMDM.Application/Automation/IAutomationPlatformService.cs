@@ -17,7 +17,7 @@ public interface IAutomationPlatformService
             AutomationRuleDefinition definition,
             CancellationToken cancellationToken = default);
 
-    Task<AutomationRuleDto>
+    Task<AutomationEnterpriseRuleDto>
         CreateEnterpriseRuleAsync(
             Guid organizationId,
             Guid userId,
@@ -28,9 +28,18 @@ public interface IAutomationPlatformService
             AutomationEnterpriseRuleDto>>
         GetEnterpriseRulesAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default);
 
-    Task<AutomationRuleDto>
+    Task<IReadOnlyCollection<AutomationIntegrationDto>>
+        GetIntegrationsAsync(
+            CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<AutomationToolContractDto>>
+        GetToolContractsAsync(
+            CancellationToken cancellationToken = default);
+
+    Task<AutomationEnterpriseRuleDto>
         UpdateEnterpriseRuleAsync(
             Guid organizationId,
             Guid ruleId,
@@ -48,11 +57,13 @@ public interface IAutomationPlatformService
 
     Task<AutomationDashboardDto> GetDashboardAsync(
         Guid organizationId,
+        Guid userId,
         CancellationToken cancellationToken = default);
 
     Task<AutomationExecutionDetailDto?>
         GetExecutionDetailAsync(
             Guid organizationId,
+            Guid userId,
             Guid executionId,
             CancellationToken cancellationToken = default);
 
@@ -66,16 +77,19 @@ public interface IAutomationPlatformService
             AutomationNotificationDto>>
         GetNotificationsAsync(
             Guid organizationId,
+            Guid userId,
             int limit,
             CancellationToken cancellationToken = default);
 
     Task<bool> MarkNotificationReadAsync(
         Guid organizationId,
+        Guid userId,
         Guid notificationId,
         CancellationToken cancellationToken = default);
 
     Task<AutomationScheduleDto?> GetScheduleAsync(
         Guid organizationId,
+        Guid userId,
         Guid ruleId,
         CancellationToken cancellationToken = default);
 
@@ -88,10 +102,12 @@ public interface IAutomationPlatformService
 
     Task DeleteScheduleAsync(
         Guid organizationId,
+        Guid userId,
         Guid ruleId,
         CancellationToken cancellationToken = default);
 
     Task<AutomationQueueStatsDto> GetQueueStatsAsync(
         Guid organizationId,
+        Guid userId,
         CancellationToken cancellationToken = default);
 }

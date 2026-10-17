@@ -1,3 +1,5 @@
+using TitanMDM.Application.Security;
+
 namespace TitanMDM.Infrastructure.Automation.Enterprise.Actions;
 
 internal sealed record AutomationActionParameter(
@@ -25,6 +27,15 @@ internal sealed record AutomationActionDescriptor(
  */
 internal static class AutomationActionCatalog
 {
+    // Permiso de comando de dispositivo (compartido con la
+    // plataforma de dispositivos).
+    private const string DeviceCommands =
+        PermissionCodes.Devices.Commands;
+
+    // Permiso de enrutamiento/asignación de Helpdesk.
+    private const string TicketAssign =
+        PermissionCodes.Helpdesk.TicketsAssign;
+
     private static readonly AutomationActionDescriptor[]
         Descriptors =
     {
@@ -422,5 +433,80 @@ internal static class AutomationActionCatalog
     public static bool IsEnabled(string? code)
     {
         return Find(code)?.Enabled == true;
+    }
+
+    /*
+     * AUT-1.8 — Permiso específico por acción.
+     *
+     * null => sólo se exige el permiso global
+     * "automation.execute". Los comandos de dispositivo exigen
+     * además "devices.commands" y la escalada de tickets exige
+     * "tickets.assign". Esto evita que un usuario obtenga
+     * capacidades superiores mediante reglas programadas.
+     */
+    private static readonly IReadOnlyDictionary<
+        string,
+        string> RequiredPermissions =
+        new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase)
+        {
+            ["RequestLocation"] = DeviceCommands,
+            ["SecurityScan"] = DeviceCommands,
+            ["ComplianceScan"] = DeviceCommands,
+            ["AppInventory"] = DeviceCommands,
+            ["WindowsInventory"] = DeviceCommands,
+            ["WindowsUpdateScan"] = DeviceCommands,
+            ["WindowsUpdateInstall"] = DeviceCommands,
+            ["RestartDevice"] = DeviceCommands,
+            ["LockDevice"] = DeviceCommands,
+            ["EnableLostMode"] = DeviceCommands,
+            ["DisableLostMode"] = DeviceCommands,
+            ["SendCommand"] = DeviceCommands,
+            ["EscalateTicket"] = TicketAssign,
+
+            // Acciones de alto impacto (stub AUT-2): se les
+            // asocia el permiso de administración del motor.
+            ["AssignTicket"] =
+                TitanMDM.Application.Automation
+                    .AutomationPermissions.Admin,
+            ["RequestDeviceSync"] = DeviceCommands,
+            ["ApplyPolicy"] =
+                PermissionCodes.Policies.Manage,
+            ["GenerateReport"] =
+                PermissionCodes.Reports.Export,
+            ["RunAssistantTool"] =
+                TitanMDM.Application.Automation
+                    .AutomationPermissions.Admin
+        };
+
+    /*
+     * Acciones que aceptan parámetros libres además de los
+     * declarados (p. ej. un comando crudo).
+     */
+    private static readonly HashSet<string>
+        FreeFormActions =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                "SendCommand"
+            };
+
+    public static string? RequiredPermissionFor(
+        string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return null;
+
+        return RequiredPermissions.TryGetValue(
+            code.Trim(),
+            out var permission)
+            ? permission
+            : null;
+    }
+
+    public static bool AllowsUnknownParameters(
+        string? code)
+    {
+        return !string.IsNullOrWhiteSpace(code) &&
+            FreeFormActions.Contains(code.Trim());
     }
 }

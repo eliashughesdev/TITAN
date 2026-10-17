@@ -22,6 +22,7 @@ public sealed record AutomationActionDescriptorDto(
     string Impact,
     bool RequiresDevice,
     bool Enabled,
+    string? RequiredPermission,
     IReadOnlyCollection<
         AutomationActionParameterDescriptorDto>
         Parameters);
@@ -186,3 +187,34 @@ public sealed record AutomationEnterpriseRuleDto(
     DateTime UpdatedAtUtc,
     DateTime? LastExecutedAtUtc,
     AutomationRuleDefinition Definition);
+
+/*
+ * AUT-1.9 — Integraciones reales vs preparadas.
+ *
+ * "Status" es "connected" cuando el evento ya se emite desde el
+ * módulo y el motor lo procesa hoy; "prepared" cuando el
+ * contrato existe pero el emisor todavía no publica el evento.
+ */
+public sealed record AutomationIntegrationDto(
+    string Module,
+    string Label,
+    string Status,
+    bool Connected,
+    IReadOnlyCollection<string> EventCodes,
+    string Owner,
+    string ConnectionPoint,
+    string Notes);
+
+/*
+ * AUT-2 — Contratos de herramientas de Titan Assistant y
+ * Fiorella. Las acciones de escritura permanecen deshabilitadas
+ * (WriteEnabled = false) hasta que exista permiso explícito y
+ * flujo de aprobación.
+ */
+public sealed record AutomationToolContractDto(
+    string ToolCode,
+    string Owner,
+    string RequiredPermission,
+    bool WriteEnabled,
+    bool RequiresApproval,
+    string Notes);

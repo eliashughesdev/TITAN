@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TitanMDM.Application.Automation;
+using TitanMDM.Application.Security;
 using TitanMDM.Domain.Automation;
 using TitanMDM.Infrastructure.Automation.Enterprise.Actions;
 using TitanMDM.Infrastructure.Automation.Enterprise.Engine;
 using TitanMDM.Infrastructure.Automation.Enterprise.Events;
+using TitanMDM.Infrastructure.Automation.Enterprise.Integrations;
 using TitanMDM.Infrastructure.Automation.Enterprise.Queue;
 using TitanMDM.Infrastructure.Automation.Enterprise.Scheduling;
 using TitanMDM.Infrastructure.Persistence;
@@ -26,17 +28,21 @@ internal sealed class AutomationPlatformService
     private readonly IAutomationQueueService _queue;
     private readonly IAutomationQueueProcessor _processor;
     private readonly IAutomationEventIngest _ingest;
+    private readonly IAutomationAuthorizationService
+        _authorization;
 
     public AutomationPlatformService(
         TitanMdmDbContext db,
         IAutomationQueueService queue,
         IAutomationQueueProcessor processor,
-        IAutomationEventIngest ingest)
+        IAutomationEventIngest ingest,
+        IAutomationAuthorizationService authorization)
     {
         _db = db;
         _queue = queue;
         _processor = processor;
         _ingest = ingest;
+        _authorization = authorization;
     }
 
     public Task<IReadOnlyCollection<
@@ -77,6 +83,9 @@ internal sealed class AutomationPlatformService
                         x.Impact,
                         x.RequiresDevice,
                         x.Enabled,
+                        AutomationActionCatalog
+                            .RequiredPermissionFor(
+                                x.Code),
                         x.Parameters
                             .Select(p =>
                                 new AutomationActionParameterDescriptorDto(
@@ -100,7 +109,7 @@ internal sealed class AutomationPlatformService
                 definition));
     }
 
-    public async Task<AutomationRuleDto>
+    public async Task<AutomationEnterpriseRuleDto>
         CreateEnterpriseRuleAsync(
             Guid organizationId,
             Guid userId,
@@ -111,6 +120,23 @@ internal sealed class AutomationPlatformService
             request.Definition;
 
         EnsureValid(definition);
+
+        /*
+         * AUT-1.8 — Permiso de creación y alcance por
+         * localidad: el actor sólo puede definir reglas
+         * dentro de su alcance autorizado.
+         */
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Create,
+            cancellationToken);
+
+        await _authorization.EnsureScopeCoversSitesAsync(
+            organizationId,
+            userId,
+            definition.ScopeSiteIds,
+            cancellationToken);
 
         var trigger = ParseTrigger(
             definition.Trigger);
@@ -144,13 +170,14 @@ internal sealed class AutomationPlatformService
         await _db.SaveChangesAsync(
             cancellationToken);
 
-        return AutomationRuleMapper.Map(rule);
+        return MapEnterpriseRule(rule);
     }
 
     public async Task<IReadOnlyCollection<
             AutomationEnterpriseRuleDto>>
         GetEnterpriseRulesAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default)
     {
         var rules = await _db
@@ -162,30 +189,51 @@ internal sealed class AutomationPlatformService
             .OrderByDescending(x => x.UpdatedAtUtc)
             .ToListAsync(cancellationToken);
 
-        return rules
-            .Select(rule =>
-            {
-                var definition =
-                    AutomationRuleEngine.DeserializeDefinition(rule)
-                    ?? new AutomationRuleDefinition();
+        /*
+         * AUT-1.8 — Aislamiento de lectura. Un actor con
+         * alcance de organización ve todas las reglas; un
+         * actor con alcance por localidad sólo ve las reglas
+         * cuyos sitios están incluidos en su alcance. Las reglas de
+         * organización completa (sin sitios) quedan ocultas.
+         */
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
 
-                return new AutomationEnterpriseRuleDto(
-                    rule.Id,
-                    rule.Name,
-                    rule.Description,
-                    rule.IsEnabled,
-                    rule.Module ?? definition.Module,
-                    rule.Priority,
-                    rule.ConsecutiveFailures,
-                    rule.ExecutionCount,
-                    rule.UpdatedAtUtc,
-                    rule.LastExecutedAtUtc,
-                    definition);
-            })
+        rules = rules
+            .Where(rule =>
+                IsRuleWithinScope(rule, scope))
+            .ToList();
+
+        return rules
+            .Select(MapEnterpriseRule)
             .ToArray();
     }
 
-    public async Task<AutomationRuleDto>
+    public Task<IReadOnlyCollection<
+            AutomationIntegrationDto>>
+        GetIntegrationsAsync(
+            CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<AutomationIntegrationDto>
+            dtos = AutomationIntegrationCatalog.All;
+
+        return Task.FromResult(dtos);
+    }
+
+    public Task<IReadOnlyCollection<
+            AutomationToolContractDto>>
+        GetToolContractsAsync(
+            CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<AutomationToolContractDto>
+            dtos = AutomationToolContractCatalog.All;
+
+        return Task.FromResult(dtos);
+    }
+
+    public async Task<AutomationEnterpriseRuleDto>
         UpdateEnterpriseRuleAsync(
             Guid organizationId,
             Guid ruleId,
@@ -198,6 +246,22 @@ internal sealed class AutomationPlatformService
 
         EnsureValid(definition);
 
+        /*
+         * AUT-1.8 — Permiso de edición y alcance por
+         * localidad del actor.
+         */
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Edit,
+            cancellationToken);
+
+        await _authorization.EnsureScopeCoversSitesAsync(
+            organizationId,
+            userId,
+            definition.ScopeSiteIds,
+            cancellationToken);
+
         var rule = await _db
             .Set<AutomationRule>()
             .FirstOrDefaultAsync(
@@ -208,6 +272,12 @@ internal sealed class AutomationPlatformService
                 cancellationToken)
             ?? throw new InvalidOperationException(
                 "Automation rule not found.");
+
+        await EnsureRuleScopeAsync(
+            organizationId,
+            userId,
+            rule,
+            cancellationToken);
 
         var trigger = ParseTrigger(
             definition.Trigger);
@@ -234,7 +304,7 @@ internal sealed class AutomationPlatformService
         await _db.SaveChangesAsync(
             cancellationToken);
 
-        return AutomationRuleMapper.Map(rule);
+        return MapEnterpriseRule(rule);
     }
 
     public async Task<AutomationSimulationResultDto>
@@ -245,6 +315,12 @@ internal sealed class AutomationPlatformService
             SimulateRuleRequest request,
             CancellationToken cancellationToken = default)
     {
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Simulate,
+            cancellationToken);
+
         var rule = await _db
             .Set<AutomationRule>()
             .FirstOrDefaultAsync(
@@ -266,6 +342,12 @@ internal sealed class AutomationPlatformService
                     AutomationPlannedActionDto>(),
                 new[] { "Rule not found." });
         }
+
+        await EnsureRuleScopeAsync(
+            organizationId,
+            userId,
+            rule,
+            cancellationToken);
 
         var payload =
             request.TriggerPayloadJson ?? "{}";
@@ -339,6 +421,7 @@ internal sealed class AutomationPlatformService
     public async Task<AutomationDashboardDto>
         GetDashboardAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default)
     {
         var since = DateTime.UtcNow.AddHours(-24);
@@ -351,12 +434,28 @@ internal sealed class AutomationPlatformService
                     organizationId)
             .ToListAsync(cancellationToken);
 
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        rules = rules
+            .Where(rule =>
+                IsRuleWithinScope(rule, scope))
+            .ToList();
+
+        var accessibleRuleIds = rules
+            .Select(x => x.Id)
+            .ToArray();
+
         var executions = await _db
             .Set<AutomationExecution>()
             .AsNoTracking()
             .Where(x =>
                 x.OrganizationId ==
                     organizationId &&
+                accessibleRuleIds.Contains(
+                    x.AutomationRuleId) &&
                 x.StartedAtUtc >= since)
             .ToListAsync(cancellationToken);
 
@@ -364,9 +463,12 @@ internal sealed class AutomationPlatformService
             .Set<AutomationQueueItem>()
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
-                    x.State ==
+                        x.OrganizationId ==
+                            organizationId &&
+                        x.AutomationRuleId.HasValue &&
+                        accessibleRuleIds.Contains(
+                            x.AutomationRuleId.Value) &&
+                        x.State ==
                         AutomationQueueItemState
                             .Pending,
                 cancellationToken);
@@ -375,9 +477,12 @@ internal sealed class AutomationPlatformService
             .Set<AutomationQueueItem>()
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
-                    x.State ==
+                        x.OrganizationId ==
+                            organizationId &&
+                        x.AutomationRuleId.HasValue &&
+                        accessibleRuleIds.Contains(
+                            x.AutomationRuleId.Value) &&
+                        x.State ==
                         AutomationQueueItemState
                             .DeadLetter,
                 cancellationToken);
@@ -467,6 +572,7 @@ internal sealed class AutomationPlatformService
     public async Task<AutomationExecutionDetailDto?>
         GetExecutionDetailAsync(
             Guid organizationId,
+            Guid userId,
             Guid executionId,
             CancellationToken cancellationToken = default)
     {
@@ -483,14 +589,25 @@ internal sealed class AutomationPlatformService
         if (execution is null)
             return null;
 
-        var ruleName = await _db
+        var rule = await _db
             .Set<AutomationRule>()
             .AsNoTracking()
-            .Where(x =>
-                x.Id == execution.AutomationRuleId)
-            .Select(x => x.Name)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? "Automation";
+            .FirstOrDefaultAsync(
+                x =>
+                    x.Id == execution.AutomationRuleId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (rule is null)
+            return null;
+
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (!IsRuleWithinScope(rule, scope))
+            return null;
 
         string? deviceName = null;
 
@@ -499,7 +616,8 @@ internal sealed class AutomationPlatformService
             deviceName = await _db.Devices
                 .AsNoTracking()
                 .Where(x =>
-                    x.Id == execution.DeviceId.Value)
+                    x.Id == execution.DeviceId.Value &&
+                    x.OrganizationId == organizationId)
                 .Select(x => x.DeviceName)
                 .FirstOrDefaultAsync(cancellationToken);
         }
@@ -507,7 +625,7 @@ internal sealed class AutomationPlatformService
         return new AutomationExecutionDetailDto(
             execution.Id,
             execution.AutomationRuleId,
-            ruleName,
+            rule.Name,
             execution.DeviceId,
             deviceName,
             execution.TriggerType,
@@ -529,6 +647,12 @@ internal sealed class AutomationPlatformService
         Guid executionId,
         CancellationToken cancellationToken = default)
     {
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Execute,
+            cancellationToken);
+
         var execution = await _db
             .Set<AutomationExecution>()
             .AsNoTracking()
@@ -554,6 +678,12 @@ internal sealed class AutomationPlatformService
 
         if (rule is null)
             return false;
+
+        await EnsureRuleScopeAsync(
+            organizationId,
+            userId,
+            rule,
+            cancellationToken);
 
         var item = new AutomationQueueItem(
             organizationId,
@@ -583,19 +713,74 @@ internal sealed class AutomationPlatformService
             AutomationNotificationDto>>
         GetNotificationsAsync(
             Guid organizationId,
+            Guid userId,
             int limit,
             CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit, 1, 200);
 
-        var notifications = await _db
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        var roleNames = await GetUserRoleNamesAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        var roleNameValues = roleNames.ToArray();
+
+        var query = _db
             .Set<AutomationNotification>()
             .AsNoTracking()
             .Where(x =>
-                x.OrganizationId ==
-                    organizationId)
-            .OrderByDescending(
-                x => x.CreatedAtUtc)
+                x.OrganizationId == organizationId &&
+                (!x.TargetUserId.HasValue ||
+                 x.TargetUserId.Value == userId) &&
+                (x.TargetRole == null ||
+                 roleNameValues.Contains(x.TargetRole)));
+
+        if (!scope.OrganizationWide)
+        {
+            var rules = await _db
+                .Set<AutomationRule>()
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId)
+                .ToListAsync(cancellationToken);
+
+            var accessibleRuleIds = rules
+                .Where(rule =>
+                    IsRuleWithinScope(rule, scope))
+                .Select(x => x.Id)
+                .ToArray();
+
+            var accessibleSites =
+                scope.SiteIds.ToArray();
+
+            var accessibleDeviceIds = await _db.Devices
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId &&
+                    !x.IsDeleted &&
+                    x.SiteId.HasValue &&
+                    accessibleSites.Contains(
+                        x.SiteId.Value))
+                .Select(x => x.Id)
+                .ToArrayAsync(cancellationToken);
+
+            query = query.Where(x =>
+                    (x.AutomationRuleId.HasValue &&
+                     accessibleRuleIds.Contains(
+                         x.AutomationRuleId.Value)) ||
+                    (x.DeviceId.HasValue &&
+                     accessibleDeviceIds.Contains(
+                         x.DeviceId.Value)));
+        }
+
+        var notifications = await query
+            .OrderByDescending(x => x.CreatedAtUtc)
             .Take(limit)
             .ToListAsync(cancellationToken);
 
@@ -610,6 +795,7 @@ internal sealed class AutomationPlatformService
             .Set<AutomationRule>()
             .AsNoTracking()
             .Where(x =>
+                x.OrganizationId == organizationId &&
                 ruleIds.Contains(x.Id))
             .ToDictionaryAsync(
                 x => x.Id,
@@ -639,6 +825,7 @@ internal sealed class AutomationPlatformService
 
     public async Task<bool> MarkNotificationReadAsync(
         Guid organizationId,
+        Guid userId,
         Guid notificationId,
         CancellationToken cancellationToken = default)
     {
@@ -654,6 +841,67 @@ internal sealed class AutomationPlatformService
         if (notification is null)
             return false;
 
+        if (notification.TargetUserId.HasValue &&
+            notification.TargetUserId.Value != userId)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                notification.TargetRole))
+        {
+            var roleNames = await GetUserRoleNamesAsync(
+                organizationId,
+                userId,
+                cancellationToken);
+
+            if (!roleNames.Contains(
+                    notification.TargetRole))
+            {
+                return false;
+            }
+        }
+
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (!scope.OrganizationWide)
+        {
+            var canAccess = false;
+
+            if (notification.AutomationRuleId.HasValue)
+            {
+                var rule = await _db
+                    .Set<AutomationRule>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.Id == notification
+                                .AutomationRuleId.Value &&
+                            x.OrganizationId == organizationId,
+                        cancellationToken);
+
+                canAccess = rule is not null &&
+                    IsRuleWithinScope(rule, scope);
+            }
+
+            if (!canAccess &&
+                notification.DeviceId.HasValue)
+            {
+                canAccess = await _authorization
+                    .CanAccessDeviceAsync(
+                        organizationId,
+                        userId,
+                        notification.DeviceId.Value,
+                        cancellationToken);
+            }
+
+            if (!canAccess)
+                return false;
+        }
+
         notification.MarkRead();
 
         await _db.SaveChangesAsync(
@@ -665,9 +913,30 @@ internal sealed class AutomationPlatformService
     public async Task<AutomationScheduleDto?>
         GetScheduleAsync(
             Guid organizationId,
+            Guid userId,
             Guid ruleId,
             CancellationToken cancellationToken = default)
     {
+        var rule = await _db
+            .Set<AutomationRule>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x =>
+                    x.Id == ruleId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (rule is null)
+            return null;
+
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (!IsRuleWithinScope(rule, scope))
+            return null;
+
         var schedule = await _db
             .Set<AutomationSchedule>()
             .AsNoTracking()
@@ -691,6 +960,12 @@ internal sealed class AutomationPlatformService
             AutomationScheduleRequest request,
             CancellationToken cancellationToken = default)
     {
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Edit,
+            cancellationToken);
+
         var rule = await _db
             .Set<AutomationRule>()
             .FirstOrDefaultAsync(
@@ -702,6 +977,12 @@ internal sealed class AutomationPlatformService
             ?? throw new InvalidOperationException(
                 "Automation rule not found.");
 
+        await EnsureRuleScopeAsync(
+            organizationId,
+            userId,
+            rule,
+            cancellationToken);
+
         if (!Enum.TryParse<
                 AutomationScheduleRecurrence>(
                 request.Recurrence,
@@ -710,6 +991,16 @@ internal sealed class AutomationPlatformService
         {
             throw new ArgumentException(
                 $"Invalid recurrence '{request.Recurrence}'.");
+        }
+
+        if (recurrence ==
+                AutomationScheduleRecurrence.Once &&
+            (!request.StartAtUtc.HasValue ||
+             request.StartAtUtc.Value <= DateTime.UtcNow))
+        {
+            throw new ArgumentException(
+                "A one-time schedule requires a future " +
+                "StartAtUtc.");
         }
 
         var schedule = await _db
@@ -763,9 +1054,34 @@ internal sealed class AutomationPlatformService
 
     public async Task DeleteScheduleAsync(
         Guid organizationId,
+        Guid userId,
         Guid ruleId,
         CancellationToken cancellationToken = default)
     {
+        await _authorization.EnsurePermissionAsync(
+            organizationId,
+            userId,
+            AutomationPermissions.Admin,
+            cancellationToken);
+
+        var rule = await _db
+            .Set<AutomationRule>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x =>
+                    x.Id == ruleId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
+
+        if (rule is null)
+            return;
+
+        await EnsureRuleScopeAsync(
+            organizationId,
+            userId,
+            rule,
+            cancellationToken);
+
         var schedule = await _db
             .Set<AutomationSchedule>()
             .FirstOrDefaultAsync(
@@ -788,47 +1104,68 @@ internal sealed class AutomationPlatformService
     public async Task<AutomationQueueStatsDto>
         GetQueueStatsAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default)
     {
-        var pending = await _db
+        var query = _db
             .Set<AutomationQueueItem>()
+            .AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == organizationId);
+
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (!scope.OrganizationWide)
+        {
+            var rules = await _db
+                .Set<AutomationRule>()
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId)
+                .ToListAsync(cancellationToken);
+
+            var accessibleRuleIds = rules
+                .Where(rule =>
+                    IsRuleWithinScope(rule, scope))
+                .Select(x => x.Id)
+                .ToArray();
+
+            query = query.Where(x =>
+                x.AutomationRuleId.HasValue &&
+                accessibleRuleIds.Contains(
+                    x.AutomationRuleId.Value));
+        }
+
+        var pending = await query
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
                     x.State ==
                         AutomationQueueItemState
                             .Pending,
                 cancellationToken);
 
-        var retried = await _db
-            .Set<AutomationQueueItem>()
+        var retried = await query
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
                     x.State ==
                         AutomationQueueItemState
                             .Retried,
                 cancellationToken);
 
-        var running = await _db
-            .Set<AutomationQueueItem>()
+        var running = await query
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
                     x.State ==
                         AutomationQueueItemState
                             .Running,
                 cancellationToken);
 
-        var dead = await _db
-            .Set<AutomationQueueItem>()
+        var dead = await query
             .CountAsync(
                 x =>
-                    x.OrganizationId ==
-                        organizationId &&
                     x.State ==
                         AutomationQueueItemState
                             .DeadLetter,
@@ -839,6 +1176,90 @@ internal sealed class AutomationPlatformService
             retried,
             running,
             dead);
+    }
+
+    private async Task EnsureRuleScopeAsync(
+        Guid organizationId,
+        Guid userId,
+        AutomationRule rule,
+        CancellationToken cancellationToken)
+    {
+        var scope = await _authorization.GetScopeAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (!IsRuleWithinScope(rule, scope))
+        {
+            throw new AutomationAuthorizationException(
+                "El actor no tiene alcance para operar sobre " +
+                "esta regla de automatización.");
+        }
+    }
+
+    private static AutomationEnterpriseRuleDto
+        MapEnterpriseRule(AutomationRule rule)
+    {
+        var definition =
+            AutomationRuleEngine.DeserializeDefinition(rule)
+            ?? new AutomationRuleDefinition();
+
+        return new AutomationEnterpriseRuleDto(
+            rule.Id,
+            rule.Name,
+            rule.Description,
+            rule.IsEnabled,
+            rule.Module ?? definition.Module,
+            rule.Priority,
+            rule.ConsecutiveFailures,
+            rule.ExecutionCount,
+            rule.UpdatedAtUtc,
+            rule.LastExecutedAtUtc,
+            definition);
+    }
+
+    private async Task<HashSet<string>>
+        GetUserRoleNamesAsync(
+            Guid organizationId,
+            Guid userId,
+            CancellationToken cancellationToken)
+    {
+        var roleNames = await (
+            from userRole in _db.UserRoles.AsNoTracking()
+            join role in _db.Roles.AsNoTracking()
+                on userRole.RoleId equals role.Id
+            where
+                userRole.UserId == userId &&
+                role.OrganizationId == organizationId &&
+                role.IsActive
+            select role.Name)
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+
+        return roleNames.ToHashSet(
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRuleWithinScope(
+        AutomationRule rule,
+        AuthorizationScopeSnapshot scope)
+    {
+        if (scope.OrganizationWide)
+            return true;
+
+        var definition =
+            AutomationRuleEngine.DeserializeDefinition(rule);
+
+        if (definition is null ||
+            definition.ScopeSiteIds.Count == 0)
+        {
+            return false;
+        }
+
+        var accessible = scope.SiteIds.ToHashSet();
+
+        return definition.ScopeSiteIds
+            .All(accessible.Contains);
     }
 
     private static void EnsureValid(
@@ -1033,6 +1454,7 @@ internal sealed class AutomationPlatformService
             .Set<AutomationRule>()
             .AsNoTracking()
             .Where(x =>
+                x.OrganizationId == organizationId &&
                 ruleIds.Contains(x.Id))
             .ToDictionaryAsync(
                 x => x.Id,
@@ -1048,6 +1470,7 @@ internal sealed class AutomationPlatformService
         var deviceNames = await _db.Devices
             .AsNoTracking()
             .Where(x =>
+                x.OrganizationId == organizationId &&
                 deviceIds.Contains(x.Id))
             .ToDictionaryAsync(
                 x => x.Id,

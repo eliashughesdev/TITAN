@@ -1,7 +1,10 @@
 using TitanMDM.Application.Automation;
+using TitanMDM.Application.Security;
 using TitanMDM.Infrastructure.Automation.Enterprise.Actions;
 using TitanMDM.Infrastructure.Automation.Enterprise.Engine;
 using TitanMDM.Infrastructure.Automation.Enterprise.Events;
+using TitanMDM.Infrastructure.Automation.Enterprise.Integrations;
+using TitanMDM.Infrastructure.Automation.Enterprise.Queue;
 using TitanMDM.Infrastructure.Automation.Enterprise.Scheduling;
 using TitanMDM.Domain.Automation;
 
@@ -74,6 +77,39 @@ public sealed class AutomationEngineTests
         Assert.Contains(
             result.Issues,
             x => x.Path == "schedule");
+    }
+
+    [Fact]
+    public void OnceScheduleRequiresFutureStart()
+    {
+        var definition = Valid();
+        definition.Trigger = "Schedule";
+        definition.Schedule =
+            new AutomationScheduleDefinitionDto
+            {
+                Recurrence = "Once",
+                TimeZoneId = "UTC",
+                StartAtUtc = null
+            };
+
+        var result =
+            AutomationDefinitionValidator.Validate(
+                definition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Issues,
+            x => x.Path == "schedule.startAtUtc");
+
+        definition.Schedule.StartAtUtc =
+            DateTime.UtcNow.AddHours(1);
+
+        result = AutomationDefinitionValidator.Validate(
+            definition);
+
+        Assert.DoesNotContain(
+            result.Issues,
+            x => x.Path == "schedule.startAtUtc");
     }
 
     [Fact]
@@ -339,6 +375,209 @@ public sealed class AutomationEngineTests
                 "TicketCreated"));
     }
 
+    [Fact]
+    public void UnknownActionParameterFails()
+    {
+        var definition = Valid();
+
+        definition.Actions[0].Parameters["bogus"] = "x";
+
+        var result =
+            AutomationDefinitionValidator.Validate(
+                definition);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Issues,
+            x => x.Path.Contains("bogus"));
+    }
+
+    [Fact]
+    public void RequiredActionOverlongParameterFails()
+    {
+        var definition = Valid();
+
+        definition.Actions[0].Parameters["message"] =
+            new string('x', 5000);
+
+        var result =
+            AutomationDefinitionValidator.Validate(
+                definition);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void CatalogMapsRequiredPermissionsPerAction()
+    {
+        Assert.Equal(
+            PermissionCodes.Devices.Commands,
+            AutomationActionCatalog.RequiredPermissionFor(
+                "RestartDevice"));
+
+        Assert.Equal(
+            PermissionCodes.Helpdesk.TicketsAssign,
+            AutomationActionCatalog.RequiredPermissionFor(
+                "EscalateTicket"));
+
+        Assert.Null(
+            AutomationActionCatalog.RequiredPermissionFor(
+                "CreateNotification"));
+
+        Assert.True(
+            AutomationActionCatalog.AllowsUnknownParameters(
+                "SendCommand"));
+
+        Assert.False(
+            AutomationActionCatalog.AllowsUnknownParameters(
+                "CreateNotification"));
+    }
+
+    [Fact]
+    public void AutomationPermissionsExposeGranularCodes()
+    {
+        var codes = AutomationPermissions.All
+            .Select(x => x.Code)
+            .ToArray();
+
+        Assert.Contains(
+            AutomationPermissions.Create,
+            codes);
+
+        Assert.Contains(
+            AutomationPermissions.Edit,
+            codes);
+
+        Assert.Contains(
+            AutomationPermissions.Admin,
+            codes);
+
+        Assert.Contains(
+            AutomationPermissions.Manage,
+            AutomationPermissions.GrantingCodes(
+                AutomationPermissions.Create));
+
+        Assert.Contains(
+            AutomationPermissions.Admin,
+            AutomationPermissions.GrantingCodes(
+                AutomationPermissions.Execute));
+
+        Assert.DoesNotContain(
+            PermissionCodes.Devices.Commands,
+            AutomationPermissions.GrantingCodes(
+                AutomationPermissions.Admin));
+    }
+
+    [Fact]
+    public void IntegrationCatalogSeparatesConnectedAndPreparedModules()
+    {
+        var general = Assert.Single(
+            AutomationIntegrationCatalog.All,
+            x => x.Module == AutomationModules.General);
+
+        var android = Assert.Single(
+            AutomationIntegrationCatalog.All,
+            x => x.Module == AutomationModules.Android);
+
+        Assert.True(general.Connected);
+        Assert.Equal("connected", general.Status);
+        Assert.Contains("DeviceOnline", general.EventCodes);
+
+        Assert.False(android.Connected);
+        Assert.Equal("prepared", android.Status);
+        Assert.Contains("AndroidEnrolled", android.EventCodes);
+    }
+
+    [Fact]
+    public void Aut2ToolContractsKeepWritesDisabled()
+    {
+        Assert.NotEmpty(AutomationToolContractCatalog.All);
+
+        Assert.All(
+            AutomationToolContractCatalog.All,
+            contract => Assert.False(
+                contract.WriteEnabled));
+
+        var assistant = Assert.Single(
+            AutomationToolContractCatalog.All,
+            x => x.ToolCode == "RunAssistantTool");
+
+        Assert.True(assistant.RequiresApproval);
+        Assert.Equal(
+            AutomationPermissions.Admin,
+            assistant.RequiredPermission);
+    }
+
+    [Fact]
+    public async Task ScheduleTaskPreservesActorAndIncrementsCycleDepth()
+    {
+        var queue = new CapturingQueueService();
+        var handler = new ScheduleTaskActionHandler(queue);
+        var actorId = Guid.NewGuid();
+        var ruleId = Guid.NewGuid();
+
+        var result = await handler.ExecuteAsync(
+            new AutomationActionContext(
+                Guid.NewGuid(),
+                null,
+                actorId,
+                ruleId,
+                null,
+                new AutomationActionDto
+                {
+                    Code = "ScheduleTask",
+                    Parameters = new Dictionary<string, string?>
+                    {
+                        ["delaySeconds"] = "5",
+                        ["actionCode"] = "CreateNotification",
+                        ["actionParamsJson"] = "{}"
+                    }
+                },
+                "{}",
+                false,
+                1,
+                Array.Empty<Guid>()));
+
+        Assert.True(result.Success);
+        Assert.NotNull(queue.Item);
+        Assert.Equal(2, queue.Item!.CycleDepth);
+        Assert.Equal(actorId, queue.Item.ActorUserId);
+        Assert.Equal(ruleId, queue.Item.AutomationRuleId);
+        Assert.Equal("ScheduledTask", queue.Item.TriggerType);
+    }
+
+    [Fact]
+    public async Task ScheduleTaskBlocksExcessiveCycleDepth()
+    {
+        var queue = new CapturingQueueService();
+        var handler = new ScheduleTaskActionHandler(queue);
+
+        var result = await handler.ExecuteAsync(
+            new AutomationActionContext(
+                Guid.NewGuid(),
+                null,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                null,
+                new AutomationActionDto
+                {
+                    Code = "ScheduleTask",
+                    Parameters = new Dictionary<string, string?>
+                    {
+                        ["delaySeconds"] = "5",
+                        ["actionCode"] = "ScheduleTask",
+                        ["actionParamsJson"] = "{}"
+                    }
+                },
+                "{}",
+                false,
+                AutomationPolicyDefaults.MaxCycleDepth,
+                Array.Empty<Guid>()));
+
+        Assert.False(result.Success);
+        Assert.Null(queue.Item);
+    }
+
     private static AutomationRuleDefinition Valid()
     {
         return new AutomationRuleDefinition
@@ -362,5 +601,44 @@ public sealed class AutomationEngineTests
                 }
             }
         };
+    }
+
+    private sealed class CapturingQueueService
+        : IAutomationQueueService
+    {
+        public AutomationQueueItem? Item { get; private set; }
+
+        public Task<AutomationQueueItem> EnqueueAsync(
+            AutomationQueueItem item,
+            CancellationToken cancellationToken = default)
+        {
+            Item = item;
+            return Task.FromResult(item);
+        }
+
+        public Task<IReadOnlyList<AutomationQueueItem>>
+            ClaimDueAsync(
+                int max,
+                TimeSpan lease,
+                CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<
+                IReadOnlyList<AutomationQueueItem>>(
+                Array.Empty<AutomationQueueItem>());
+        }
+
+        public Task<int> RecoverExpiredLeasesAsync(
+            TimeSpan lease,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(0);
+        }
+
+        public Task<int> CountActiveForOrganizationAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(0);
+        }
     }
 }

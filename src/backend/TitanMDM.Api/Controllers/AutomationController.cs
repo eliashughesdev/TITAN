@@ -35,24 +35,37 @@ public sealed class AutomationController
     }
 
     [HttpGet("rules")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Rules(
         CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         return Ok(
             await _service.GetRulesAsync(
                 organizationId.Value,
+                userId.Value,
                 cancellationToken));
     }
 
     [HttpGet("rules/{ruleId:guid}")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Rule(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -60,12 +73,19 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var rule =
             await _service.GetRuleAsync(
                 organizationId.Value,
+                userId.Value,
                 ruleId,
                 cancellationToken);
 
@@ -75,7 +95,10 @@ public sealed class AutomationController
     }
 
     [HttpPost("rules")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Create,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Create(
         CreateAutomationRuleRequest request,
         CancellationToken cancellationToken)
@@ -92,16 +115,20 @@ public sealed class AutomationController
             return Unauthorized();
         }
 
-        return Ok(
-            await _service.CreateAsync(
-                organizationId.Value,
-                userId.Value,
-                request,
-                cancellationToken));
+        return await ExecuteAuthorizedAsync(
+            () =>
+                _service.CreateAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    request,
+                    cancellationToken));
     }
 
     [HttpPut("rules/{ruleId:guid}")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Edit,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Update(
         Guid ruleId,
         UpdateAutomationRuleRequest request,
@@ -110,19 +137,30 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
-            return Unauthorized();
+        var userId =
+            GetUserId();
 
-        return Ok(
-            await _service.UpdateAsync(
-                organizationId.Value,
-                ruleId,
-                request,
-                cancellationToken));
+        if (organizationId is null ||
+            userId is null)
+        {
+            return Unauthorized();
+        }
+
+        return await ExecuteAuthorizedAsync(
+            () =>
+                _service.UpdateAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    ruleId,
+                    request,
+                    cancellationToken));
     }
 
     [HttpPost("rules/{ruleId:guid}/enable")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Edit,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Enable(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -130,20 +168,35 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
-        await _service.SetEnabledAsync(
-            organizationId.Value,
-            ruleId,
-            true,
-            cancellationToken);
+        return await ExecuteAuthorizedAsync(
+            async () =>
+            {
+                await _service.SetEnabledAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    ruleId,
+                    true,
+                    cancellationToken);
 
-        return NoContent();
+                return true;
+            },
+            NoContent);
     }
 
     [HttpPost("rules/{ruleId:guid}/disable")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Edit,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Disable(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -151,20 +204,34 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
-        await _service.SetEnabledAsync(
-            organizationId.Value,
-            ruleId,
-            false,
-            cancellationToken);
+        return await ExecuteAuthorizedAsync(
+            async () =>
+            {
+                await _service.SetEnabledAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    ruleId,
+                    false,
+                    cancellationToken);
 
-        return NoContent();
+                return true;
+            },
+            NoContent);
     }
 
     [HttpPost("rules/{ruleId:guid}/execute")]
-    [RequirePermission(AutomationPermissions.Execute)]
+    [RequireAnyPermission(
+        AutomationPermissions.Execute,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Execute(
         Guid ruleId,
         ExecuteAutomationRequest request,
@@ -182,18 +249,35 @@ public sealed class AutomationController
             return Unauthorized();
         }
 
-        await _service.ExecuteRuleAsync(
-            organizationId.Value,
-            userId.Value,
-            ruleId,
-            request,
-            cancellationToken);
+        try
+        {
+            await _service.ExecuteRuleAsync(
+                organizationId.Value,
+                userId.Value,
+                ruleId,
+                request,
+                cancellationToken);
 
-        return Accepted();
+            return Accepted();
+        }
+        catch (AutomationAuthorizationException ex)
+        {
+            return Forbidden(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (AutomationPlatformUnavailableException)
+        {
+            return PlatformUnavailable();
+        }
     }
 
     [HttpDelete("rules/{ruleId:guid}")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Admin,
+        AutomationPermissions.Manage)]
     public async Task<IActionResult> Delete(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -201,19 +285,34 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
-        await _service.DeleteAsync(
-            organizationId.Value,
-            ruleId,
-            cancellationToken);
+        return await ExecuteAuthorizedAsync(
+            async () =>
+            {
+                await _service.DeleteAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    ruleId,
+                    cancellationToken);
 
-        return NoContent();
+                return true;
+            },
+            NoContent);
     }
 
     [HttpGet("executions")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Executions(
         [FromQuery] int limit = 100,
         CancellationToken cancellationToken = default)
@@ -221,12 +320,19 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         return Ok(
             await _service.GetExecutionsAsync(
                 organizationId.Value,
+                userId.Value,
                 limit,
                 cancellationToken));
     }
@@ -236,7 +342,10 @@ public sealed class AutomationController
     // ============================================================
 
     [HttpGet("platform/events")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Events(
         CancellationToken cancellationToken)
     {
@@ -251,7 +360,10 @@ public sealed class AutomationController
     }
 
     [HttpGet("platform/actions")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Actions(
         CancellationToken cancellationToken)
     {
@@ -265,8 +377,47 @@ public sealed class AutomationController
                 cancellationToken));
     }
 
+    [HttpGet("platform/integrations")]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
+    public async Task<IActionResult> Integrations(
+        CancellationToken cancellationToken)
+    {
+        var platform = GetPlatform();
+
+        if (platform is null)
+            return PlatformUnavailable();
+
+        return Ok(
+            await platform.GetIntegrationsAsync(
+                cancellationToken));
+    }
+
+    [HttpGet("platform/tool-contracts")]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
+    public async Task<IActionResult> ToolContracts(
+        CancellationToken cancellationToken)
+    {
+        var platform = GetPlatform();
+
+        if (platform is null)
+            return PlatformUnavailable();
+
+        return Ok(
+            await platform.GetToolContractsAsync(
+                cancellationToken));
+    }
+
     [HttpPost("platform/definitions/validate")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Simulate,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> ValidateDefinition(
         AutomationRuleDefinition definition,
         CancellationToken cancellationToken)
@@ -283,15 +434,24 @@ public sealed class AutomationController
     }
 
     [HttpGet("platform/rules")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> EnterpriseRules(
         CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -301,11 +461,15 @@ public sealed class AutomationController
         return Ok(
             await platform.GetEnterpriseRulesAsync(
                 organizationId.Value,
+                userId.Value,
                 cancellationToken));
     }
 
     [HttpPost("platform/rules")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Create,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> CreateEnterpriseRule(
         EnterpriseCreateRuleRequest request,
         CancellationToken cancellationToken)
@@ -327,16 +491,20 @@ public sealed class AutomationController
         if (platform is null)
             return PlatformUnavailable();
 
-        return Ok(
-            await platform.CreateEnterpriseRuleAsync(
-                organizationId.Value,
-                userId.Value,
-                request,
-                cancellationToken));
+        return await ExecuteAuthorizedAsync(
+            () =>
+                platform.CreateEnterpriseRuleAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    request,
+                    cancellationToken));
     }
 
     [HttpPut("platform/rules/{ruleId:guid}")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Edit,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> UpdateEnterpriseRule(
         Guid ruleId,
         EnterpriseUpdateRuleRequest request,
@@ -359,17 +527,20 @@ public sealed class AutomationController
         if (platform is null)
             return PlatformUnavailable();
 
-        return Ok(
-            await platform.UpdateEnterpriseRuleAsync(
-                organizationId.Value,
-                ruleId,
-                userId.Value,
-                request,
-                cancellationToken));
+        return await ExecuteAuthorizedAsync(
+            () =>
+                platform.UpdateEnterpriseRuleAsync(
+                    organizationId.Value,
+                    ruleId,
+                    userId.Value,
+                    request,
+                    cancellationToken));
     }
 
     [HttpPost("platform/rules/{ruleId:guid}/simulate")]
-    [RequirePermission(AutomationPermissions.Simulate)]
+    [RequireAnyPermission(
+        AutomationPermissions.Simulate,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Simulate(
         Guid ruleId,
         SimulateRuleRequest request,
@@ -392,25 +563,35 @@ public sealed class AutomationController
         if (platform is null)
             return PlatformUnavailable();
 
-        return Ok(
-            await platform.SimulateAsync(
-                organizationId.Value,
-                userId.Value,
-                ruleId,
-                request,
-                cancellationToken));
+        return await ExecuteAuthorizedAsync(
+            () =>
+                platform.SimulateAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    ruleId,
+                    request,
+                    cancellationToken));
     }
 
     [HttpGet("platform/dashboard")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Dashboard(
         CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -420,19 +601,29 @@ public sealed class AutomationController
         return Ok(
             await platform.GetDashboardAsync(
                 organizationId.Value,
+                userId.Value,
                 cancellationToken));
     }
 
     [HttpGet("platform/queue")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> QueueStats(
         CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -442,11 +633,15 @@ public sealed class AutomationController
         return Ok(
             await platform.GetQueueStatsAsync(
                 organizationId.Value,
+                userId.Value,
                 cancellationToken));
     }
 
     [HttpGet("platform/executions/{executionId:guid}")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> ExecutionDetail(
         Guid executionId,
         CancellationToken cancellationToken)
@@ -454,8 +649,14 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -465,6 +666,7 @@ public sealed class AutomationController
         var detail =
             await platform.GetExecutionDetailAsync(
                 organizationId.Value,
+                userId.Value,
                 executionId,
                 cancellationToken);
 
@@ -475,7 +677,9 @@ public sealed class AutomationController
 
     [HttpPost(
         "platform/executions/{executionId:guid}/retry")]
-    [RequirePermission(AutomationPermissions.Execute)]
+    [RequireAnyPermission(
+        AutomationPermissions.Execute,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> RetryExecution(
         Guid executionId,
         CancellationToken cancellationToken)
@@ -497,20 +701,34 @@ public sealed class AutomationController
         if (platform is null)
             return PlatformUnavailable();
 
-        var result =
-            await platform.RetryExecutionAsync(
-                organizationId.Value,
-                userId.Value,
-                executionId,
-                cancellationToken);
+        try
+        {
+            var result =
+                await platform.RetryExecutionAsync(
+                    organizationId.Value,
+                    userId.Value,
+                    executionId,
+                    cancellationToken);
 
-        return result
-            ? Accepted()
-            : NotFound();
+            return result
+                ? Accepted()
+                : NotFound();
+        }
+        catch (AutomationAuthorizationException ex)
+        {
+            return Forbidden(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpGet("platform/notifications")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> Notifications(
         [FromQuery] int limit = 50,
         CancellationToken cancellationToken = default)
@@ -518,8 +736,14 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -529,13 +753,17 @@ public sealed class AutomationController
         return Ok(
             await platform.GetNotificationsAsync(
                 organizationId.Value,
+                userId.Value,
                 limit,
                 cancellationToken));
     }
 
     [HttpPost(
         "platform/notifications/{notificationId:guid}/read")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> MarkNotificationRead(
         Guid notificationId,
         CancellationToken cancellationToken)
@@ -543,8 +771,14 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -554,6 +788,7 @@ public sealed class AutomationController
         var result =
             await platform.MarkNotificationReadAsync(
                 organizationId.Value,
+                userId.Value,
                 notificationId,
                 cancellationToken);
 
@@ -563,7 +798,10 @@ public sealed class AutomationController
     }
 
     [HttpGet("platform/rules/{ruleId:guid}/schedule")]
-    [RequirePermission(AutomationPermissions.View)]
+    [RequireAnyPermission(
+        AutomationPermissions.View,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> GetSchedule(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -571,8 +809,14 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
@@ -582,6 +826,7 @@ public sealed class AutomationController
         var schedule =
             await platform.GetScheduleAsync(
                 organizationId.Value,
+                userId.Value,
                 ruleId,
                 cancellationToken);
 
@@ -591,7 +836,10 @@ public sealed class AutomationController
     }
 
     [HttpPut("platform/rules/{ruleId:guid}/schedule")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Edit,
+        AutomationPermissions.Manage,
+        AutomationPermissions.Admin)]
     public async Task<IActionResult> SaveSchedule(
         Guid ruleId,
         AutomationScheduleRequest request,
@@ -614,17 +862,20 @@ public sealed class AutomationController
         if (platform is null)
             return PlatformUnavailable();
 
-        return Ok(
-            await platform.SaveScheduleAsync(
-                organizationId.Value,
-                ruleId,
-                userId.Value,
-                request,
-                cancellationToken));
+        return await ExecuteAuthorizedAsync(
+            () =>
+                platform.SaveScheduleAsync(
+                    organizationId.Value,
+                    ruleId,
+                    userId.Value,
+                    request,
+                    cancellationToken));
     }
 
     [HttpDelete("platform/rules/{ruleId:guid}/schedule")]
-    [RequirePermission(AutomationPermissions.Manage)]
+    [RequireAnyPermission(
+        AutomationPermissions.Admin,
+        AutomationPermissions.Manage)]
     public async Task<IActionResult> DeleteSchedule(
         Guid ruleId,
         CancellationToken cancellationToken)
@@ -632,20 +883,34 @@ public sealed class AutomationController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         var platform = GetPlatform();
 
         if (platform is null)
             return PlatformUnavailable();
 
-        await platform.DeleteScheduleAsync(
-            organizationId.Value,
-            ruleId,
-            cancellationToken);
+        try
+        {
+            await platform.DeleteScheduleAsync(
+                organizationId.Value,
+                userId.Value,
+                ruleId,
+                cancellationToken);
 
-        return NoContent();
+            return NoContent();
+        }
+        catch (AutomationAuthorizationException ex)
+        {
+            return Forbidden(ex.Message);
+        }
     }
 
     private IAutomationPlatformService? GetPlatform()
@@ -663,6 +928,59 @@ public sealed class AutomationController
                 error =
                     "The enterprise automation platform is not registered. Call AddTitanAutomationPlatform during startup."
             });
+    }
+
+    /*
+     * AUT-1.8 — Traduce una denegación de autorización del
+     * motor (permiso insuficiente o alcance de localidad) a
+     * HTTP 403 en lugar de un error 500 genérico.
+     */
+    private async Task<IActionResult>
+        ExecuteAuthorizedAsync<T>(
+            Func<Task<T>> action)
+    {
+        try
+        {
+            var result = await action();
+
+            return Ok(result);
+        }
+        catch (AutomationAuthorizationException ex)
+        {
+            return Forbidden(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private async Task<IActionResult>
+        ExecuteAuthorizedAsync<T>(
+            Func<Task<T>> action,
+            Func<IActionResult> onSuccess)
+    {
+        try
+        {
+            await action();
+
+            return onSuccess();
+        }
+        catch (AutomationAuthorizationException ex)
+        {
+            return Forbidden(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private ObjectResult Forbidden(string message)
+    {
+        return StatusCode(
+            StatusCodes.Status403Forbidden,
+            new { error = message });
     }
 
     private Guid? GetOrganizationId()

@@ -148,8 +148,8 @@ internal sealed class AutomationQueueWorker
             await db.Set<AutomationSchedule>()
                 .Where(x =>
                     x.IsEnabled &&
-                    (x.NextRunAtUtc == null ||
-                     x.NextRunAtUtc <= now))
+                    x.NextRunAtUtc.HasValue &&
+                    x.NextRunAtUtc <= now)
                 .Take(50)
                 .ToListAsync(cancellationToken);
 
@@ -171,7 +171,11 @@ internal sealed class AutomationQueueWorker
 
             if (rule is null || !rule.IsEnabled)
             {
+                schedule.SetEnabled(false);
                 schedule.ScheduleNext(null);
+
+                await db.SaveChangesAsync(
+                    cancellationToken);
                 continue;
             }
 
@@ -194,7 +198,8 @@ internal sealed class AutomationQueueWorker
                 cancellationToken);
 
             schedule.RegisterRun(runAt);
-            schedule.ScheduleNext(
+
+            var nextRunAtUtc =
                 AutomationScheduleCalculator.ComputeNext(
                     schedule.Recurrence,
                     now,
@@ -203,7 +208,12 @@ internal sealed class AutomationQueueWorker
                     schedule.DayOfWeek,
                     schedule.DayOfMonth,
                     schedule.TimeZoneId,
-                    schedule.StartAtUtc));
+                    schedule.StartAtUtc);
+
+            schedule.ScheduleNext(nextRunAtUtc);
+
+            if (!nextRunAtUtc.HasValue)
+                schedule.SetEnabled(false);
 
             await db.SaveChangesAsync(
                 cancellationToken);

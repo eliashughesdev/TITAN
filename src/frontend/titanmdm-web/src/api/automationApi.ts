@@ -176,7 +176,28 @@ export interface AutomationActionDescriptor {
   impact: string
   requiresDevice: boolean
   enabled: boolean
+  requiredPermission: string | null
   parameters: AutomationActionParameterDescriptor[]
+}
+
+export interface AutomationIntegration {
+  module: string
+  label: string
+  status: 'connected' | 'prepared'
+  connected: boolean
+  eventCodes: string[]
+  owner: string
+  connectionPoint: string
+  notes: string
+}
+
+export interface AutomationToolContract {
+  toolCode: string
+  owner: string
+  requiredPermission: string
+  writeEnabled: boolean
+  requiresApproval: boolean
+  notes: string
 }
 
 export interface AutomationValidationIssue {
@@ -451,6 +472,28 @@ export const automationApi = {
       await apiClient.get<
         AutomationActionDescriptor[]
       >('/automation/platform/actions')
+
+    return response.data
+  },
+
+  async getIntegrations(): Promise<
+    AutomationIntegration[]
+  > {
+    const response =
+      await apiClient.get<AutomationIntegration[]>(
+        '/automation/platform/integrations',
+      )
+
+    return response.data
+  },
+
+  async getToolContracts(): Promise<
+    AutomationToolContract[]
+  > {
+    const response =
+      await apiClient.get<AutomationToolContract[]>(
+        '/automation/platform/tool-contracts',
+      )
 
     return response.data
   },

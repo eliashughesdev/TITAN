@@ -55,6 +55,10 @@ public static class AutomationEnterpriseServiceCollectionExtensions
             IAutomationPlatformService,
             AutomationPlatformService>();
 
+        services.AddScoped<
+            IAutomationAuthorizationService,
+            AutomationAuthorizationService>();
+
         services.AddHostedService<
             AutomationQueueWorker>();
 

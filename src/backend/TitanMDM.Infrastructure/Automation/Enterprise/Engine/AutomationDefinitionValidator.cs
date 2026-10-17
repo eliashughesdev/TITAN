@@ -21,6 +21,12 @@ internal static class AutomationDefinitionValidator
             "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$",
             RegexOptions.Compiled);
 
+    /*
+     * AUT-1.8 — Longitud máxima de un valor de parámetro de
+     * acción, para evitar payloads desmedidos.
+     */
+    private const int MaxParameterValueLength = 4000;
+
     public static AutomationDefinitionValidationDto
         Validate(AutomationRuleDefinition? definition)
     {
@@ -365,6 +371,49 @@ internal static class AutomationDefinitionValidator
                             $"Action '{descriptor.Code}' requires '{parameter.Name}'."));
                 }
             }
+
+            if (action.Parameters is null)
+                continue;
+
+            /*
+             * AUT-1.8 — Validación estricta de parámetros:
+             * sólo se aceptan los declarados por el catálogo
+             * (salvo acciones de forma libre) y con longitud
+             * acotada.
+             */
+            var allowed = descriptor.Parameters
+                .Select(p => p.Name)
+                .ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
+
+            var allowUnknown =
+                AutomationActionCatalog
+                    .AllowsUnknownParameters(
+                        descriptor.Code);
+
+            foreach (var pair in action.Parameters)
+            {
+                if (!allowUnknown &&
+                    !allowed.Contains(pair.Key))
+                {
+                    issues.Add(
+                        new AutomationValidationIssueDto(
+                            "error",
+                            $"{path}.parameters.{pair.Key}",
+                            $"Unknown parameter '{pair.Key}' for action '{descriptor.Code}'."));
+                }
+
+                if (pair.Value is not null &&
+                    pair.Value.Length >
+                        MaxParameterValueLength)
+                {
+                    issues.Add(
+                        new AutomationValidationIssueDto(
+                            "error",
+                            $"{path}.parameters.{pair.Key}",
+                            $"Parameter '{pair.Key}' exceeds the maximum length of {MaxParameterValueLength}."));
+                }
+            }
         }
     }
 
@@ -496,6 +545,18 @@ internal static class AutomationDefinitionValidator
                     "error",
                     "schedule.intervalMinutes",
                     "Interval must be at least 5 minutes."));
+        }
+
+        if (recurrence ==
+                AutomationScheduleRecurrence.Once &&
+            (!schedule.StartAtUtc.HasValue ||
+             schedule.StartAtUtc.Value <= DateTime.UtcNow))
+        {
+            issues.Add(
+                new AutomationValidationIssueDto(
+                    "error",
+                    "schedule.startAtUtc",
+                    "A one-time schedule requires a future StartAtUtc."));
         }
 
         if (recurrence is

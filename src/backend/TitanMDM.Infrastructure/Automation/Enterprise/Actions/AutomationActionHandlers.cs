@@ -366,23 +366,32 @@ internal sealed class EscalateTicketActionHandler
                     ticketId,
                     cancellationToken);
 
-        await _audit.WriteAsync(
-            new AdministrativeAuditEntry(
-                context.OrganizationId,
-                context.ActorUserId == Guid.Empty
-                    ? null
-                    : context.ActorUserId,
-                "Automation.EscalateTicket",
-                "HelpdeskTicket",
-                ticketId.ToString(),
-                escalated
-                    ? "Escalated"
-                    : "NoAssignment",
-                context.AutomationExecutionId
-                    ?.ToString() ??
-                Guid.NewGuid().ToString("N"),
-                null),
-            cancellationToken);
+        try
+        {
+            await _audit.WriteAsync(
+                new AdministrativeAuditEntry(
+                    context.OrganizationId,
+                    context.ActorUserId == Guid.Empty
+                        ? null
+                        : context.ActorUserId,
+                    "Automation.EscalateTicket",
+                    "HelpdeskTicket",
+                    ticketId.ToString(),
+                    escalated
+                        ? "Escalated"
+                        : "NoAssignment",
+                    context.AutomationExecutionId
+                        ?.ToString() ??
+                    Guid.NewGuid().ToString("N"),
+                    null),
+                CancellationToken.None);
+        }
+        catch
+        {
+            // The routing operation may already be committed.
+            // Queue-level sensitive-action auditing is attempted
+            // separately and must not trigger a duplicate retry.
+        }
 
         return new AutomationActionResult(
             escalated,
@@ -605,6 +614,17 @@ internal sealed class ScheduleTaskActionHandler
                 $"ScheduleTask requires an enabled 'actionCode' (received '{actionCode}').");
         }
 
+        var nextDepth = context.CycleDepth + 1;
+
+        if (nextDepth >
+            AutomationPolicyDefaults.MaxCycleDepth)
+        {
+            return new AutomationActionResult(
+                false,
+                "Scheduled task cycle limit reached; blocked " +
+                "to prevent loops.");
+        }
+
         var runAt = DateTime.UtcNow.AddSeconds(
             delaySeconds);
 
@@ -628,6 +648,7 @@ internal sealed class ScheduleTaskActionHandler
             payload,
             context.DeviceId,
             $"task-{Guid.NewGuid():N}",
+            cycleDepth: nextDepth,
             simulated: context.Simulated,
             actorUserId: context.ActorUserId,
             priority: 500,

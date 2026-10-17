@@ -6,6 +6,22 @@ import React, {
   useState,
 } from "react";
 
+import {
+  AnimatePresence,
+  motion,
+} from "motion/react";
+
+import {
+  reducedSpriteMotion,
+  spriteMotion,
+} from "./animations";
+
+import type {
+  FiorellaAction,
+} from "./types";
+
+import "./Fiorella.css";
+
 const MODULE_NAMES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/records": "Ponches",
@@ -176,6 +192,26 @@ export const Fiorella: React.FC<FiorellaProps> = ({
   const spriteSrc =
     SPRITES[action] ||
     SPRITES.idle;
+
+
+  // ============================================================
+  // ANIMACIÓN ORGÁNICA
+  // ============================================================
+
+  // La acción puede llegar como string arbitrario (backend, engine o
+  // deambulado). Se normaliza a un estado conocido para elegir el
+  // movimiento; si no existe, se usa "idle" sin romper nada.
+  const safeAction: FiorellaAction =
+    Object.prototype.hasOwnProperty.call(
+      spriteMotion,
+      action,
+    )
+      ? (action as FiorellaAction)
+      : "idle";
+
+  const spriteAnimation = reducedMotion
+    ? reducedSpriteMotion[safeAction]
+    : spriteMotion[safeAction];
 
 
   // ============================================================
@@ -598,47 +634,73 @@ export const Fiorella: React.FC<FiorellaProps> = ({
       {/* GLOBO DE DIÁLOGO                                     */}
       {/* ===================================================== */}
 
-      {!isChatOpen &&
-        line && (
+      <AnimatePresence>
 
-          <div
-            className="
-              bg-white
-              text-gray-800
-              px-3
-              py-1.5
-              rounded-lg
-              shadow-lg
-              border
-              border-gray-200
-              text-xs
-              font-medium
-              max-w-xs
-              animate-bounce
-              mb-1
-            "
-          >
-            {line}
-          </div>
+        {!isChatOpen &&
+          line && (
 
-        )}
+            <motion.div
+              key="fiorella-bubble"
+
+              initial={{
+                opacity: 0,
+                y: 8,
+                scale: 0.96,
+              }}
+
+              animate={{
+                opacity: 1,
+                y: 0,
+                scale: 1,
+              }}
+
+              exit={{
+                opacity: 0,
+                y: 8,
+                scale: 0.96,
+              }}
+
+              transition={{
+                duration: reducedMotion
+                  ? 0
+                  : 0.22,
+                ease: "easeOut",
+              }}
+
+              className="
+                bg-white
+                text-gray-800
+                px-3
+                py-1.5
+                rounded-lg
+                shadow-lg
+                border
+                border-gray-200
+                text-xs
+                font-medium
+                max-w-xs
+                mb-1
+              "
+            >
+              {line}
+            </motion.div>
+
+          )}
+
+      </AnimatePresence>
 
 
       {/* ===================================================== */}
       {/* AVATAR FIORELLA                                      */}
       {/* ===================================================== */}
 
-      <div
+      <motion.div
         onClick={
           onSpriteClick
         }
 
         className="
           cursor-pointer
-          hover:scale-105
-          transition-transform
-          duration-150
-          active:scale-95
           flex
           items-center
           justify-center
@@ -646,41 +708,83 @@ export const Fiorella: React.FC<FiorellaProps> = ({
         "
 
         title="Hablar con Fiorella"
+
+        initial={{
+          opacity: 0,
+          y: 14,
+          scale: 0.9,
+        }}
+
+        animate={{
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        }}
+
+        transition={{
+          duration: reducedMotion
+            ? 0
+            : 0.35,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+
+        whileHover={
+          reducedMotion
+            ? undefined
+            : { scale: 1.04 }
+        }
+
+        whileTap={
+          reducedMotion
+            ? undefined
+            : { scale: 0.96 }
+        }
       >
 
         {!imgError ? (
 
-          <img
-            src={
-              spriteSrc
-            }
+          <span
+            className="fiorella-direction"
 
-            alt="Fiorella Avatar"
+            style={{
+              transform:
+                facing === "left"
+                  ? "scaleX(-1)"
+                  : undefined,
+            }}
+          >
 
-            draggable={
-              false
-            }
-
-            className={`
-              h-28
-              w-auto
-              object-contain
-              drop-shadow-md
-
-              ${
-                facing ===
-                "left"
-                  ? "scale-x-[-1]"
-                  : ""
+            <motion.img
+              src={
+                spriteSrc
               }
-            `}
 
-            onError={() =>
-              setImgError(
-                true,
-              )
-            }
-          />
+              alt="Fiorella Avatar"
+
+              draggable={
+                false
+              }
+
+              className="
+                fiorella-motion
+                h-28
+                w-auto
+                object-contain
+                drop-shadow-md
+              "
+
+              animate={
+                spriteAnimation
+              }
+
+              onError={() =>
+                setImgError(
+                  true,
+                )
+              }
+            />
+
+          </span>
 
         ) : (
 
@@ -733,7 +837,7 @@ export const Fiorella: React.FC<FiorellaProps> = ({
           ✨
         </div>
 
-      </div>
+      </motion.div>
 
 
       {/* ===================================================== */}

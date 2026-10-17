@@ -5,11 +5,13 @@ public interface IAutomationService
     Task<IReadOnlyCollection<AutomationRuleDto>>
         GetRulesAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default);
 
     Task<AutomationRuleDto?>
         GetRuleAsync(
             Guid organizationId,
+            Guid userId,
             Guid ruleId,
             CancellationToken cancellationToken = default);
 
@@ -23,24 +25,28 @@ public interface IAutomationService
     Task<AutomationRuleDto>
         UpdateAsync(
             Guid organizationId,
+            Guid userId,
             Guid ruleId,
             UpdateAutomationRuleRequest request,
             CancellationToken cancellationToken = default);
 
     Task SetEnabledAsync(
         Guid organizationId,
+        Guid userId,
         Guid ruleId,
         bool enabled,
         CancellationToken cancellationToken = default);
 
     Task DeleteAsync(
         Guid organizationId,
+        Guid userId,
         Guid ruleId,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<AutomationExecutionDto>>
         GetExecutionsAsync(
             Guid organizationId,
+            Guid userId,
             int limit,
             CancellationToken cancellationToken = default);
 

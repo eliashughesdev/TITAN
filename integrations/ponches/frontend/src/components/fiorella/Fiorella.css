@@ -42,9 +42,29 @@
   box-shadow: 0 10px 24px rgba(200, 16, 46, 0.12);
 }
 
+/* Espejo de orientación (izquierda/derecha). Se aplica a un contenedor
+   para no competir con las transformaciones de animación del sprite. */
+.fiorella-direction {
+  display: inline-block;
+  transform-origin: 50% 100%;
+}
+
+/* Sprite animado: el pivote en la base produce un "squash & stretch"
+   natural (los pies se mantienen apoyados mientras el cuerpo respira). */
+.fiorella-motion {
+  display: block;
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
 /* Sección 11 del plan: respetar el movimiento reducido del usuario. */
 @media (prefers-reduced-motion: reduce) {
   .fiorella-stage {
     transition: none !important;
+  }
+
+  .fiorella-motion {
+    will-change: auto;
   }
 }
