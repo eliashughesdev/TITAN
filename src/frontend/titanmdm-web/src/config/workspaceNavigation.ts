@@ -73,6 +73,7 @@ const androidNavigation: WorkspaceNavigationItem[] = [
   item('Cumplimiento', '/compliance?workspace=android', ShieldCheck, 'compliance.view'),
   item('Kiosk', '/kiosk?workspace=android', PackageOpen, 'kiosk.view'),
   item('Titan Launcher', '/android/titan-launcher', LayoutGrid, 'android.enterprise.view'),
+  item('Control Center', '/android/control-center', Smartphone, 'android.enterprise.actions'),
   item('Geofencing', '/geofencing?workspace=android', MapPinned, 'geofencing.view'),
   item('Mapa de Flota', '/fleet-map?workspace=android', Map, 'geofencing.view'),
   item('Reportes', '/reports?workspace=android', FileBarChart, 'reports.view'),

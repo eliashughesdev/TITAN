@@ -96,6 +96,10 @@ import {
 } from './pages/android-launcher/TitanLauncherPage'
 
 import {
+  AndroidFleetCommandCenter,
+} from './pages/devices/components/AndroidFleetCommandCenter'
+
+import {
   GeofencingPage,
 } from './pages/geofencing/GeofencingPage'
 
@@ -756,6 +760,22 @@ const applicationRoutes:
 
       allPermissions: [
         'policies.view',
+      ],
+    },
+
+    {
+      path:
+        'android/control-center',
+
+      page:
+        <AndroidFleetCommandCenter />,
+
+      permissions: [
+        'android.enterprise.actions',
+      ],
+
+      allPermissions: [
+        'android.enterprise.manage',
       ],
     },
 
