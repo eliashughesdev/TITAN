@@ -10,8 +10,10 @@ using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
 using TitanMDM.Application.Commands;
+using TitanMDM.Application.Location;
 
 using TitanMDM.Infrastructure.DependencyInjection;
+using TitanMDM.Infrastructure.Location;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Bootstrap;
 
@@ -159,8 +161,15 @@ builder.Services.AddSingleton<
     IDeviceCommandNotifier,
     DeviceCommandSignalRNotifier>();
 
+builder.Services.AddSingleton<
+    ILocationUpdateNotifier,
+    LocationSignalRNotifier>();
+
 builder.Services.AddHostedService<
     DeviceCommandExpirationService>();
+
+builder.Services.AddHostedService<
+    LocationCleanupBackgroundService>();
 
 builder.Services.AddSingleton<
     RemoteHostTokenService>();

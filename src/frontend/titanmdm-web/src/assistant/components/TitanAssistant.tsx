@@ -21,6 +21,26 @@ const MARGIN = 14
 
 type Side = 'left' | 'right'
 
+const EXPRESSIVE_ANIMATIONS:
+  ReadonlySet<TitanAnimationState> =
+  new Set([
+    'thinking',
+    'talking',
+    'error',
+    'success',
+    'warning',
+    'pointing',
+  ])
+
+const ASSISTANT_PRIORITIES:
+  ReadonlySet<string> =
+  new Set([
+    'assistant',
+    'contextual',
+    'user',
+    'critical',
+  ])
+
 function edgePosition(
   side: Side,
   level: 'bottom' | 'middle' = 'bottom',
@@ -361,6 +381,15 @@ export function TitanAssistant() {
 
   const position = snapshot?.position ?? edgePosition('right')
 
+  // Los estados expresivos del asistente (pensando, hablando,
+  // error) solo se muestran mientras la prioridad activa es del
+  // asistente; el desplazamiento autónomo conserva su animación.
+  const avatarAnimation =
+    ASSISTANT_PRIORITIES.has(runtime.priority) &&
+    EXPRESSIVE_ANIMATIONS.has(runtime.animation)
+      ? runtime.animation
+      : animation
+
   return (
     <div
       ref={rootRef}
@@ -391,8 +420,6 @@ export function TitanAssistant() {
 
       {chatOpen && (
         <TitanAgentChatPanel
-          firstName={user.firstName}
-          module={page.module}
           onClose={() => setChatOpen(false)}
         />
       )}
@@ -430,7 +457,7 @@ export function TitanAssistant() {
       </div>
 
       <TitanAvatarCanvas
-        animation={animation}
+        animation={avatarAnimation}
         velocity={snapshot?.velocity ?? { x: 0, y: 0 }}
         direction={snapshot?.direction ?? runtime.direction}
         pointerX={pointer.x}

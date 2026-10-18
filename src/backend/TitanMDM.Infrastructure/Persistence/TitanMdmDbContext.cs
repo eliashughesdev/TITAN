@@ -167,6 +167,14 @@ public sealed class TitanMdmDbContext
         GeofenceEvents =>
             Set<GeofenceEvent>();
 
+    public DbSet<LocationReportingPolicy>
+        LocationReportingPolicies =>
+            Set<LocationReportingPolicy>();
+
+    public DbSet<DeviceLocationState>
+        DeviceLocationStates =>
+            Set<DeviceLocationState>();
+
     // ============================================================
     // AUTOMATION
     // ============================================================

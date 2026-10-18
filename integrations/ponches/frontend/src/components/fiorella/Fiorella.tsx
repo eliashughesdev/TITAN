@@ -16,8 +16,9 @@ import {
   spriteMotion,
 } from "./animations";
 
-import type {
-  FiorellaAction,
+import {
+  SPRITE_MAP,
+  type FiorellaAction,
 } from "./types";
 
 import "./Fiorella.css";
@@ -79,12 +80,12 @@ interface FiorellaProps {
 // SPRITES
 // ============================================================
 
-const SPRITES: Record<string, string> = {
-  idle: "/fiorella-idle.png",
-  walk: "/fiorella-walk.png",
-  jump: "/fiorella-jump.png",
-  point: "/fiorella-point.png",
-};
+// Sprites únicos que existen en disco. Se precargan una sola vez
+// para evitar "saltos" visuales al cambiar de acción (el navegador
+// ya tiene la imagen en caché antes de que se muestre).
+const PRELOAD_SPRITES = Array.from(
+  new Set(Object.values(SPRITE_MAP)),
+);
 
 
 // ============================================================
@@ -186,28 +187,25 @@ export const Fiorella: React.FC<FiorellaProps> = ({
 
 
   // ============================================================
-  // SPRITE ACTUAL
-  // ============================================================
-
-  const spriteSrc =
-    SPRITES[action] ||
-    SPRITES.idle;
-
-
-  // ============================================================
   // ANIMACIÓN ORGÁNICA
   // ============================================================
 
   // La acción puede llegar como string arbitrario (backend, engine o
   // deambulado). Se normaliza a un estado conocido para elegir el
-  // movimiento; si no existe, se usa "idle" sin romper nada.
+  // sprite y el movimiento; si no existe, se usa "idle" sin romper nada.
   const safeAction: FiorellaAction =
-    Object.prototype.hasOwnProperty.call(
-      spriteMotion,
-      action,
-    )
+    Object.prototype.hasOwnProperty.call(spriteMotion, action)
       ? (action as FiorellaAction)
       : "idle";
+
+  // ============================================================
+  // SPRITE ACTUAL
+  // ============================================================
+
+  // Se toma del mapa canónico (types.ts) para que TODOS los estados
+  // (wave, celebrate, think, alert, ...) tengan sprite asignado en
+  // lugar de caer siempre en "idle".
+  const spriteSrc = SPRITE_MAP[safeAction] || SPRITE_MAP.idle;
 
   const spriteAnimation = reducedMotion
     ? reducedSpriteMotion[safeAction]
@@ -238,7 +236,7 @@ export const Fiorella: React.FC<FiorellaProps> = ({
   return (
 
     <div
-      className="
+      className={`
         fixed
         z-50
         flex
@@ -247,18 +245,59 @@ export const Fiorella: React.FC<FiorellaProps> = ({
         gap-2
         pointer-events-auto
         select-none
-        transition-all
-        duration-300
-        ease-out
-      "
+        ${reducedMotion ? "" : "transition-all duration-300 ease-out"}
+      `}
       style={containerStyle}
     >
+
+      {/* Precarga invisible: mantiene las 4 imágenes en caché para
+          que el cambio de acción no produzca parpadeos. */}
+      <div className="hidden" aria-hidden="true">
+        {PRELOAD_SPRITES.map((src) => (
+          <img key={src} src={src} alt="" draggable={false} />
+        ))}
+      </div>
 
       {/* ===================================================== */}
       {/* VENTANA FLOTANTE CHAT                                */}
       {/* ===================================================== */}
 
-      {isChatOpen && (
+      <AnimatePresence>
+
+        {isChatOpen && (
+
+        <motion.div
+          key="fiorella-chat"
+
+          initial={{
+            opacity: 0,
+            y: 12,
+            scale: 0.98,
+          }}
+
+          animate={{
+            opacity: 1,
+            y: 0,
+            scale: 1,
+          }}
+
+          exit={{
+            opacity: 0,
+            y: 12,
+            scale: 0.98,
+          }}
+
+          transition={{
+            duration: reducedMotion
+              ? 0
+              : 0.22,
+            ease: "easeOut",
+          }}
+
+          className="
+            origin-bottom-right
+          "
+        >
 
         <div
           className="
@@ -627,7 +666,11 @@ export const Fiorella: React.FC<FiorellaProps> = ({
 
         </div>
 
-      )}
+        </motion.div>
+
+        )}
+
+      </AnimatePresence>
 
 
       {/* ===================================================== */}

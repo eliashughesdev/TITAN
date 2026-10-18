@@ -116,6 +116,42 @@ export interface AndroidInventoryItem {
   lastPolicySyncTimeUtc: string | null
   lastSynchronizedAtUtc: string
   isDeletedInGoogle: boolean
+  apiLevel: number | null
+  androidVersion: string | null
+  securityPatchLevel: string | null
+}
+
+export type AndroidCapabilityStatus =
+  | 'Available'
+  | 'NotSupported'
+  | 'PendingValidation'
+
+export interface AndroidCapability {
+  action: string
+  status: AndroidCapabilityStatus
+  reason: string | null
+}
+
+export interface AndroidDeviceCapabilities {
+  deviceId: string
+  deviceName: string
+  manufacturer: string | null
+  model: string | null
+  apiLevel: number | null
+  androidVersion: string | null
+  securityPatchLevel: string | null
+  managementMode: string | null
+  ownership: string | null
+  isManaged: boolean
+  isDeletedInGoogle: boolean
+  hasGoogleMobileServices: boolean
+  requiresAlternativeRoute: boolean
+  alternativeRouteNote: string | null
+  remoteDiagnosticsSupported: boolean
+  remoteVisionSupported: boolean
+  remoteControlSupported: boolean
+  remoteSupportNote: string
+  actions: AndroidCapability[]
 }
 
 export interface AndroidInventoryPage {

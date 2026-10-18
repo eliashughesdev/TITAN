@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using TitanMDM.Application.Commands.Agent;
 using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Application.Location;
+using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -17,13 +20,22 @@ public sealed class DeviceCommandAgentController
     private readonly IDeviceAuthenticator
         _deviceAuthenticator;
 
+    private readonly IDeviceLocationService
+        _locationService;
+
+    private readonly TitanMdmDbContext _dbContext;
+
     public DeviceCommandAgentController(
         IDeviceCommandAgentService commandService,
-        IDeviceAuthenticator deviceAuthenticator)
+        IDeviceAuthenticator deviceAuthenticator,
+        IDeviceLocationService locationService,
+        TitanMdmDbContext dbContext)
     {
         _commandService = commandService;
         _deviceAuthenticator =
             deviceAuthenticator;
+        _locationService = locationService;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -191,9 +203,110 @@ public sealed class DeviceCommandAgentController
         }
     }
 
+    [HttpPost("location")]
+    public async Task<IActionResult> ReportLocation(
+        [FromBody] LocationReportRequest request,
+        CancellationToken cancellationToken)
+    {
+        var authentication =
+            await AuthenticateDeviceAsync(
+                cancellationToken);
+
+        if (!authentication.Success)
+        {
+            return authentication.Error!;
+        }
+
+        try
+        {
+            await _locationService.ProcessLocationAsync(
+                authentication.DeviceId,
+                request.ResultJson,
+                cancellationToken);
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                code = "LOCATION_REPORT_ERROR",
+                message = ex.Message
+            });
+        }
+    }
+
+    [HttpGet("location/policy")]
+    public async Task<IActionResult> GetLocationPolicy(
+        CancellationToken cancellationToken)
+    {
+        var authentication =
+            await AuthenticateDeviceAsync(
+                cancellationToken);
+
+        if (!authentication.Success)
+        {
+            return authentication.Error!;
+        }
+
+        var organizationId =
+            await _dbContext.Devices
+                .AsNoTracking()
+                .Where(x =>
+                    x.Id ==
+                        authentication.DeviceId)
+                .Select(x => x.OrganizationId)
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
+        if (organizationId == Guid.Empty)
+        {
+            return NotFound(new
+            {
+                code = "DEVICE_NOT_FOUND",
+                message =
+                    "Dispositivo no encontrado."
+            });
+        }
+
+        var policy =
+            await _dbContext
+                .LocationReportingPolicies
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId ==
+                        organizationId)
+                .Select(x => new
+                {
+                    isEnabled = x.IsEnabled,
+                    reportingIntervalMinutes =
+                        x.ReportingIntervalMinutes,
+                    retentionDays =
+                        x.RetentionDays
+                })
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
+        /*
+         * Sin politica configurada el agente NO
+         * reporta: el comportamiento por defecto
+         * es no capturar.
+         */
+        return Ok(policy ?? new
+        {
+            isEnabled = false,
+            reportingIntervalMinutes = 15,
+            retentionDays = 30
+        });
+    }
+
+    public sealed record LocationReportRequest(
+        string ResultJson);
+
     private async Task<DeviceAuthenticationResult>
         AuthenticateDeviceAsync(
             CancellationToken cancellationToken)
+
     {
         var deviceIdHeader =
             Request.Headers[

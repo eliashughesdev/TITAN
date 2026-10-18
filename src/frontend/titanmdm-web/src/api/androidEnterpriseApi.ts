@@ -3,6 +3,7 @@ import apiClient from './apiClient'
 import type {
   AndroidAuditPage,
   AndroidAuditQuery,
+  AndroidDeviceCapabilities,
   AndroidDeviceInventorySummary,
   AndroidDeviceSyncResult,
   AndroidEnterpriseStatus,
@@ -115,6 +116,17 @@ export const androidEnterpriseApi = {
             search: query.search?.trim() || undefined,
           },
         },
+      )
+
+    return response.data
+  },
+
+  async getDeviceCapabilities(
+    deviceId: string,
+  ): Promise<AndroidDeviceCapabilities> {
+    const response =
+      await apiClient.get<AndroidDeviceCapabilities>(
+        `/android-enterprise/devices/${deviceId}/capabilities`,
       )
 
     return response.data

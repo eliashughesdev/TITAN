@@ -5,6 +5,7 @@ import {
   Gauge,
   Home,
   LayoutGrid,
+  Map,
   MapPinned,
   MonitorSmartphone,
   Network,
@@ -73,6 +74,7 @@ const androidNavigation: WorkspaceNavigationItem[] = [
   item('Kiosk', '/kiosk?workspace=android', PackageOpen, 'kiosk.view'),
   item('Titan Launcher', '/android/titan-launcher', LayoutGrid, 'android.enterprise.view'),
   item('Geofencing', '/geofencing?workspace=android', MapPinned, 'geofencing.view'),
+  item('Mapa de Flota', '/fleet-map?workspace=android', Map, 'geofencing.view'),
   item('Reportes', '/reports?workspace=android', FileBarChart, 'reports.view'),
 ]
 

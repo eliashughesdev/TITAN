@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using TitanMDM.Application.AndroidEnterprise;
 using TitanMDM.Application.Audit;
 using TitanMDM.Application.Security;
+using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -135,6 +136,12 @@ public sealed class AndroidRemoteActionService
                 "ANDROID_DEVICE_NOT_ENROLLED",
                 "El dispositivo todavía no está registrado en Android Enterprise.");
         }
+
+        EnsureDeviceSupportsAction(
+            action,
+            device.Manufacturer,
+            device.Model,
+            androidDevice);
 
         ValidateActionRequest(
             action,
@@ -408,6 +415,74 @@ public sealed class AndroidRemoteActionService
     // ============================================================
     // PARSING
     // ============================================================
+
+    /// <summary>
+    /// Rechaza operaciones que el modo de administración, el nivel de
+    /// API o el fabricante reportado por Google no admiten. Evita
+    /// enviar comandos que Google rechazará de todos modos.
+    /// </summary>
+    private static void EnsureDeviceSupportsAction(
+        AndroidRemoteActionType action,
+        string? manufacturer,
+        string? model,
+        AndroidDevice androidDevice)
+    {
+        var input =
+            new AndroidRemoteCapabilityInput(
+                manufacturer,
+                model,
+                androidDevice.ApiLevel,
+                androidDevice.ManagementMode,
+                androidDevice.State,
+                androidDevice.Ownership,
+                IsManaged: !string.Equals(
+                    androidDevice.State,
+                    "DELETED",
+                    StringComparison.OrdinalIgnoreCase),
+                androidDevice.IsDeletedInGoogle,
+                androidDevice.LastStatusReportTimeUtc);
+
+        var capability =
+            AndroidRemoteCapabilityResolver.ResolveAction(
+                input,
+                MapCapabilityAction(action));
+
+        if (!string.Equals(
+                capability.Status,
+                nameof(AndroidCapabilityStatus.NotSupported),
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new AndroidRemoteActionException(
+            "ACTION_NOT_SUPPORTED_FOR_DEVICE",
+            capability.Reason
+                ?? "La operación no está soportada por este dispositivo.");
+    }
+
+    private static string MapCapabilityAction(
+        AndroidRemoteActionType action)
+    {
+        return action switch
+        {
+            AndroidRemoteActionType.Lock =>
+                AndroidRemoteCapabilityResolver.ActionLock,
+            AndroidRemoteActionType.Reboot =>
+                AndroidRemoteCapabilityResolver.ActionReboot,
+            AndroidRemoteActionType.ResetPassword =>
+                AndroidRemoteCapabilityResolver.ActionResetPassword,
+            AndroidRemoteActionType.StartLostMode =>
+                AndroidRemoteCapabilityResolver.ActionStartLostMode,
+            AndroidRemoteActionType.StopLostMode =>
+                AndroidRemoteCapabilityResolver.ActionStopLostMode,
+            AndroidRemoteActionType.Wipe =>
+                AndroidRemoteCapabilityResolver.ActionWipe,
+            AndroidRemoteActionType.Delete =>
+                AndroidRemoteCapabilityResolver.ActionDelete,
+            _ => action.ToString()
+        };
+    }
 
     private static void ValidateActionRequest(
         AndroidRemoteActionType action,

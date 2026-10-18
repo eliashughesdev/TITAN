@@ -18,6 +18,12 @@ public interface IAndroidDeviceSyncService
         int pageSize,
         IReadOnlyCollection<Guid>? accessibleSiteIds = null,
         CancellationToken cancellationToken = default);
+
+    Task<AndroidDeviceCapabilitiesDto?> GetCapabilitiesAsync(
+        Guid organizationId,
+        Guid deviceId,
+        IReadOnlyCollection<Guid>? accessibleSiteIds = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record AndroidDeviceSyncResultDto(
@@ -59,7 +65,10 @@ public sealed record AndroidInventoryItemDto(
     string? AppliedPolicyState,
     DateTime? LastPolicySyncTimeUtc,
     DateTime LastSynchronizedAtUtc,
-    bool IsDeletedInGoogle);
+    bool IsDeletedInGoogle,
+    int? ApiLevel = null,
+    string? AndroidVersion = null,
+    string? SecurityPatchLevel = null);
 
 public sealed record AndroidDeviceInventoryPageDto(
     IReadOnlyCollection<AndroidInventoryItemDto> Items,

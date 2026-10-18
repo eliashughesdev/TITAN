@@ -703,3 +703,41 @@ input:checked
   z-index: 40;
   transition: opacity .24s ease;
 }
+
+/* ============================================================
+   Estados expresivos del asistente (pensando / hablando / error)
+   ============================================================ */
+
+.titan-avatar-canvas[data-animation="thinking"] {
+  filter:
+    drop-shadow(0 9px 12px rgba(12, 51, 105, .23))
+    drop-shadow(0 0 11px rgba(255, 190, 88, .55));
+}
+
+.titan-avatar-canvas[data-animation="talking"] {
+  filter:
+    drop-shadow(0 9px 12px rgba(12, 51, 105, .23))
+    drop-shadow(0 0 13px rgba(95, 227, 255, .62));
+}
+
+.titan-avatar-canvas[data-animation="error"] {
+  filter:
+    drop-shadow(0 9px 12px rgba(12, 51, 105, .23))
+    drop-shadow(0 0 13px rgba(255, 96, 96, .6));
+}
+
+.titan-avatar-canvas[data-animation="thinking"],
+.titan-avatar-canvas[data-animation="talking"] {
+  animation: titan-state-glow 1.7s ease-in-out infinite alternate;
+}
+
+@keyframes titan-state-glow {
+  from { opacity: .92; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-avatar-canvas[data-animation] {
+    animation: none;
+  }
+}

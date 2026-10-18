@@ -100,6 +100,10 @@ import {
 } from './pages/geofencing/GeofencingPage'
 
 import {
+  FleetMapPage,
+} from './pages/fleet-map/FleetMapPage'
+
+import {
   AutomationPage,
 } from './pages/automation/AutomationPage'
 
@@ -758,6 +762,18 @@ const applicationRoutes:
 
       page:
         <GeofencingPage />,
+
+      permissions: [
+        'geofencing.view',
+      ],
+    },
+
+    {
+      path:
+        'fleet-map',
+
+      page:
+        <FleetMapPage />,
 
       permissions: [
         'geofencing.view',

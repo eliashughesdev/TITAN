@@ -111,6 +111,43 @@ public sealed class AndroidDeviceInventoryController
         }
     }
 
+    [HttpGet("{deviceId:guid}/capabilities")]
+    [RequireAnyPermission(
+        PermissionCodes.AndroidEnterprise.View,
+        PermissionCodes.Workspaces.AndroidView)]
+    public async Task<IActionResult> GetCapabilities(
+        Guid deviceId,
+        CancellationToken cancellationToken)
+    {
+        var organizationId =
+            GetOrganizationId();
+
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+            return Unauthorized();
+
+        var accessibleSiteIds =
+            await ResolveSiteScopeAsync(
+                organizationId.Value,
+                userId.Value,
+                cancellationToken);
+
+        var result =
+            await _syncService
+                .GetCapabilitiesAsync(
+                    organizationId.Value,
+                    deviceId,
+                    accessibleSiteIds,
+                    cancellationToken);
+
+        return result is null
+            ? NotFound()
+            : Ok(result);
+    }
+
     [HttpGet("summary")]
     [RequireAnyPermission(
         PermissionCodes.AndroidEnterprise.View,

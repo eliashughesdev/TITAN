@@ -20,6 +20,27 @@ public interface IDeviceLocationService
             int limit,
             CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<FleetLocationDto>>
+        GetFleetLocationsAsync(
+            Guid organizationId,
+            FleetLocationFilters filters,
+            CancellationToken cancellationToken = default);
+
+    Task<LocationReportingPolicyDto?>
+        GetReportingPolicyAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default);
+
+    Task<LocationReportingPolicyDto>
+        UpdateReportingPolicyAsync(
+            Guid organizationId,
+            UpdateReportingPolicyRequest request,
+            CancellationToken cancellationToken = default);
+
+    Task PurgeOldLocationsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyCollection<GeofenceDto>>
         GetGeofencesAsync(
             Guid organizationId,
@@ -54,6 +75,46 @@ public sealed record DeviceLocationDto(
     string Source,
     DateTime CapturedAtUtc,
     DateTime ReceivedAtUtc);
+
+public sealed record FleetLocationDto(
+    Guid DeviceId,
+    string DeviceName,
+    string? Manufacturer,
+    string? Model,
+    string? Department,
+    Guid? SiteId,
+    string? SiteName,
+    double? Latitude,
+    double? Longitude,
+    double? AccuracyMeters,
+    DateTime? CapturedAtUtc,
+    DateTime? ReceivedAtUtc,
+    string Status,
+    string LocationState,
+    double? SignalAgeMinutes,
+    int? BatteryLevel,
+    DateTime? LastSeenAtUtc);
+
+public sealed record FleetLocationFilters(
+    string? Search,
+    string? Manufacturer,
+    string? Department,
+    Guid? DeviceGroupId,
+    Guid? SiteId,
+    string? Status,
+    string? LocationState,
+    int? MaxSignalAgeMinutes);
+
+public sealed record LocationReportingPolicyDto(
+    Guid Id,
+    bool IsEnabled,
+    int ReportingIntervalMinutes,
+    int RetentionDays);
+
+public sealed record UpdateReportingPolicyRequest(
+    bool IsEnabled,
+    int ReportingIntervalMinutes,
+    int RetentionDays);
 
 public sealed record GeofenceDto(
     Guid Id,

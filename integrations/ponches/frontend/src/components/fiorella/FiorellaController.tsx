@@ -96,6 +96,10 @@ const WANDER_POOL: FiorellaAction[] = [
   "jump",
 ];
 
+// Ancho aproximado del sprite (h-28 = 112px + indicador). Se usa para
+// que Fiorella nunca quede recortada por el borde de la ventana.
+const SPRITE_WIDTH = 128;
+
 type FiorellaControllerProps = {
   events?: FiorellaEvents;
 };
@@ -189,13 +193,31 @@ export default function FiorellaController({
       document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
+  // Recorta la posición si la ventana se hace más angosta, sin
+  // provocar saltos cuando Fiorella ya está dentro de los límites.
+  useEffect(() => {
+    const onResize = () => {
+      setX((previousX) =>
+        Math.min(
+          previousX,
+          Math.max(8, window.innerWidth - SPRITE_WIDTH - 24),
+        ),
+      );
+    };
+
+    window.addEventListener("resize", onResize);
+    return () =>
+      window.removeEventListener("resize", onResize);
+  }, []);
+
   useEffect(() => {
     if (hidden || isChatOpen) return;
 
     let cancelled = false;
     let timer = 0;
 
-    const maxX = () => Math.max(60, window.innerWidth - 180);
+    const maxX = () =>
+      Math.max(60, window.innerWidth - SPRITE_WIDTH - 24);
 
     const wander = (): FiorellaAction =>
       WANDER_POOL[Math.floor(Math.random() * WANDER_POOL.length)];

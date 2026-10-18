@@ -13,6 +13,57 @@ export interface DeviceLocation {
   receivedAtUtc: string
 }
 
+export type FleetLocationState =
+  | 'Fresh'
+  | 'Stale'
+  | 'Offline'
+  | 'NoLocation'
+  | 'PermissionDenied'
+
+export interface FleetLocation {
+  deviceId: string
+  deviceName: string
+  manufacturer: string | null
+  model: string | null
+  department: string | null
+  siteId: string | null
+  siteName: string | null
+  latitude: number | null
+  longitude: number | null
+  accuracyMeters: number | null
+  capturedAtUtc: string | null
+  receivedAtUtc: string | null
+  status: string
+  locationState: FleetLocationState
+  signalAgeMinutes: number | null
+  batteryLevel: number | null
+  lastSeenAtUtc: string | null
+}
+
+export interface FleetLocationFilters {
+  search?: string
+  manufacturer?: string
+  department?: string
+  deviceGroupId?: string
+  siteId?: string
+  status?: string
+  locationState?: string
+  maxSignalAgeMinutes?: number
+}
+
+export interface LocationReportingPolicy {
+  id: string
+  isEnabled: boolean
+  reportingIntervalMinutes: number
+  retentionDays: number
+}
+
+export interface UpdateReportingPolicyRequest {
+  isEnabled: boolean
+  reportingIntervalMinutes: number
+  retentionDays: number
+}
+
 export interface Geofence {
   id: string
   name: string
@@ -112,5 +163,41 @@ export const locationApi = {
     await apiClient.delete(
       `/location/geofences/${geofenceId}`,
     )
+  },
+
+  async getFleet(
+    filters: FleetLocationFilters = {},
+  ): Promise<FleetLocation[]> {
+    const response =
+      await apiClient.get<FleetLocation[]>(
+        '/location/fleet',
+        {
+          params: filters,
+        },
+      )
+
+    return response.data
+  },
+
+  async getReportingPolicy():
+    Promise<LocationReportingPolicy> {
+    const response =
+      await apiClient.get<LocationReportingPolicy>(
+        '/location/policy',
+      )
+
+    return response.data
+  },
+
+  async updateReportingPolicy(
+    request: UpdateReportingPolicyRequest,
+  ): Promise<LocationReportingPolicy> {
+    const response =
+      await apiClient.post<LocationReportingPolicy>(
+        '/location/policy',
+        request,
+      )
+
+    return response.data
   },
 }

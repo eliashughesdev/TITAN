@@ -526,7 +526,10 @@ public sealed class AndroidDeviceSyncService
                             x.Android.AppliedPolicyState,
                             x.Android.LastPolicySyncTimeUtc,
                             x.Android.LastSynchronizedAtUtc,
-                            x.Android.IsDeletedInGoogle))
+                            x.Android.IsDeletedInGoogle,
+                            x.Android.ApiLevel,
+                            x.Device.OperatingSystemVersion,
+                            x.Android.SecurityPatchLevel))
                 .ToList();
 
         return new AndroidDeviceInventoryPageDto(
@@ -539,6 +542,117 @@ public sealed class AndroidDeviceSyncService
                 : (int)Math.Ceiling(
                     totalCount /
                     (double)normalizedPageSize));
+    }
+
+    public async Task<AndroidDeviceCapabilitiesDto?>
+        GetCapabilitiesAsync(
+            Guid organizationId,
+            Guid deviceId,
+            IReadOnlyCollection<Guid>? accessibleSiteIds = null,
+            CancellationToken cancellationToken = default)
+    {
+        ValidateOrganization(organizationId);
+
+        if (deviceId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "DeviceId is required.",
+                nameof(deviceId));
+        }
+
+        var allowedSiteIds =
+            NormalizeSiteScope(accessibleSiteIds);
+
+        var row =
+            await (
+                from android in
+                    _dbContext
+                        .AndroidDevices
+                        .AsNoTracking()
+
+                join device in
+                    _dbContext
+                        .Devices
+                        .AsNoTracking()
+                    on android.DeviceId
+                    equals device.Id
+
+                where
+                    android.OrganizationId ==
+                        organizationId &&
+                    device.OrganizationId ==
+                        organizationId &&
+                    android.DeviceId ==
+                        deviceId &&
+                    !device.IsDeleted &&
+                    (allowedSiteIds == null ||
+                     (device.SiteId != null &&
+                      allowedSiteIds.Contains(
+                          device.SiteId.Value)))
+
+                select new
+                {
+                    Device = device,
+                    Android = android
+                })
+                .SingleOrDefaultAsync(
+                    cancellationToken);
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        var manufacturer =
+            row.Device.Manufacturer;
+
+        var requiresAlternativeRoute =
+            AndroidRemoteCapabilityResolver
+                .IsHuaweiFamily(manufacturer);
+
+        var input =
+            new AndroidRemoteCapabilityInput(
+                manufacturer,
+                row.Device.Model,
+                row.Android.ApiLevel,
+                row.Android.ManagementMode,
+                row.Android.State,
+                row.Android.Ownership,
+                row.Device.IsManaged,
+                row.Android.IsDeletedInGoogle,
+                row.Android.LastStatusReportTimeUtc);
+
+        var actions =
+            AndroidRemoteCapabilityResolver
+                .Resolve(input);
+
+        return new AndroidDeviceCapabilitiesDto(
+            row.Device.Id,
+            row.Device.DeviceName,
+            manufacturer,
+            row.Device.Model,
+            row.Android.ApiLevel,
+            row.Device.OperatingSystemVersion,
+            row.Android.SecurityPatchLevel,
+            row.Android.ManagementMode,
+            row.Android.Ownership,
+            row.Device.IsManaged,
+            row.Android.IsDeletedInGoogle,
+            HasGoogleMobileServices: !requiresAlternativeRoute,
+            RequiresAlternativeRoute: requiresAlternativeRoute,
+            AlternativeRouteNote: requiresAlternativeRoute
+                ? "Huawei/Honor sin Google Mobile Services puede requerir "
+                  + "una ruta alternativa no basada en Android Management API."
+                : null,
+            RemoteDiagnosticsSupported: true,
+            RemoteVisionSupported: false,
+            RemoteControlSupported: false,
+            RemoteSupportNote:
+                "La visualización y el control interactivo Android "
+                + "requieren un agente con MediaProjection y consentimiento "
+                + "explícito del usuario. Hoy no están disponibles; "
+                + "el diagnóstico remoto sí lo está.",
+            Actions: actions);
     }
 
     private async Task<bool>

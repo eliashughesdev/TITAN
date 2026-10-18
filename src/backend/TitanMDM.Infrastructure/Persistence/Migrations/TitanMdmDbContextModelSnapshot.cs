@@ -28,14 +28,23 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("AutomationRuleId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("CompletedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("CycleDepth")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("DeviceId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2000)
@@ -46,6 +55,12 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("ResultJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Simulated")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("StartedAtUtc")
                         .HasColumnType("datetime2");
@@ -75,6 +90,154 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("AutomationExecutions", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Automation.AutomationNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AutomationExecutionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AutomationRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TargetRole")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "IsRead", "CreatedAtUtc");
+
+                    b.ToTable("AutomationNotifications", (string)null);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Automation.AutomationQueueItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("AutomationExecutionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AutomationRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CycleDepth")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LeaseUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Simulated")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TriggerPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "State");
+
+                    b.HasIndex("State", "NextAttemptAtUtc");
+
+                    b.ToTable("AutomationQueueItems", (string)null);
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Automation.AutomationRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -94,11 +257,17 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DefinitionJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -113,6 +282,13 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("LastExecutedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Module")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -120,6 +296,12 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ScopeSiteIdsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TriggerType")
                         .IsRequired()
@@ -137,6 +319,71 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId", "TriggerType", "IsEnabled");
 
                     b.ToTable("AutomationRules", (string)null);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Automation.AutomationSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AutomationRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("CatchUp")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DayOfMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("IntervalMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastRunAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("NextRunAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Recurrence")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("StartAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TimeOfDay")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextRunAtUtc");
+
+                    b.HasIndex("OrganizationId", "IsEnabled", "NextRunAtUtc");
+
+                    b.ToTable("AutomationSchedules", (string)null);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.AdministrativeAuditEvent", b =>
@@ -1163,6 +1410,41 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId", "DeviceId", "CapturedAtUtc");
 
                     b.ToTable("DeviceLocations", (string)null);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.DeviceLocationState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CaptureState")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("OrganizationId", "DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("DeviceLocationStates", (string)null);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.DevicePolicyAssignment", b =>
@@ -2737,6 +3019,35 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("HelpdeskZones", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.LocationReportingPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ReportingIntervalMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LocationReportingPolicies");
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.LostModeSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3863,6 +4174,15 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.DeviceLocation", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.DeviceLocationState", b =>
                 {
                     b.HasOne("TitanMDM.Domain.Entities.Device", null)
                         .WithMany()

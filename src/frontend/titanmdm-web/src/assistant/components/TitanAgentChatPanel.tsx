@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -7,247 +8,474 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  AlertCircle,
+  ArrowLeft,
   Bot,
-  ClipboardList,
+  History,
   Plus,
-  Search,
+  RefreshCw,
   Send,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Trash2,
+  WifiOff,
   X,
 } from 'lucide-react'
-import apiClient from '../../api/apiClient'
+
+import {
+  describeTitanFailure,
+  titanAssistantApi,
+  toolKindOf,
+  type TitanCapabilities,
+  type TitanConversationSummary,
+  type TitanToolInvocation,
+} from '../api/titanAssistantApi'
+import {
+  useTitanAssistant,
+  type TitanAnimationState,
+} from '../context/TitanAssistantContext'
 import '../styles/titan-agent-chat.css'
 
-interface ChatResponse {
-  answer: string
-  availableActions: string[]
-  module: string
-}
-
-interface AgentContext {
-  tools: string[]
-}
-
-interface TicketSummary {
-  id: string
-  number: string
-  subject: string
-  status: string
-}
-
-interface ActionResponse {
-  action: string
-  items?: TicketSummary[]
-  item?: TicketSummary & {
-    description?: string
-    priority?: string
-  }
-  id?: string
-  number?: string
-  message?: string
-}
+type Connection =
+  | 'connecting'
+  | 'online'
+  | 'offline'
+  | 'forbidden'
 
 interface ChatLine {
   id: number
   role: 'user' | 'assistant'
   content: string
+  invocations?: TitanToolInvocation[]
+  cancelled?: boolean
+  failed?: boolean
 }
 
 interface Props {
-  firstName: string
-  module: string
   onClose: () => void
 }
 
-function errorMessage(error: unknown): string {
-  const failure = error as {
-    response?: {
-      status?: number
-      data?: { message?: string }
-    }
-  }
+function prettyModule(module: string): string {
+  return module
+    .replace(/-/g, ' ')
+    .trim() || 'general'
+}
 
-  if (failure.response?.data?.message) {
-    return failure.response.data.message
-  }
+function MessageLine({
+  line,
+}: {
+  line: ChatLine
+}) {
+  const invocations =
+    line.invocations ?? []
 
-  if (failure.response?.status === 403) {
-    return 'Tu cuenta no tiene permiso para esta acción.'
-  }
+  return (
+    <div
+      className={
+        'titan-agent-chat__message ' +
+        `titan-agent-chat__message--${line.role}` +
+        (line.failed
+          ? ' titan-agent-chat__message--failed'
+          : '')
+      }
+    >
+      <div className="titan-agent-chat__bubble">
+        {line.content}
+      </div>
 
-  return 'No se pudo completar la solicitud. Comprueba el backend e inténtalo de nuevo.'
+      {invocations.length > 0 && (
+        <div className="titan-agent-chat__invocations">
+          {invocations.map((invocation, index) => (
+            <span
+              key={`${line.id}-${index}`}
+              className={
+                'titan-agent-chat__invocation' +
+                (invocation.success
+                  ? ''
+                  : ' titan-agent-chat__invocation--failed')
+              }
+            >
+              {invocation.tool} ·{' '}
+              {invocation.durationMs} ms ·{' '}
+              {invocation.success
+                ? 'OK'
+                : (invocation.errorCode ?? 'error')}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {line.cancelled && (
+        <span className="titan-agent-chat__message-meta">
+          Cancelada por el usuario
+        </span>
+      )}
+
+      <span className="titan-agent-chat__message-meta">
+        {line.role === 'user' ? 'Tú' : 'Titan'}
+      </span>
+    </div>
+  )
 }
 
 export function TitanAgentChatPanel({
-  firstName,
-  module,
   onClose,
 }: Props) {
+  const {
+    user,
+    page,
+    setAnimation,
+    clearMessage,
+  } = useTitanAssistant()
+
+  const [capabilities, setCapabilities] =
+    useState<TitanCapabilities | null>(null)
+  const [connection, setConnection] =
+    useState<Connection>('connecting')
+  const [connectionError, setConnectionError] =
+    useState('')
+  const [lines, setLines] = useState<ChatLine[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [lines, setLines] = useState<ChatLine[]>([])
   const [error, setError] = useState('')
-  const [tools, setTools] = useState<string[]>([])
-  const [showCreate, setShowCreate] = useState(false)
-  const [subject, setSubject] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('general')
+  const [conversationId, setConversationId] =
+    useState<string | null>(null)
+  const [history, setHistory] = useState<
+    TitanConversationSummary[]
+  >([])
+  const [loadingHistory, setLoadingHistory] =
+    useState(false)
+  const [screen, setScreen] =
+    useState<'chat' | 'history'>('chat')
 
   const nextId = useRef(0)
   const mounted = useRef(true)
+  const abortRef = useRef<AbortController | null>(null)
+  const avatarTimer = useRef<number | null>(null)
   const endRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+
+  const firstName = user?.firstName ?? 'usuario'
+  const moduleName = prettyModule(page.module)
+
+  const clearAvatarTimer = useCallback(() => {
+    if (avatarTimer.current !== null) {
+      window.clearTimeout(avatarTimer.current)
+      avatarTimer.current = null
+    }
+  }, [])
+
+  const setAvatar = useCallback(
+    (
+      state: TitanAnimationState,
+      resetAfter?: number,
+    ) => {
+      clearAvatarTimer()
+      setAnimation(state, 'user')
+
+      if (resetAfter) {
+        avatarTimer.current = window.setTimeout(() => {
+          avatarTimer.current = null
+          clearMessage()
+        }, resetAfter)
+      }
+    },
+    [clearAvatarTimer, setAnimation, clearMessage],
+  )
+
+  const loadCapabilities = useCallback(async () => {
+    try {
+      const caps =
+        await titanAssistantApi.getCapabilities()
+
+      if (!mounted.current) return
+
+      setCapabilities(caps)
+
+      if (!caps.enabled || !caps.available) {
+        setConnection('offline')
+        setConnectionError(
+          caps.enabled
+            ? 'El proveedor de IA no está disponible.'
+            : 'El asistente no está habilitado.',
+        )
+      } else {
+        setConnection('online')
+      }
+    } catch (cause) {
+      if (!mounted.current) return
+
+      const failure = describeTitanFailure(cause)
+
+      setConnection(
+        failure.kind === 'forbidden'
+          ? 'forbidden'
+          : 'offline',
+      )
+      setConnectionError(failure.message)
+    }
+  }, [])
+
+  const retry = useCallback(() => {
+    setConnection('connecting')
+    setConnectionError('')
+    void loadCapabilities()
+  }, [loadCapabilities])
 
   useEffect(() => {
     mounted.current = true
     inputRef.current?.focus()
-
-    void apiClient
-      .get<AgentContext>('/virtual-agent/context')
-      .then(({ data }) => {
-        if (mounted.current) {
-          setTools(data.tools ?? [])
-        }
-      })
-      .catch(() => {
-        // El chat mostrará el error concreto al enviar un mensaje.
-        // Sin contexto autorizado no presentamos acciones.
-      })
+    void loadCapabilities()
 
     return () => {
       mounted.current = false
+      abortRef.current?.abort()
+      clearAvatarTimer()
+      clearMessage()
     }
-  }, [])
+  }, [
+    loadCapabilities,
+    clearAvatarTimer,
+    clearMessage,
+  ])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'end',
     })
-  }, [lines, sending, error, showCreate])
+  }, [lines, sending, error, screen])
 
-  function addLine(
-    role: ChatLine['role'],
-    content: string,
-  ) {
-    const id = ++nextId.current
+  const addLine = useCallback(
+    (
+      role: ChatLine['role'],
+      content: string,
+      extra?: Partial<
+        Omit<ChatLine, 'id' | 'role' | 'content'>
+      >,
+    ) => {
+      const id = ++nextId.current
 
-    setLines((current) => [
-      ...current,
-      { id, role, content },
-    ])
-  }
+      setLines((current) => [
+        ...current,
+        { id, role, content, ...extra },
+      ])
+    },
+    [],
+  )
 
-  async function sendChat(
-    event?: FormEvent<HTMLFormElement>,
-  ) {
-    event?.preventDefault()
+  const send = useCallback(
+    async (event?: FormEvent<HTMLFormElement>) => {
+      event?.preventDefault()
 
-    const message = input.trim()
+      const message = input.trim()
 
-    if (message.length < 2 || sending) return
+      if (message.length < 2 || sending) return
 
+      setInput('')
+      setError('')
+      setSending(true)
+
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      addLine('user', message)
+      setAvatar('thinking')
+
+      try {
+        const response =
+          await titanAssistantApi.sendMessage(
+            {
+              conversationId,
+              message,
+              module: page.module,
+            },
+            controller.signal,
+          )
+
+        if (!mounted.current) return
+
+        setConversationId(response.conversationId)
+
+        addLine(
+          'assistant',
+          response.answer &&
+            response.answer.trim()
+            ? response.answer
+            : 'No recibí una respuesta del asistente.',
+          {
+            invocations: response.toolInvocations,
+            cancelled: response.cancelled,
+          },
+        )
+
+        if (response.cancelled) {
+          setAvatar('warning', 2600)
+        } else {
+          setAvatar('talking', 2600)
+        }
+
+        setConnection(
+          response.provider === 'none'
+            ? 'offline'
+            : 'online',
+        )
+      } catch (cause) {
+        if (!mounted.current) return
+
+        const failure = describeTitanFailure(cause)
+
+        if (failure.kind === 'cancelled') {
+          addLine('assistant', 'Consulta cancelada.', {
+            cancelled: true,
+          })
+          setAvatar('idle', 1200)
+        } else {
+          setError(failure.message)
+          addLine('assistant', failure.message, {
+            failed: true,
+          })
+          setAvatar('error', 3400)
+
+          if (
+            failure.kind === 'unavailable' ||
+            failure.kind === 'network'
+          ) {
+            setConnection('offline')
+          }
+
+          if (
+            failure.kind === 'forbidden' ||
+            failure.kind === 'unauthorized'
+          ) {
+            setConnection('forbidden')
+          }
+        }
+      } finally {
+        if (mounted.current) {
+          setSending(false)
+          abortRef.current = null
+        }
+      }
+    },
+    [
+      input,
+      sending,
+      conversationId,
+      page.module,
+      addLine,
+      setAvatar,
+    ],
+  )
+
+  const cancel = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
+
+  const openHistory = useCallback(async () => {
+    setScreen('history')
+    setLoadingHistory(true)
+    setError('')
+
+    try {
+      const items =
+        await titanAssistantApi.listConversations()
+
+      if (mounted.current) {
+        setHistory(items)
+      }
+    } catch (cause) {
+      if (mounted.current) {
+        setError(
+          describeTitanFailure(cause).message,
+        )
+      }
+    } finally {
+      if (mounted.current) {
+        setLoadingHistory(false)
+      }
+    }
+  }, [])
+
+  const openConversation = useCallback(
+    async (id: string) => {
+      setLoadingHistory(true)
+      setError('')
+
+      try {
+        const conversation =
+          await titanAssistantApi.getConversation(id)
+
+        if (!mounted.current) return
+
+        const restored: ChatLine[] =
+          conversation.entries.map(
+            (entry, index) => ({
+              id: index + 1,
+              role:
+                entry.role === 'user'
+                  ? 'user'
+                  : 'assistant',
+              content: entry.content,
+              invocations: entry.toolInvocations,
+            }),
+          )
+
+        nextId.current = restored.length
+        setLines(restored)
+        setConversationId(conversation.id)
+        setScreen('chat')
+      } catch (cause) {
+        if (mounted.current) {
+          setError(
+            describeTitanFailure(cause).message,
+          )
+        }
+      } finally {
+        if (mounted.current) {
+          setLoadingHistory(false)
+        }
+      }
+    },
+    [],
+  )
+
+  const removeConversation = useCallback(
+    async (id: string) => {
+      try {
+        await titanAssistantApi.deleteConversation(id)
+
+        if (!mounted.current) return
+
+        setHistory((current) =>
+          current.filter((item) => item.id !== id),
+        )
+
+        if (conversationId === id) {
+          setConversationId(null)
+          setLines([])
+        }
+      } catch (cause) {
+        if (mounted.current) {
+          setError(
+            describeTitanFailure(cause).message,
+          )
+        }
+      }
+    },
+    [conversationId],
+  )
+
+  const startNew = useCallback(() => {
+    abortRef.current?.abort()
+    setConversationId(null)
+    setLines([])
+    setError('')
     setInput('')
-    setError('')
-    setSending(true)
-    addLine('user', message)
-
-    try {
-      const { data } = await apiClient.post<ChatResponse>(
-        '/virtual-agent/chat',
-        { message, module },
-      )
-
-      if (mounted.current) {
-        addLine(
-          'assistant',
-          data.answer ||
-            'No recibí una respuesta. Inténtalo nuevamente.',
-        )
-      }
-    } catch (cause) {
-      if (mounted.current) {
-        setError(errorMessage(cause))
-      }
-    } finally {
-      if (mounted.current) {
-        setSending(false)
-      }
-    }
-  }
-
-  async function executeAction(
-    action: string,
-    values: Record<string, string> = {},
-  ) {
-    if (sending || !tools.includes(action)) return
-
-    setError('')
-    setSending(true)
-
-    try {
-      const { data } = await apiClient.post<ActionResponse>(
-        '/virtual-agent/execute',
-        { action, ...values },
-      )
-
-      if (!mounted.current) return
-
-      if (action === 'helpdesk.my_tickets') {
-        const tickets = data.items ?? []
-
-        addLine(
-          'assistant',
-          tickets.length
-            ? [
-                `Encontré ${tickets.length} ticket(s) recientes a tu nombre:`,
-                ...tickets.map(
-                  (ticket) =>
-                    `• ${ticket.number} · ${ticket.subject} · ${ticket.status}`,
-                ),
-              ].join('\n')
-            : 'No encontré tickets creados por tu cuenta.',
-        )
-      } else if (action === 'helpdesk.my_ticket') {
-        const ticket = data.item
-
-        addLine(
-          'assistant',
-          ticket
-            ? [
-                `${ticket.number} · ${ticket.subject}`,
-                `Estado: ${ticket.status}`,
-                ticket.priority
-                  ? `Prioridad: ${ticket.priority}`
-                  : '',
-                ticket.description ?? '',
-              ]
-                .filter(Boolean)
-                .join('\n')
-            : 'No encontré ese ticket entre tus solicitudes.',
-        )
-      } else if (action === 'helpdesk.create_ticket') {
-        addLine(
-          'assistant',
-          `Ticket ${data.number ?? ''} creado para tu cuenta. ${
-            data.message ?? ''
-          }`.trim(),
-        )
-
-        setShowCreate(false)
-        setSubject('')
-        setDescription('')
-        setCategory('general')
-      }
-    } catch (cause) {
-      if (mounted.current) {
-        setError(errorMessage(cause))
-      }
-    } finally {
-      if (mounted.current) {
-        setSending(false)
-      }
-    }
-  }
+    setScreen('chat')
+    inputRef.current?.focus()
+  }, [])
 
   function handleInputKeyDown(
     event: KeyboardEvent<HTMLTextAreaElement>,
@@ -258,29 +486,22 @@ export function TitanAgentChatPanel({
       !event.nativeEvent.isComposing
     ) {
       event.preventDefault()
-      void sendChat()
+      void send()
     }
   }
 
-  function handleCreate(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault()
+  const statusText =
+    connection === 'connecting'
+      ? 'Conectando con el asistente…'
+      : connection === 'forbidden'
+        ? 'Asistente no habilitado para tu cuenta'
+        : connection === 'offline'
+          ? 'Sin conexión con el asistente'
+          : `${capabilities?.provider ?? 'Asistente'} · ${
+              capabilities?.model || 'modelo activo'
+            }`
 
-    if (
-      !subject.trim() ||
-      !description.trim() ||
-      sending
-    ) {
-      return
-    }
-
-    void executeAction('helpdesk.create_ticket', {
-      subject: subject.trim(),
-      description: description.trim(),
-      category: category.trim() || 'general',
-    })
-  }
+  const toolCount = capabilities?.tools.length ?? 0
 
   return createPortal(
     <section
@@ -293,15 +514,35 @@ export function TitanAgentChatPanel({
           className="titan-agent-chat__avatar"
           aria-hidden="true"
         >
-          <Bot size={25} />
+          <Bot size={24} />
         </div>
 
         <div className="titan-agent-chat__identity">
           <strong>Titan Assistant</strong>
           <span>
-            {firstName} · {module}
+            {firstName} · {moduleName}
           </span>
         </div>
+
+        {screen === 'chat' ? (
+          <button
+            className="titan-agent-chat__icon"
+            type="button"
+            aria-label="Historial de conversaciones"
+            onClick={() => void openHistory()}
+          >
+            <History size={17} />
+          </button>
+        ) : (
+          <button
+            className="titan-agent-chat__icon"
+            type="button"
+            aria-label="Volver a la conversación"
+            onClick={() => setScreen('chat')}
+          >
+            <ArrowLeft size={18} />
+          </button>
+        )}
 
         <button
           className="titan-agent-chat__close"
@@ -313,208 +554,238 @@ export function TitanAgentChatPanel({
         </button>
       </header>
 
-      <div className="titan-agent-chat__context">
+      <div
+        className={
+          'titan-agent-chat__status ' +
+          `titan-agent-chat__status--${connection}`
+        }
+      >
         <span
           className="titan-agent-chat__status-dot"
           aria-hidden="true"
         />
-        Acciones limitadas a tu cuenta y permisos
+        <span className="titan-agent-chat__status-text">
+          {statusText}
+        </span>
+
+        {toolCount > 0 && (
+          <span className="titan-agent-chat__status-tools">
+            <ShieldCheck size={12} />
+            {toolCount} consultas
+          </span>
+        )}
       </div>
 
-      <div
-        className="titan-agent-chat__messages"
-        role="log"
-        aria-label="Mensajes de Titan"
-        aria-live="polite"
-      >
-        <div className="titan-agent-chat__message titan-agent-chat__message--assistant">
-          <div className="titan-agent-chat__bubble">
-            Hola, {firstName}. Puedo ayudarte con tus
-            solicitudes y responder consultas según tus
-            permisos.
-          </div>
-          <span className="titan-agent-chat__message-meta">
-            Titan
-          </span>
-        </div>
-
-        {lines.map((line) => (
+      {connection === 'offline' &&
+        connectionError && (
           <div
-            key={line.id}
-            className={
-              `titan-agent-chat__message ` +
-              `titan-agent-chat__message--${line.role}`
-            }
+            className="titan-agent-chat__connection"
+            role="status"
           >
-            <div className="titan-agent-chat__bubble">
-              {line.content}
-            </div>
+            <WifiOff size={13} />
+            <span>{connectionError}</span>
 
-            <span className="titan-agent-chat__message-meta">
-              {line.role === 'user' ? 'Tú' : 'Titan'}
-            </span>
-          </div>
-        ))}
-
-        {sending && (
-          <div className="titan-agent-chat__message titan-agent-chat__message--assistant">
-            <div className="titan-agent-chat__bubble">
-              Procesando tu solicitud…
-            </div>
+            <button
+              type="button"
+              onClick={retry}
+            >
+              <RefreshCw size={12} />
+              Reintentar
+            </button>
           </div>
         )}
 
-        <div ref={endRef} />
-      </div>
-
-      {error && (
-        <div className="titan-agent-chat__error" role="alert">
-          {error}
-        </div>
-      )}
-
-      {tools.length > 0 && (
+      {connection === 'forbidden' && (
         <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 7,
-            padding: '10px 15px',
-            borderTop: '1px solid #e2eaf5',
-          }}
-          aria-label="Acciones disponibles"
+          className="titan-agent-chat__connection titan-agent-chat__connection--denied"
+          role="alert"
         >
-          {tools.includes('helpdesk.my_tickets') && (
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() =>
-                void executeAction('helpdesk.my_tickets')
-              }
-            >
-              <ClipboardList size={15} /> Mis tickets
-            </button>
-          )}
-
-          {tools.includes('helpdesk.my_ticket') && (
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() => {
-                const number = window.prompt(
-                  'Pega el identificador completo del ticket:',
-                )
-
-                if (number?.trim()) {
-                  void executeAction(
-                    'helpdesk.my_ticket',
-                    { ticketId: number.trim() },
-                  )
-                }
-              }}
-            >
-              <Search size={15} /> Consultar ticket
-            </button>
-          )}
-
-          {tools.includes('helpdesk.create_ticket') && (
-            <button
-              type="button"
-              disabled={sending}
-              onClick={() =>
-                setShowCreate((current) => !current)
-              }
-            >
-              <Plus size={15} /> Crear ticket
-            </button>
-          )}
+          <AlertCircle size={13} />
+          <span>{connectionError}</span>
         </div>
       )}
 
-      {showCreate && (
-        <form
-          onSubmit={handleCreate}
-          style={{
-            display: 'grid',
-            gap: 8,
-            padding: '12px 15px',
-            borderTop: '1px solid #e2eaf5',
-          }}
+      {screen === 'history' ? (
+        <div
+          className="titan-agent-chat__history"
+          role="list"
+          aria-label="Conversaciones anteriores"
         >
-          <strong style={{ fontSize: 12 }}>
-            Crear solicitud a tu nombre
-          </strong>
-
-          <input
-            aria-label="Asunto del ticket"
-            value={subject}
-            onChange={(event) =>
-              setSubject(event.target.value)
-            }
-            maxLength={250}
-            placeholder="Asunto"
-            required
-          />
-
-          <textarea
-            aria-label="Descripción del ticket"
-            value={description}
-            onChange={(event) =>
-              setDescription(event.target.value)
-            }
-            maxLength={4000}
-            rows={3}
-            placeholder="Describe el problema"
-            required
-          />
-
-          <input
-            aria-label="Categoría del ticket"
-            value={category}
-            onChange={(event) =>
-              setCategory(event.target.value)
-            }
-            maxLength={80}
-            placeholder="Categoría"
-          />
-
-          <button type="submit" disabled={sending}>
-            Confirmar creación
+          <button
+            className="titan-agent-chat__history-new"
+            type="button"
+            onClick={startNew}
+          >
+            <Plus size={14} />
+            Nueva conversación
           </button>
-        </form>
+
+          {loadingHistory && (
+            <div className="titan-agent-chat__history-empty">
+              Cargando historial…
+            </div>
+          )}
+
+          {!loadingHistory &&
+            history.length === 0 && (
+              <div className="titan-agent-chat__history-empty">
+                Sin conversaciones previas en esta
+                sesión.
+              </div>
+            )}
+
+          {history.map((item) => (
+            <div
+              key={item.id}
+              className="titan-agent-chat__history-item"
+            >
+              <button
+                type="button"
+                className="titan-agent-chat__history-open"
+                onClick={() =>
+                  void openConversation(item.id)
+                }
+              >
+                <strong>
+                  {item.title || 'Conversación'}
+                </strong>
+                <span>
+                  {item.messageCount} mensajes
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="titan-agent-chat__history-delete"
+                aria-label="Eliminar conversación"
+                onClick={() =>
+                  void removeConversation(item.id)
+                }
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div
+            className="titan-agent-chat__messages"
+            role="log"
+            aria-live="polite"
+            aria-label="Mensajes de Titan"
+          >
+            {lines.length === 0 && !sending && (
+              <div className="titan-agent-chat__empty">
+                <Sparkles size={16} />
+                <div>
+                  Hola, {firstName}. Puedo consultar
+                  información autorizada para tu cuenta
+                  en el módulo {moduleName}.
+                </div>
+              </div>
+            )}
+
+            {lines.map((line) => (
+              <MessageLine
+                key={line.id}
+                line={line}
+              />
+            ))}
+
+            {sending && (
+              <div className="titan-agent-chat__message titan-agent-chat__message--assistant">
+                <div className="titan-agent-chat__bubble titan-agent-chat__thinking">
+                  <span className="titan-agent-chat__thinking-dots">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  Procesando tu consulta…
+                </div>
+              </div>
+            )}
+
+            <div ref={endRef} />
+          </div>
+
+          {error && (
+            <div
+              className="titan-agent-chat__error"
+              role="alert"
+            >
+              <AlertCircle size={14} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {toolCount > 0 && (
+            <div
+              className="titan-agent-chat__tools"
+              aria-label="Consultas autorizadas"
+            >
+              {capabilities?.tools.map((tool) => (
+                <span
+                  key={tool.name}
+                  className={
+                    'titan-agent-chat__tool ' +
+                    `titan-agent-chat__tool--${toolKindOf(
+                      tool.kind,
+                    )}`
+                  }
+                  title={tool.description}
+                >
+                  {tool.title}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <form
+            className="titan-agent-chat__composer"
+            onSubmit={(event) => void send(event)}
+          >
+            <textarea
+              ref={inputRef}
+              className="titan-agent-chat__input"
+              aria-label="Mensaje para Titan"
+              value={input}
+              onChange={(event) =>
+                setInput(event.target.value)
+              }
+              onKeyDown={handleInputKeyDown}
+              maxLength={1500}
+              rows={1}
+              placeholder="Escribe tu consulta…"
+            />
+
+            {sending ? (
+              <button
+                className="titan-agent-chat__send titan-agent-chat__send--stop"
+                type="button"
+                aria-label="Cancelar consulta"
+                onClick={cancel}
+              >
+                <Square size={16} />
+              </button>
+            ) : (
+              <button
+                className="titan-agent-chat__send"
+                type="submit"
+                aria-label="Enviar mensaje"
+                disabled={input.trim().length < 2}
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </form>
+
+          <div className="titan-agent-chat__hint">
+            Enter para enviar · Shift + Enter para nueva
+            línea · Solo consultas autorizadas
+          </div>
+        </>
       )}
-
-      <form
-        className="titan-agent-chat__composer"
-        onSubmit={(event) => void sendChat(event)}
-      >
-        <textarea
-          ref={inputRef}
-          className="titan-agent-chat__input"
-          aria-label="Mensaje para Titan"
-          value={input}
-          onChange={(event) =>
-            setInput(event.target.value)
-          }
-          onKeyDown={handleInputKeyDown}
-          maxLength={1500}
-          rows={1}
-          placeholder="Escribe tu consulta…"
-        />
-
-        <button
-          className="titan-agent-chat__send"
-          type="submit"
-          aria-label="Enviar mensaje"
-          disabled={sending || input.trim().length < 2}
-        >
-          <Send size={19} />
-        </button>
-      </form>
-
-      <div className="titan-agent-chat__hint">
-        Enter para enviar · Shift + Enter para nueva línea
-      </div>
     </section>,
     document.body,
   )

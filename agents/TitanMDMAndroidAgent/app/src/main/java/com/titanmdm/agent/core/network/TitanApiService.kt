@@ -113,4 +113,33 @@ interface TitanApiService {
         @Body
         request: CommandFailedRequest
     ): Response<Unit>
+
+
+    @POST("api/device/commands/location")
+    suspend fun reportLocation(
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String,
+
+        @Body
+        request: LocationReportRequest
+    ): Response<Unit>
+
+
+    /*
+     * ANDROID-GEO-01: la politica se consulta con
+     * autenticacion de dispositivo (headers
+     * X-Titan-Device-Id / X-Titan-Device-Secret),
+     * NO con JWT de usuario.
+     */
+    @GET("api/device/commands/location/policy")
+    suspend fun getReportingPolicy(
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String
+    ): Response<LocationReportingPolicyResponse>
 }

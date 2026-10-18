@@ -20,6 +20,9 @@ object AgentWorkScheduler {
     private const val IMMEDIATE_COMMAND_WORK_NAME =
         "titanmdm-immediate-command-sync"
 
+    private const val LOCATION_REPORTING_WORK_NAME =
+        "titanmdm-location-reporting"
+
     fun schedule(
         context: Context
     ) {
@@ -31,6 +34,10 @@ object AgentWorkScheduler {
         )
 
         scheduleCommands(
+            appContext
+        )
+
+        scheduleLocationReporting(
             appContext
         )
     }
@@ -139,6 +146,40 @@ object AgentWorkScheduler {
             .enqueueUniquePeriodicWork(
                 AgentConfig
                     .COMMAND_WORK_NAME,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request
+            )
+    }
+
+    private fun scheduleLocationReporting(
+        context: Context
+    ) {
+        // We use a default interval of 15 minutes.
+        // The worker itself checks the policy from the server.
+        val request =
+            PeriodicWorkRequestBuilder<
+                    LocationReportingWorker
+                    >(
+                15,
+                TimeUnit.MINUTES
+            )
+                .setConstraints(
+                    networkConstraints()
+                )
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    1,
+                    TimeUnit.MINUTES
+                )
+                .addTag(
+                    LOCATION_REPORTING_WORK_NAME
+                )
+                .build()
+
+        WorkManager
+            .getInstance(context)
+            .enqueueUniquePeriodicWork(
+                LOCATION_REPORTING_WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )

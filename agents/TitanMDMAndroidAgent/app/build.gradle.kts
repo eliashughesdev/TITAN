@@ -123,6 +123,7 @@ dependencies {
 
     // Android Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.play.services.location)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
     // Lifecycle / ViewModel

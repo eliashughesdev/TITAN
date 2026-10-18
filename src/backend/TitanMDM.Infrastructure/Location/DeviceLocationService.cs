@@ -1,32 +1,44 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TitanMDM.Application.Automation;
 using TitanMDM.Application.Location;
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
-using TitanMDM.Application.Automation;
 
 namespace TitanMDM.Infrastructure.Location;
 
 public sealed class DeviceLocationService
     : IDeviceLocationService
 {
+    /// <summary>
+    /// Umbral de "posicion antigua". Un dispositivo con
+    /// una captura mas reciente que esto se considera Fresh.
+    /// </summary>
+    public const int StaleSignalThresholdMinutes = 60;
+
     private readonly TitanMdmDbContext _db;
 
     private readonly IAutomationEventDispatcher
         _automation;
 
+    private readonly ILocationUpdateNotifier?
+        _notifier;
+
     public DeviceLocationService(
         TitanMdmDbContext db,
-        IAutomationEventDispatcher automation)
+        IAutomationEventDispatcher automation,
+        ILocationUpdateNotifier? notifier = null)
     {
         _db = db;
         _automation = automation;
+        _notifier = notifier;
     }
 
     public async Task ProcessLocationAsync(
-    Guid deviceId,
-    string resultJson,
-    CancellationToken cancellationToken = default)
+        Guid deviceId,
+        string resultJson,
+        CancellationToken cancellationToken = default)
     {
         var device =
             await _db.Devices
@@ -45,9 +57,47 @@ public sealed class DeviceLocationService
             ?? throw new InvalidOperationException(
                 "Invalid location result.");
 
+        /*
+         * Reporte de estado sin coordenadas
+         * (permiso denegado / sin fix).
+         * No inventamos posiciones: solo registramos
+         * el estado de captura.
+         */
+        if (result.Latitude is null ||
+            result.Longitude is null)
+        {
+            var captureState =
+                ParseCaptureState(
+                    result.Status);
+
+            await UpsertLocationStateAsync(
+                device,
+                captureState,
+                DateTime.UtcNow,
+                result.Source,
+                cancellationToken);
+
+            await _db.SaveChangesAsync(
+                cancellationToken);
+
+            await NotifyAsync(
+                device,
+                captureState.ToString(),
+                null,
+                cancellationToken);
+
+            return;
+        }
+
+        var latitude =
+            result.Latitude.Value;
+
+        var longitude =
+            result.Longitude.Value;
+
         ValidateCoordinates(
-            result.Latitude,
-            result.Longitude);
+            latitude,
+            longitude);
 
         var capturedAt =
             DateTime.TryParse(
@@ -56,12 +106,34 @@ public sealed class DeviceLocationService
                 ? parsed.ToUniversalTime()
                 : DateTime.UtcNow;
 
+        /*
+         * Fuentes proactivas respetan la politica de la
+         * organizacion. Las solicitudes on-demand del
+         * tecnico se procesan siempre.
+         */
+        if (IsProactiveSource(result.Source))
+        {
+            var policy =
+                await _db.LocationReportingPolicies
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(
+                        x =>
+                            x.OrganizationId ==
+                                device.OrganizationId,
+                        cancellationToken);
+
+            if (policy is null || !policy.IsEnabled)
+            {
+                return;
+            }
+        }
+
         var location =
             new DeviceLocation(
                 device.OrganizationId,
                 device.Id,
-                result.Latitude,
-                result.Longitude,
+                latitude,
+                longitude,
                 result.AccuracyMeters,
                 result.AltitudeMeters,
                 result.SpeedMetersPerSecond,
@@ -71,6 +143,13 @@ public sealed class DeviceLocationService
 
         _db.DeviceLocations.Add(
             location);
+
+        await UpsertLocationStateAsync(
+            device,
+            DeviceCaptureState.Reported,
+            DateTime.UtcNow,
+            result.Source,
+            cancellationToken);
 
         var geofences =
             await (
@@ -106,8 +185,8 @@ public sealed class DeviceLocationService
         {
             var distanceMeters =
                 CalculateDistanceMeters(
-                    result.Latitude,
-                    result.Longitude,
+                    latitude,
+                    longitude,
                     geofence.Latitude,
                     geofence.Longitude);
 
@@ -139,9 +218,6 @@ public sealed class DeviceLocationService
                 _db.GeofenceDeviceStates.Add(
                     state);
 
-                // Primera observación:
-                // si el dispositivo ya está dentro,
-                // registramos una entrada inicial.
                 if (
                     isInside &&
                     geofence.AlertOnEnter)
@@ -152,8 +228,8 @@ public sealed class DeviceLocationService
                             geofence.Id,
                             device.Id,
                             "Enter",
-                            result.Latitude,
-                            result.Longitude,
+                            latitude,
+                            longitude,
                             distanceMeters,
                             capturedAt);
 
@@ -201,8 +277,6 @@ public sealed class DeviceLocationService
                 continue;
             }
 
-            // Garantiza que la transición
-            // corresponda realmente al estado anterior.
             if (
                 isInside == wasInside)
             {
@@ -215,8 +289,8 @@ public sealed class DeviceLocationService
                     geofence.Id,
                     device.Id,
                     eventType,
-                    result.Latitude,
-                    result.Longitude,
+                    latitude,
+                    longitude,
                     distanceMeters,
                     capturedAt);
 
@@ -230,13 +304,15 @@ public sealed class DeviceLocationService
                 ));
         }
 
-        // Primero persistimos ubicación,
-        // estados y eventos.
         await _db.SaveChangesAsync(
             cancellationToken);
 
-        // Después publicamos los eventos
-        // al Automation Engine.
+        await NotifyAsync(
+            device,
+            DeviceCaptureState.Reported.ToString(),
+            capturedAt,
+            cancellationToken);
+
         foreach (
             var pending in
             pendingEvents)
@@ -289,6 +365,7 @@ public sealed class DeviceLocationService
                     cancellationToken);
         }
     }
+
     public async Task<DeviceLocationDto?>
         GetLatestAsync(
             Guid organizationId,
@@ -358,6 +435,269 @@ public sealed class DeviceLocationService
     }
 
     public async Task<
+        IReadOnlyCollection<FleetLocationDto>>
+        GetFleetLocationsAsync(
+            Guid organizationId,
+            FleetLocationFilters filters,
+            CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var statusFilter =
+            ParseDeviceStatus(
+                filters.Status);
+
+        var query =
+            from d in _db.Devices
+
+            let latestLocation =
+                _db.DeviceLocations
+                    .Where(x =>
+                        x.DeviceId ==
+                            d.Id &&
+                        x.OrganizationId ==
+                            organizationId)
+                    .OrderByDescending(
+                        x => x.CapturedAtUtc)
+                    .FirstOrDefault()
+
+            let locationState =
+                _db.DeviceLocationStates
+                    .Where(x =>
+                        x.DeviceId ==
+                            d.Id &&
+                        x.OrganizationId ==
+                            organizationId)
+                    .OrderByDescending(
+                        x => x.UpdatedAtUtc)
+                    .FirstOrDefault()
+
+            let siteName =
+                _db.SiteLocations
+                    .Where(x =>
+                        x.Id ==
+                            d.SiteLocationId)
+                    .Select(x => x.Name)
+                    .FirstOrDefault()
+
+            where
+                d.OrganizationId ==
+                    organizationId &&
+                !d.IsDeleted
+
+            select new
+            {
+                Device = d,
+                LatestLocation = latestLocation,
+                LocationState = locationState,
+                SiteName = siteName
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                filters.Search))
+        {
+            var search =
+                filters.Search.ToLower();
+
+            query =
+                query.Where(x =>
+                    x.Device.DeviceName
+                        .ToLower()
+                        .Contains(search) ||
+                    (x.Device.Manufacturer ?? "")
+                        .ToLower()
+                        .Contains(search));
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                filters.Manufacturer))
+        {
+            query =
+                query.Where(x =>
+                    x.Device.Manufacturer ==
+                        filters.Manufacturer);
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                filters.Department))
+        {
+            query =
+                query.Where(x =>
+                    x.Device.Department ==
+                        filters.Department);
+        }
+
+        if (filters.SiteId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.Device.SiteLocationId ==
+                        filters.SiteId);
+        }
+
+        if (filters.DeviceGroupId.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    _db.DeviceGroupMembers
+                        .Any(m =>
+                            m.DeviceId ==
+                                x.Device.Id &&
+                            m.GroupId ==
+                                filters.DeviceGroupId));
+        }
+
+        if (statusFilter.HasValue)
+        {
+            query =
+                query.Where(x =>
+                    x.Device.Status ==
+                        statusFilter);
+        }
+
+        var rows =
+            await query.ToListAsync(
+                cancellationToken);
+
+        var result =
+            rows.Select(x =>
+                    BuildFleetLocation(
+                        x.Device,
+                        x.LatestLocation,
+                        x.LocationState,
+                        x.SiteName,
+                        now))
+                .AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(
+                filters.LocationState))
+        {
+            result =
+                result.Where(x =>
+                    string.Equals(
+                        x.LocationState,
+                        filters.LocationState,
+                        StringComparison
+                            .OrdinalIgnoreCase));
+        }
+
+        if (filters.MaxSignalAgeMinutes.HasValue)
+        {
+            var maxAge =
+                filters.MaxSignalAgeMinutes
+                    .Value;
+
+            result =
+                result.Where(x =>
+                    x.SignalAgeMinutes is null
+                        ? false
+                        : x.SignalAgeMinutes
+                            .Value <= maxAge);
+        }
+
+        return result
+            .OrderBy(x => x.DeviceName)
+            .ToList();
+    }
+
+    public async Task<LocationReportingPolicyDto?>
+        GetReportingPolicyAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken = default)
+    {
+        return await _db.LocationReportingPolicies
+            .AsNoTracking()
+            .Where(x =>
+                x.OrganizationId ==
+                    organizationId)
+            .Select(x =>
+                new LocationReportingPolicyDto(
+                    x.Id,
+                    x.IsEnabled,
+                    x.ReportingIntervalMinutes,
+                    x.RetentionDays))
+            .FirstOrDefaultAsync(
+                cancellationToken);
+    }
+
+    public async Task<LocationReportingPolicyDto>
+        UpdateReportingPolicyAsync(
+            Guid organizationId,
+            UpdateReportingPolicyRequest request,
+            CancellationToken cancellationToken = default)
+    {
+        var policy =
+            await _db.LocationReportingPolicies
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId,
+                    cancellationToken);
+
+        if (policy is null)
+        {
+            policy =
+                new LocationReportingPolicy(
+                    organizationId,
+                    request.IsEnabled,
+                    request.ReportingIntervalMinutes,
+                    request.RetentionDays);
+
+            _db.LocationReportingPolicies.Add(
+                policy);
+        }
+        else
+        {
+            policy.Update(
+                request.IsEnabled,
+                request.ReportingIntervalMinutes,
+                request.RetentionDays);
+        }
+
+        await _db.SaveChangesAsync(
+            cancellationToken);
+
+        return new LocationReportingPolicyDto(
+            policy.Id,
+            policy.IsEnabled,
+            policy.ReportingIntervalMinutes,
+            policy.RetentionDays);
+    }
+
+    public async Task PurgeOldLocationsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        var policy =
+            await _db.LocationReportingPolicies
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId,
+                    cancellationToken);
+
+        if (policy is null || !policy.IsEnabled)
+            return;
+
+        var cutoff =
+            DateTime.UtcNow.AddDays(
+                -policy.RetentionDays);
+
+        var oldLocations =
+            _db.DeviceLocations.Where(x =>
+                x.OrganizationId ==
+                    organizationId &&
+                x.CapturedAtUtc <
+                    cutoff);
+
+        _db.DeviceLocations.RemoveRange(
+            oldLocations);
+
+        await _db.SaveChangesAsync(
+            cancellationToken);
+    }
+
+    public async Task<
         IReadOnlyCollection<GeofenceDto>>
         GetGeofencesAsync(
             Guid organizationId,
@@ -406,7 +746,8 @@ public sealed class DeviceLocationService
                 request.AlertOnEnter,
                 request.AlertOnExit);
 
-        _db.Geofences.Add(geofence);
+        _db.Geofences.Add(
+            geofence);
 
         await _db.SaveChangesAsync(
             cancellationToken);
@@ -436,12 +777,13 @@ public sealed class DeviceLocationService
                     x =>
                         x.Id == geofenceId &&
                         x.OrganizationId ==
-                        organizationId,
+                            organizationId,
                     cancellationToken)
             ?? throw new InvalidOperationException(
                 "Geofence not found.");
 
-        _db.Geofences.Remove(geofence);
+        _db.Geofences.Remove(
+            geofence);
 
         await _db.SaveChangesAsync(
             cancellationToken);
@@ -483,7 +825,7 @@ public sealed class DeviceLocationService
                 .AsNoTracking()
                 .Where(x =>
                     x.GeofenceId ==
-                    geofenceId)
+                        geofenceId)
                 .Select(x => x.DeviceId)
                 .ToListAsync(
                     cancellationToken);
@@ -501,6 +843,214 @@ public sealed class DeviceLocationService
 
         await _db.SaveChangesAsync(
             cancellationToken);
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    private static FleetLocationDto
+        BuildFleetLocation(
+            Device device,
+            DeviceLocation? latestLocation,
+            DeviceLocationState? locationState,
+            string? siteName,
+            DateTime now)
+    {
+        var signalAgeMinutes =
+            latestLocation is null
+                ? (double?)null
+                : (now -
+                    latestLocation.CapturedAtUtc)
+                .TotalMinutes;
+
+        var locationStateText =
+            ResolveLocationState(
+                device,
+                latestLocation,
+                locationState,
+                signalAgeMinutes);
+
+        return new FleetLocationDto(
+            device.Id,
+            device.DeviceName,
+            device.Manufacturer,
+            device.Model,
+            device.Department,
+            device.SiteLocationId,
+            siteName,
+            latestLocation?.Latitude,
+            latestLocation?.Longitude,
+            latestLocation?.AccuracyMeters,
+            latestLocation?.CapturedAtUtc,
+            latestLocation?.ReceivedAtUtc,
+            device.Status.ToString(),
+            locationStateText,
+            signalAgeMinutes,
+            device.BatteryLevel,
+            device.LastSeenAtUtc);
+    }
+
+    public static string ResolveLocationState(
+        Device device,
+        DeviceLocation? latestLocation,
+        DeviceLocationState? locationState,
+        double? signalAgeMinutes)
+    {
+        if (
+            locationState?.CaptureState ==
+                DeviceCaptureState
+                    .PermissionDenied)
+        {
+            return "PermissionDenied";
+        }
+
+        if (latestLocation is null)
+        {
+            return "NoLocation";
+        }
+
+        if (
+            device.Status ==
+                DeviceStatus.Offline ||
+            device.Status ==
+                DeviceStatus.Retired)
+        {
+            return "Offline";
+        }
+
+        if (
+            signalAgeMinutes.HasValue &&
+            signalAgeMinutes.Value >
+                StaleSignalThresholdMinutes)
+        {
+            return "Stale";
+        }
+
+        return "Fresh";
+    }
+
+    private async Task UpsertLocationStateAsync(
+        Device device,
+        DeviceCaptureState captureState,
+        DateTime updatedAtUtc,
+        string? source,
+        CancellationToken cancellationToken)
+    {
+        var existing =
+            await _db.DeviceLocationStates
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.DeviceId ==
+                            device.Id &&
+                        x.OrganizationId ==
+                            device.OrganizationId,
+                    cancellationToken);
+
+        if (existing is null)
+        {
+            _db.DeviceLocationStates.Add(
+                new DeviceLocationState(
+                    device.OrganizationId,
+                    device.Id,
+                    captureState,
+                    updatedAtUtc,
+                    source));
+
+            return;
+        }
+
+        existing.Update(
+            captureState,
+            updatedAtUtc,
+            source);
+    }
+
+    private async Task NotifyAsync(
+        Device device,
+        string locationState,
+        DateTime? capturedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        if (_notifier is null)
+            return;
+
+        try
+        {
+            await _notifier
+                .NotifyLocationUpdatedAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    locationState,
+                    capturedAtUtc,
+                    cancellationToken);
+        }
+        catch
+        {
+            /*
+             * La notificacion en vivo es best-effort:
+             * nunca debe impedir persistir la posicion.
+             */
+        }
+    }
+
+    private static bool IsProactiveSource(
+        string? source)
+    {
+        return !string.IsNullOrWhiteSpace(source) &&
+            source.Contains(
+                "Proactive",
+                StringComparison
+                    .OrdinalIgnoreCase);
+    }
+
+    private static DeviceCaptureState
+        ParseCaptureState(
+            string? status)
+    {
+        if (string.Equals(
+                status,
+                "PERMISSION_DENIED",
+                StringComparison
+                    .OrdinalIgnoreCase))
+        {
+            return DeviceCaptureState
+                .PermissionDenied;
+        }
+
+        if (string.Equals(
+                status,
+                "UNAVAILABLE",
+                StringComparison
+                    .OrdinalIgnoreCase))
+        {
+            return DeviceCaptureState
+                .Unavailable;
+        }
+
+        if (string.Equals(
+                status,
+                "DISABLED",
+                StringComparison
+                    .OrdinalIgnoreCase))
+        {
+            return DeviceCaptureState
+                .DisabledByPolicy;
+        }
+
+        return DeviceCaptureState.Unknown;
+    }
+
+    private static DeviceStatus?
+        ParseDeviceStatus(
+            string? status)
+    {
+        return Enum.TryParse<DeviceStatus>(
+            status,
+            ignoreCase: true,
+            out var parsed)
+                ? parsed
+                : null;
     }
 
     private static void ValidateCoordinates(
@@ -566,7 +1116,6 @@ public sealed class DeviceLocationService
 
             Math.Sin(
                 longitudeDifference / 2) *
-
             Math.Sin(
                 longitudeDifference / 2);
 
@@ -597,11 +1146,12 @@ public sealed class DeviceLocationService
             };
 
     private sealed record LocationResult(
-        double Latitude,
-        double Longitude,
+        double? Latitude,
+        double? Longitude,
         double? AccuracyMeters,
         double? AltitudeMeters,
         double? SpeedMetersPerSecond,
         string? Source,
-        string? CapturedAtUtc);
+        string? CapturedAtUtc,
+        string? Status);
 }

@@ -29,6 +29,7 @@ import { Link } from 'react-router-dom'
 import { androidEnterpriseApi } from '../../../api/androidEnterpriseApi'
 import { useAuth } from '../../../auth/AuthContext'
 import { Permissions } from '../../../auth/permissions'
+import { AndroidRemoteConsole } from './remote/AndroidRemoteConsole'
 import type {
   AndroidAuditEvent,
   AndroidDeviceInventorySummary,
@@ -130,6 +131,7 @@ export function AndroidFleetCommandCenter() {
   const [notice, setNotice] = useState<string | null>(null)
   const [lastAction, setLastAction] =
     useState<AndroidRemoteActionResponse | null>(null)
+  const [showRemoteConsole, setShowRemoteConsole] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -521,6 +523,16 @@ export function AndroidFleetCommandCenter() {
                   ejecución confirmada.
                 </p>
 
+                <button
+                  type="button"
+                  className="afcc-remote-console-toggle"
+                  onClick={() => setShowRemoteConsole(current => !current)}
+                >
+                  {showRemoteConsole
+                    ? 'Ocultar centro de control remoto'
+                    : 'Abrir centro de control remoto'}
+                </button>
+
                 <Link className="afcc-detail-link"
                   to={`/devices/${selectedDevice.deviceId}?workspace=android&platform=Android`}>
                   Abrir ficha completa y acciones sensibles
@@ -570,6 +582,13 @@ export function AndroidFleetCommandCenter() {
           </section>
         </aside>
       </div>
+
+      {showRemoteConsole && selectedDevice && (
+        <AndroidRemoteConsole
+          deviceId={selectedDevice.deviceId}
+          deviceName={selectedDevice.deviceName}
+        />
+      )}
     </section>
   )
 }

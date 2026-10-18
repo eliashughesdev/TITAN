@@ -224,6 +224,33 @@ data class CommandFailedRequest(
 
 
 /* ============================================================
+ * LOCATION REPORTING
+ * POST /api/device/commands/location
+ * ============================================================ */
+
+@Serializable
+data class LocationReportRequest(
+
+    @SerialName("resultJson")
+    val resultJson: String
+)
+
+
+@Serializable
+data class LocationReportingPolicyResponse(
+
+    @SerialName("isEnabled")
+    val isEnabled: Boolean,
+
+    @SerialName("reportingIntervalMinutes")
+    val reportingIntervalMinutes: Int = 15,
+
+    @SerialName("retentionDays")
+    val retentionDays: Int = 30
+)
+
+
+/* ============================================================
  * GENERIC API RESPONSE
  * ============================================================ */
 

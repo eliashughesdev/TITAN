@@ -31,6 +31,7 @@ export function TitanAvatarCanvas({
         'titan-avatar-canvas--metal',
         active ? 'is-moving' : '',
       ].filter(Boolean).join(' ')}
+      data-animation={animation}
       width="130"
       height="190"
       viewBox="0 0 130 190"

@@ -554,6 +554,28 @@
   }
 }
 
+.afcc-remote-console-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 9px 13px;
+  border: 1px solid var(--afcc-green);
+  border-radius: 10px;
+  background: var(--afcc-green);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.afcc-remote-console-toggle:hover {
+  background: var(--afcc-green-deep);
+}
+
 @media (max-width: 760px) {
   .afcc-hero {
     flex-direction: column;

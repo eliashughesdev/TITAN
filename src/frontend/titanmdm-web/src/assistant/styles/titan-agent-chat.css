@@ -1,8 +1,20 @@
+/* ============================================================
+   TITAN ASSISTANT — Panel de conversación (empresarial)
+   ============================================================ */
+
 .titan-agent-chat {
-  --chat-ink: #192b46;
-  --chat-muted: #697b96;
-  --chat-line: #e2eaf5;
-  --chat-blue: #2868e8;
+  --chat-ink: #16233c;
+  --chat-muted: #67789a;
+  --chat-line: #e1e9f6;
+  --chat-surface: #f8fbff;
+
+  --chat-blue: #2b63e8;
+  --chat-blue-deep: #1f4fd0;
+  --chat-blue-soft: #eef4ff;
+
+  --chat-ok: #1fa971;
+  --chat-warn: #d9902a;
+  --chat-err: #d24b4b;
 
   position: fixed;
   right: clamp(12px, 3vw, 34px);
@@ -12,20 +24,23 @@
   display: flex;
   flex-direction: column;
 
-  width: min(420px, calc(100vw - 24px));
-  height: min(620px, calc(100dvh - 36px));
-  min-height: 360px;
+  width: min(430px, calc(100vw - 24px));
+  height: min(640px, calc(100dvh - 36px));
+  min-height: 380px;
 
   overflow: hidden;
-  border: 1px solid rgba(198, 215, 239, 0.9);
-  border-radius: 28px;
+
+  border: 1px solid rgba(196, 214, 240, 0.92);
+  border-radius: 26px;
 
   color: var(--chat-ink);
   background: #fff;
 
   box-shadow:
-    0 28px 75px rgba(21, 51, 98, 0.21),
-    0 5px 18px rgba(21, 51, 98, 0.08);
+    0 30px 80px rgba(19, 45, 92, 0.22),
+    0 6px 20px rgba(19, 45, 92, 0.09);
+
+  animation: titan-chat-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .titan-agent-chat *,
@@ -34,36 +49,38 @@
   box-sizing: border-box;
 }
 
+/* ------------------------------------------------------------
+   Cabecera
+   ------------------------------------------------------------ */
+
 .titan-agent-chat__header {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: 0 0 auto;
 
-  min-height: 76px;
+  min-height: 78px;
   padding: 14px 16px;
 
   color: #fff;
   background:
-    radial-gradient(circle at 85% 0%, rgba(140, 210, 255, 0.35), transparent 48%),
-    linear-gradient(125deg, #102e66 0%, #245bd0 58%, #3779ed 100%);
+    radial-gradient(circle at 86% -10%, rgba(133, 205, 255, 0.42), transparent 46%),
+    linear-gradient(125deg, #0c2559 0%, #1f4fd0 58%, #3b7df0 100%);
 }
 
 .titan-agent-chat__avatar {
   display: grid;
   place-items: center;
-  flex: 0 0 44px;
+  flex: 0 0 46px;
 
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
 
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.46);
   border-radius: 16px;
 
   background: rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.25);
-
-  font-size: 23px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.26);
 }
 
 .titan-agent-chat__identity {
@@ -73,22 +90,27 @@
 
 .titan-agent-chat__identity strong {
   display: block;
+
   font-size: 15px;
   font-weight: 750;
+  letter-spacing: 0.01em;
   line-height: 1.3;
 }
 
 .titan-agent-chat__identity span {
   display: block;
+
   margin-top: 3px;
   overflow: hidden;
 
   color: rgba(255, 255, 255, 0.82);
   font-size: 11px;
   text-overflow: ellipsis;
+  text-transform: capitalize;
   white-space: nowrap;
 }
 
+.titan-agent-chat__icon,
 .titan-agent-chat__close {
   display: grid;
   place-items: center;
@@ -104,28 +126,33 @@
   color: #fff;
   background: rgba(255, 255, 255, 0.12);
 
-  font-size: 21px;
-  line-height: 1;
   cursor: pointer;
+
+  transition: background 0.16s ease;
 }
 
+.titan-agent-chat__icon:hover,
 .titan-agent-chat__close:hover {
-  background: rgba(255, 255, 255, 0.23);
+  background: rgba(255, 255, 255, 0.24);
 }
 
-.titan-agent-chat__context {
+/* ------------------------------------------------------------
+   Estado de conexión / proveedor
+   ------------------------------------------------------------ */
+
+.titan-agent-chat__status {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex: 0 0 auto;
 
-  min-height: 38px;
-  padding: 8px 18px;
+  min-height: 40px;
+  padding: 9px 18px;
 
   border-bottom: 1px solid var(--chat-line);
 
   color: var(--chat-muted);
-  background: #f8fbff;
+  background: var(--chat-surface);
 
   font-size: 11px;
 }
@@ -138,9 +165,229 @@
   height: 7px;
   border-radius: 50%;
 
-  background: #27b67a;
-  box-shadow: 0 0 0 3px rgba(39, 182, 122, 0.13);
+  background: #9aa8bf;
+  box-shadow: 0 0 0 3px rgba(154, 168, 191, 0.16);
 }
+
+.titan-agent-chat__status--online .titan-agent-chat__status-dot {
+  background: var(--chat-ok);
+  box-shadow: 0 0 0 3px rgba(31, 169, 113, 0.15);
+}
+
+.titan-agent-chat__status--connecting .titan-agent-chat__status-dot {
+  background: var(--chat-warn);
+  box-shadow: 0 0 0 3px rgba(217, 144, 42, 0.16);
+  animation: titan-chat-pulse 1.4s ease-in-out infinite;
+}
+
+.titan-agent-chat__status--offline .titan-agent-chat__status-dot {
+  background: var(--chat-err);
+  box-shadow: 0 0 0 3px rgba(210, 75, 75, 0.16);
+}
+
+.titan-agent-chat__status--forbidden .titan-agent-chat__status-dot {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+}
+
+.titan-agent-chat__status-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titan-agent-chat__status-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+
+  padding: 3px 8px;
+
+  border: 1px solid #d9e5f7;
+  border-radius: 999px;
+
+  color: #3a5cad;
+  background: #eef4ff;
+
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.titan-agent-chat__connection {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+
+  margin: 10px 16px 0;
+  padding: 9px 11px;
+
+  border: 1px solid #ffe0c0;
+  border-radius: 12px;
+
+  color: #8a5a12;
+  background: #fff8ef;
+
+  font-size: 11.5px;
+}
+
+.titan-agent-chat__connection span {
+  min-width: 0;
+  flex: 1;
+}
+
+.titan-agent-chat__connection button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+
+  padding: 5px 9px;
+
+  border: 1px solid #f0cf9f;
+  border-radius: 8px;
+
+  color: #8a5a12;
+  background: #fff2df;
+
+  font-size: 10.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.titan-agent-chat__connection--denied {
+  border-color: #e4d6ff;
+  color: #5b3ba6;
+  background: #f6f1ff;
+}
+
+/* ------------------------------------------------------------
+   Historial
+   ------------------------------------------------------------ */
+
+.titan-agent-chat__history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+
+  background: var(--chat-surface);
+
+  scrollbar-color: #c9d7ec transparent;
+  scrollbar-width: thin;
+}
+
+.titan-agent-chat__history-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 10px 12px;
+
+  border: 1px dashed #bcd0ee;
+  border-radius: 12px;
+
+  color: var(--chat-blue-deep);
+  background: #fff;
+
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.titan-agent-chat__history-new:hover {
+  border-color: var(--chat-blue);
+  background: var(--chat-blue-soft);
+}
+
+.titan-agent-chat__history-empty {
+  padding: 16px 12px;
+
+  color: var(--chat-muted);
+  text-align: center;
+  font-size: 11.5px;
+}
+
+.titan-agent-chat__history-item {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+
+  border: 1px solid var(--chat-line);
+  border-radius: 13px;
+
+  background: #fff;
+  overflow: hidden;
+}
+
+.titan-agent-chat__history-open {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+
+  padding: 11px 12px;
+
+  border: 0;
+  text-align: left;
+
+  color: var(--chat-ink);
+  background: transparent;
+
+  cursor: pointer;
+}
+
+.titan-agent-chat__history-open:hover {
+  background: var(--chat-blue-soft);
+}
+
+.titan-agent-chat__history-open strong {
+  overflow: hidden;
+
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titan-agent-chat__history-open span {
+  color: var(--chat-muted);
+  font-size: 10.5px;
+}
+
+.titan-agent-chat__history-delete {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+
+  border: 0;
+  border-left: 1px solid var(--chat-line);
+
+  color: #9aa6bb;
+  background: transparent;
+
+  cursor: pointer;
+
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.titan-agent-chat__history-delete:hover {
+  color: var(--chat-err);
+  background: #fff5f5;
+}
+
+/* ------------------------------------------------------------
+   Mensajes
+   ------------------------------------------------------------ */
 
 .titan-agent-chat__messages {
   display: flex;
@@ -153,11 +400,30 @@
   overflow-y: auto;
 
   background:
-    radial-gradient(circle at 0% 0%, rgba(224, 238, 255, 0.55), transparent 35%),
+    radial-gradient(circle at 0% 0%, rgba(224, 238, 255, 0.55), transparent 36%),
     #fff;
 
   scrollbar-color: #c9d7ec transparent;
   scrollbar-width: thin;
+}
+
+.titan-agent-chat__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+
+  margin: auto;
+  padding: 24px 20px;
+
+  color: var(--chat-muted);
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.titan-agent-chat__empty svg {
+  color: var(--chat-blue);
 }
 
 .titan-agent-chat__message {
@@ -165,7 +431,9 @@
   flex-direction: column;
   gap: 5px;
 
-  max-width: 88%;
+  max-width: 90%;
+
+  animation: titan-chat-message-in 0.2s ease-out;
 }
 
 .titan-agent-chat__message--assistant {
@@ -191,7 +459,7 @@
   border: 1px solid #e4ebf6;
   border-bottom-left-radius: 6px;
 
-  color: #2d3d56;
+  color: #2b3b54;
   background: #f3f7fd;
 }
 
@@ -203,6 +471,12 @@
   box-shadow: 0 5px 13px rgba(36, 100, 220, 0.17);
 }
 
+.titan-agent-chat__message--failed .titan-agent-chat__bubble {
+  border-color: #f6d3d3;
+  color: #9d3030;
+  background: #fff5f5;
+}
+
 .titan-agent-chat__message-meta {
   padding: 0 4px;
 
@@ -210,8 +484,78 @@
   font-size: 10px;
 }
 
+.titan-agent-chat__invocations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+
+  padding: 0 4px;
+}
+
+.titan-agent-chat__invocation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  padding: 3px 8px;
+
+  border: 1px solid #d6e6d9;
+  border-radius: 999px;
+
+  color: #2c7a52;
+  background: #f1faf4;
+
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.titan-agent-chat__invocation--failed {
+  border-color: #f4d3d3;
+  color: #a13c3c;
+  background: #fdf3f3;
+}
+
+/* Indicador "pensando" */
+
+.titan-agent-chat__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.titan-agent-chat__thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.titan-agent-chat__thinking-dots i {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+  background: var(--chat-blue);
+
+  animation: titan-chat-dot 1.1s ease-in-out infinite;
+}
+
+.titan-agent-chat__thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.titan-agent-chat__thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* ------------------------------------------------------------
+   Error
+   ------------------------------------------------------------ */
+
 .titan-agent-chat__error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   flex: 0 0 auto;
+
   margin: 0 17px 10px;
   padding: 10px 12px;
 
@@ -224,13 +568,59 @@
   font-size: 12px;
 }
 
+/* ------------------------------------------------------------
+   Herramientas autorizadas (solo lectura)
+   ------------------------------------------------------------ */
+
+.titan-agent-chat__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+
+  max-height: 92px;
+  padding: 10px 15px;
+  overflow-y: auto;
+
+  border-top: 1px solid var(--chat-line);
+
+  background: #fbfdff;
+}
+
+.titan-agent-chat__tool {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 4px 9px;
+
+  border: 1px solid #d9e5f7;
+  border-radius: 999px;
+
+  color: #3a5cad;
+  background: #eef4ff;
+
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.titan-agent-chat__tool--action,
+.titan-agent-chat__tool--sensitive {
+  border-color: #f0dcc0;
+  color: #8a5a12;
+  background: #fff6ea;
+}
+
+/* ------------------------------------------------------------
+   Composer
+   ------------------------------------------------------------ */
+
 .titan-agent-chat__composer {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   flex: 0 0 auto;
 
-  padding: 13px 15px max(15px, env(safe-area-inset-bottom));
+  padding: 13px 15px 8px;
 
   border-top: 1px solid var(--chat-line);
   background: #fff;
@@ -287,8 +677,9 @@
   background: linear-gradient(145deg, #307af0, #2059ce);
   box-shadow: 0 5px 13px rgba(37, 101, 219, 0.24);
 
-  font-size: 19px;
   cursor: pointer;
+
+  transition: filter 0.16s ease, transform 0.16s ease;
 }
 
 .titan-agent-chat__send:hover:not(:disabled) {
@@ -299,6 +690,11 @@
   opacity: 0.48;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.titan-agent-chat__send--stop {
+  background: linear-gradient(145deg, #e06060, #c23d3d);
+  box-shadow: 0 5px 13px rgba(194, 61, 61, 0.26);
 }
 
 .titan-agent-chat__hint {
@@ -312,24 +708,87 @@
   line-height: 1.4;
 }
 
+/* ------------------------------------------------------------
+   Animaciones
+   ------------------------------------------------------------ */
+
+@keyframes titan-chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes titan-chat-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes titan-chat-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes titan-chat-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ------------------------------------------------------------
+   Responsive
+   ------------------------------------------------------------ */
+
 @media (max-width: 600px) {
   .titan-agent-chat {
     right: 8px;
     bottom: 8px;
 
     width: calc(100vw - 16px);
-    height: min(650px, calc(100dvh - 16px));
+    height: min(660px, calc(100dvh - 16px));
 
-    border-radius: 23px;
+    border-radius: 22px;
   }
 }
 
+/* ------------------------------------------------------------
+   Movimiento reducido
+   ------------------------------------------------------------ */
+
 @media (prefers-reduced-motion: reduce) {
+  .titan-agent-chat,
   .titan-agent-chat *,
   .titan-agent-chat *::before,
   .titan-agent-chat *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
