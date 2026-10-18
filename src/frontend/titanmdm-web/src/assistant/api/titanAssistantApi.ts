@@ -23,6 +23,25 @@ export interface TitanCapabilities {
   tools: TitanToolDescriptor[]
 }
 
+export interface TitanProviderStatus {
+  name: string
+  enabled: boolean
+  available: boolean
+  model: string
+  detail?: string | null
+  checkedAtUtc?: string | null
+  latencyMs?: number | null
+}
+
+export interface TitanProviderConfiguration {
+  preferredProvider: string
+  requestTimeoutSeconds: number
+  maxTokens: number
+  maxTurnsPerWindow: number
+  quotaWindowSeconds: number
+  providers: TitanProviderStatus[]
+}
+
 export interface TitanToolInvocation {
   tool: string
   kind: string
@@ -93,6 +112,21 @@ export function toolKindOf(
  * proveedor activo; el frontend nunca decide esas reglas.
  */
 export const titanAssistantApi = {
+  async getProviderConfiguration(
+    signal?: AbortSignal,
+  ): Promise<TitanProviderConfiguration> {
+    const { data } =
+      await apiClient.get<TitanProviderConfiguration>(
+        '/titan-assistant/providers',
+        signal ? { signal } : undefined,
+      )
+
+    return {
+      ...data,
+      providers: data.providers ?? [],
+    }
+  },
+
   async getCapabilities(): Promise<TitanCapabilities> {
     const { data } =
       await apiClient.get<TitanCapabilities>(

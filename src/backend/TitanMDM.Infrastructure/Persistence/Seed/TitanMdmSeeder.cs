@@ -987,6 +987,15 @@ public sealed partial class TitanMdmSeeder
          */
         await EnsureSystemSuperAdminScopesAsync(
             cancellationToken);
+
+        /*
+         * Habilitamos el asistente Titan para los SuperAdmin
+         * activos de forma idempotente. No re-habilita filas
+         * revocadas manualmente (se respeta la decisión del
+         * administrador).
+         */
+        await EnsureSuperAdminAssistantAccessAsync(
+            cancellationToken);
     }
 
     // ============================================================
@@ -1535,6 +1544,158 @@ public sealed partial class TitanMdmSeeder
                         null));
 
             existingScopeKeys.Add(
+                key);
+
+            changes++;
+        }
+
+        if (
+            changes ==
+                0)
+        {
+            return;
+        }
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+    }
+
+    // ============================================================
+    // SUPERADMIN TITAN ASSISTANT ACCESS
+    // ============================================================
+
+    private async Task
+        EnsureSuperAdminAssistantAccessAsync(
+            CancellationToken cancellationToken)
+    {
+        /*
+         * Todo SuperAdmin activo recibe acceso al asistente
+         * Titan. Sólo se crea el registro cuando no existe:
+         * una revocación manual del administrador se respeta.
+         */
+
+        var superAdmins =
+            await (
+                from userRole
+                    in _dbContext
+                        .UserRoles
+                        .AsNoTracking()
+
+                join user
+                    in _dbContext
+                        .Users
+                        .AsNoTracking()
+
+                    on userRole.UserId
+                    equals user.Id
+
+                join role
+                    in _dbContext
+                        .Roles
+                        .AsNoTracking()
+
+                    on userRole.RoleId
+                    equals role.Id
+
+                where
+                    user.IsActive
+                    &&
+                    role.IsActive
+                    &&
+                    role.IsSystemRole
+                    &&
+                    role.Name ==
+                        SuperAdminRoleName
+                    &&
+                    role.OrganizationId ==
+                        user.OrganizationId
+
+                select new
+                {
+                    UserId =
+                        user.Id,
+
+                    OrganizationId =
+                        user.OrganizationId
+                }
+            )
+            .Distinct()
+            .ToArrayAsync(
+                cancellationToken);
+
+        if (
+            superAdmins.Length ==
+                0)
+        {
+            return;
+        }
+
+        var superAdminUserIds =
+            superAdmins
+                .Select(
+                    x =>
+                        x.UserId)
+                .Distinct()
+                .ToArray();
+
+        var existing =
+            await _dbContext
+                .HelpdeskAssistantAccess
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        superAdminUserIds.Contains(
+                            x.UserId))
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.UserId,
+                            x.OrganizationId
+                        })
+                .ToArrayAsync(
+                    cancellationToken);
+
+        var existingKeys =
+            existing
+                .Select(
+                    x =>
+                        (
+                            x.UserId,
+                            x.OrganizationId
+                        ))
+                .ToHashSet();
+
+        var changes =
+            0;
+
+        foreach (
+            var superAdmin
+            in superAdmins)
+        {
+            var key =
+                (
+                    superAdmin.UserId,
+                    superAdmin.OrganizationId
+                );
+
+            if (
+                existingKeys.Contains(
+                    key))
+            {
+                continue;
+            }
+
+            _dbContext
+                .HelpdeskAssistantAccess
+                .Add(
+                    new HelpdeskAssistantAccess(
+                        superAdmin.OrganizationId,
+                        superAdmin.UserId,
+                        superAdmin.UserId));
+
+            existingKeys.Add(
                 key);
 
             changes++;

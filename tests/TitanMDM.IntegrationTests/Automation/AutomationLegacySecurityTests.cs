@@ -126,6 +126,64 @@ public sealed class AutomationLegacySecurityTests
                 user.Id));
     }
 
+    [Fact]
+    public async Task LegacyDeviceCommand_FailsClosedWithoutAuthorizationService()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var user = new User(
+            organizationId,
+            "Legacy",
+            "Operator",
+            "legacy.operator@example.test");
+        var device = new Device(
+            organizationId,
+            "Android device",
+            DevicePlatform.Android,
+            Guid.NewGuid().ToString("N"));
+        var rule = new AutomationRule(
+            organizationId,
+            "Legacy lock",
+            null,
+            AutomationTriggerType.Manual,
+            "{}",
+            AutomationActionType.LockDevice,
+            "{}",
+            user.Id);
+
+        db.AddRange(
+            user,
+            device,
+            rule,
+            new UserScopeGrant(
+                organizationId,
+                user.Id,
+                AuthorizationScopeType.Organization,
+                organizationId,
+                user.Id));
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        await service.ExecuteRuleAsync(
+            organizationId,
+            user.Id,
+            rule.Id,
+            new ExecuteAutomationRequest(
+                device.Id,
+                "{}"));
+
+        var execution =
+            Assert.Single(db.AutomationExecutions);
+        Assert.Equal(
+            AutomationExecutionStatus.Failed,
+            execution.Status);
+        Assert.Contains(
+            "autorización empresarial",
+            execution.ErrorMessage,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static AutomationService CreateService(
         TitanMdmDbContext db)
     {

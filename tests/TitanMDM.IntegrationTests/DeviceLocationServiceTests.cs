@@ -360,6 +360,61 @@ public sealed class DeviceLocationServiceTests
     }
 
     [Fact]
+    public async Task FleetLocations_ExcludeNonAndroidDevices_FromMixedInventory()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var android = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Android tablet",
+            DevicePlatform.Android);
+        var windows = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Windows laptop",
+            DevicePlatform.Windows);
+
+        db.DeviceLocations.AddRange(
+            new DeviceLocation(
+                organizationId,
+                android.Id,
+                -34.6,
+                -58.3,
+                10,
+                null,
+                null,
+                "AndroidAgent",
+                DateTime.UtcNow),
+            new DeviceLocation(
+                organizationId,
+                windows.Id,
+                -34.7,
+                -58.4,
+                10,
+                null,
+                null,
+                "WindowsAgent",
+                DateTime.UtcNow));
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var fleet = await service.GetFleetLocationsAsync(
+            organizationId,
+            EmptyFilters());
+
+        Assert.Equal(
+            android.Id,
+            Assert.Single(fleet).DeviceId);
+        Assert.All(
+            fleet,
+            row => Assert.Equal("Android", row.Platform));
+        Assert.DoesNotContain(
+            fleet,
+            row => row.DeviceId == windows.Id);
+    }
+
+    [Fact]
     public async Task FleetLocations_ApplySearchAndLocationStateFilters()
     {
         await using var db = Open();
@@ -674,12 +729,13 @@ public sealed class DeviceLocationServiceTests
     private static async Task<Device> SeedDeviceAsync(
         TitanMdmDbContext db,
         Guid? organizationId = null,
-        string deviceName = "Test device")
+        string deviceName = "Test device",
+        DevicePlatform platform = DevicePlatform.Android)
     {
         var device = new Device(
             organizationId ?? Guid.NewGuid(),
             deviceName,
-            DevicePlatform.Android,
+            platform,
             Guid.NewGuid().ToString("N"));
         db.Devices.Add(device);
         await db.SaveChangesAsync();

@@ -79,6 +79,7 @@ public sealed record DeviceLocationDto(
 public sealed record FleetLocationDto(
     Guid DeviceId,
     string DeviceName,
+    string Platform,
     string? Manufacturer,
     string? Model,
     string? Department,

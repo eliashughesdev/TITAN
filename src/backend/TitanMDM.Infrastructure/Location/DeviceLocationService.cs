@@ -483,6 +483,8 @@ public sealed class DeviceLocationService
             where
                 d.OrganizationId ==
                     organizationId &&
+                d.Platform ==
+                    DevicePlatform.Android &&
                 !d.IsDeleted
 
             select new
@@ -874,6 +876,7 @@ public sealed class DeviceLocationService
         return new FleetLocationDto(
             device.Id,
             device.DeviceName,
+            device.Platform.ToString(),
             device.Manufacturer,
             device.Model,
             device.Department,

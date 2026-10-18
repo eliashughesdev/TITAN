@@ -22,6 +22,8 @@ import {
 
 import apiClient from '../../api/apiClient'
 
+import { useAuth } from '../../auth/AuthContext'
+
 import {
   TitanAssistantProvider,
 } from '../../assistant/context/TitanAssistantContext'
@@ -29,6 +31,8 @@ import {
 import {
   TitanAssistant,
 } from '../../assistant/components/TitanAssistant'
+
+import FiorellaController from '../../pages/ponches/fiorella/FiorellaController'
 
 import {
   WorkspaceProvider,
@@ -77,6 +81,15 @@ function resolveWorkspace(
     return 'administration'
   }
 
+  if (
+    pathname.startsWith('/android') ||
+    pathname.startsWith('/kiosk') ||
+    pathname.startsWith('/geofencing') ||
+    pathname.startsWith('/fleet-map')
+  ) {
+    return 'android'
+  }
+
   const requestedWorkspace =
     new URLSearchParams(search)
       .get('workspace')
@@ -91,6 +104,8 @@ function resolveWorkspace(
 export function AppLayout() {
   const location = useLocation()
   const reducedMotion = useReducedMotion()
+
+  const { hasPermission } = useAuth()
 
   const routeKey =
     `${location.pathname}${location.search}`
@@ -118,9 +133,11 @@ export function AppLayout() {
   })
 
   const [
-    assistantAllowed,
-    setAssistantAllowed,
-  ] = useState(false)
+    assistantAccess,
+    setAssistantAccess,
+  ] = useState<
+    'checking' | 'allowed' | 'denied' | 'error'
+  >('checking')
 
   /*
    * El menú queda asociado a la ruta donde
@@ -169,6 +186,13 @@ export function AppLayout() {
   /*
    * Conservamos la autorización original
    * del asistente corporativo.
+   *
+   * - allowed: acceso confirmado.
+   * - denied: el backend respondió explícitamente
+   *   que el asistente está deshabilitado.
+   * - error: no pudimos verificar (red/estado).
+   *   No ocultamos el asistente por un fallo
+   *   transitorio; el backend sigue validando.
    */
   useEffect(() => {
     let active = true
@@ -182,13 +206,15 @@ export function AppLayout() {
         )
 
         if (active) {
-          setAssistantAllowed(
-            response.data.enabled === true,
+          setAssistantAccess(
+            response.data.enabled === true
+              ? 'allowed'
+              : 'denied',
           )
         }
       } catch {
         if (active) {
-          setAssistantAllowed(false)
+          setAssistantAccess('error')
         }
       }
     }
@@ -348,9 +374,16 @@ export function AppLayout() {
             </main>
           </div>
 
-          {assistantAllowed && !isPonches && (
-            <TitanAssistant />
-          )}
+          {(assistantAccess === 'allowed' ||
+            assistantAccess === 'error') &&
+            !isPonches && (
+              <TitanAssistant />
+            )}
+
+          {isPonches &&
+            hasPermission('ponches.fiorella.use') && (
+              <FiorellaController />
+            )}
         </div>
       </TitanAssistantProvider>
     </WorkspaceProvider>

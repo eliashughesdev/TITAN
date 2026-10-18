@@ -9,6 +9,154 @@ using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Assistant.Tools;
 
+public sealed class HelpdeskOverviewTool
+    : AssistantToolBase
+{
+    private readonly TitanMdmDbContext _db;
+
+    public HelpdeskOverviewTool(
+        TitanMdmDbContext db)
+    {
+        _db = db;
+    }
+
+    public override AssistantToolDescriptor Descriptor =>
+        new(
+            "helpdesk.overview",
+            "Resumen operativo de Mesa de Ayuda",
+            "Cuenta tickets abiertos, sin asignar, vencidos y asignados al usuario dentro de su alcance autorizado.",
+            AssistantToolKind.Read,
+            new[]
+            {
+                PermissionCodes.Helpdesk.TicketsView
+            });
+
+    public override async Task<AssistantToolResult> ExecuteAsync(
+        AssistantToolContext context,
+        JsonObject arguments,
+        CancellationToken cancellationToken = default)
+    {
+        var principal = context.Principal;
+        var now = DateTime.UtcNow;
+
+        var query = _db.HelpdeskTickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == principal.OrganizationId &&
+                ticket.Status != "resolved" &&
+                ticket.Status != "closed");
+
+        if (!context.Scope.OrganizationWide)
+        {
+            var siteIds = context.AccessibleSiteIds;
+            query = query.Where(ticket =>
+                ticket.SiteId.HasValue &&
+                siteIds.Contains(ticket.SiteId.Value));
+        }
+
+        var rows = await query
+            .Select(ticket => new
+            {
+                ticket.AssigneeUserId,
+                ticket.FirstResponseDueAtUtc,
+                ticket.ResolveDueAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        var payload = new
+        {
+            open = rows.Count,
+            unassigned = rows.Count(ticket =>
+                ticket.AssigneeUserId == null),
+            overdue = rows.Count(ticket =>
+                (ticket.ResolveDueAtUtc.HasValue &&
+                    ticket.ResolveDueAtUtc.Value < now) ||
+                (ticket.FirstResponseDueAtUtc.HasValue &&
+                    ticket.FirstResponseDueAtUtc.Value < now)),
+            assignedToMe = rows.Count(ticket =>
+                ticket.AssigneeUserId == principal.UserId)
+        };
+
+        return AssistantToolResult.Ok(
+            $"Hay {payload.open} tickets abiertos dentro del alcance autorizado.",
+            AssistantDataSanitizer.WrapUntrustedData(
+                "helpdesk.overview",
+                AssistantDataSanitizer.ToCompactJson(
+                    payload,
+                    2000)));
+    }
+}
+
+public sealed class HelpdeskAssignedTicketsTool
+    : AssistantToolBase
+{
+    private readonly TitanMdmDbContext _db;
+
+    public HelpdeskAssignedTicketsTool(
+        TitanMdmDbContext db)
+    {
+        _db = db;
+    }
+
+    public override AssistantToolDescriptor Descriptor =>
+        new(
+            "helpdesk.assigned_tickets",
+            "Tickets asignados al usuario",
+            "Lista los tickets actualmente asignados al usuario autenticado dentro de su alcance.",
+            AssistantToolKind.Read,
+            new[]
+            {
+                PermissionCodes.Helpdesk.TicketsView
+            });
+
+    public override async Task<AssistantToolResult> ExecuteAsync(
+        AssistantToolContext context,
+        JsonObject arguments,
+        CancellationToken cancellationToken = default)
+    {
+        var principal = context.Principal;
+        var query = _db.HelpdeskTickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == principal.OrganizationId &&
+                ticket.AssigneeUserId == principal.UserId &&
+                ticket.Status != "resolved" &&
+                ticket.Status != "closed");
+
+        if (!context.Scope.OrganizationWide)
+        {
+            var siteIds = context.AccessibleSiteIds;
+            query = query.Where(ticket =>
+                ticket.SiteId.HasValue &&
+                siteIds.Contains(ticket.SiteId.Value));
+        }
+
+        var tickets = await query
+            .OrderBy(ticket => ticket.ResolveDueAtUtc)
+            .ThenByDescending(ticket => ticket.CreatedAtUtc)
+            .Take(25)
+            .Select(ticket => new
+            {
+                ticket.Id,
+                ticket.Number,
+                ticket.Subject,
+                ticket.Status,
+                ticket.Priority,
+                ticket.FirstResponseDueAtUtc,
+                ticket.ResolveDueAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        return AssistantToolResult.Ok(
+            $"El usuario tiene {tickets.Count} tickets abiertos asignados.",
+            AssistantDataSanitizer.WrapUntrustedData(
+                "helpdesk.assigned_tickets",
+                AssistantDataSanitizer.ToCompactJson(
+                    tickets,
+                    4000)));
+    }
+}
+
 public sealed class HelpdeskMyTicketsTool
     : AssistantToolBase
 {

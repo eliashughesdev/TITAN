@@ -41,6 +41,14 @@ public static class AssistantServiceExtensions
 
         services.AddScoped<
             IAssistantTool,
+            HelpdeskOverviewTool>();
+
+        services.AddScoped<
+            IAssistantTool,
+            HelpdeskAssignedTicketsTool>();
+
+        services.AddScoped<
+            IAssistantTool,
             HelpdeskMyTicketsTool>();
 
         services.AddScoped<
@@ -65,11 +73,19 @@ public static class AssistantServiceExtensions
 
         services.AddScoped<
             IAssistantTool,
+            DevicePoliciesTool>();
+
+        services.AddScoped<
+            IAssistantTool,
             ApplicationInventoryTool>();
 
         services.AddScoped<
             IAssistantTool,
             ReportOverviewTool>();
+
+        services.AddScoped<
+            IAssistantTool,
+            AutomationOverviewTool>();
 
         services.AddScoped<
             IAssistantToolRegistry,

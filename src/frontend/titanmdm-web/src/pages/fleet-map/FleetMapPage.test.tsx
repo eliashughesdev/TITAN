@@ -50,6 +50,7 @@ function fleetRow(
   return {
     deviceId: 'device-1',
     deviceName: 'Tablet Alfa',
+    platform: 'Android',
     manufacturer: 'Samsung',
     model: 'Tab A9',
     department: 'Operaciones',

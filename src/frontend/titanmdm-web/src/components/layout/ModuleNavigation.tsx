@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   MapPin,
+  MapPinned,
   Monitor,
   Package,
   Plus,
@@ -197,6 +198,13 @@ const androidLinks:
       'Geofencing',
       '/geofencing?workspace=android',
       MapPin,
+      'geofencing.view',
+    ),
+
+    link(
+      'Mapa de Flota',
+      '/fleet-map?workspace=android',
+      MapPinned,
       'geofencing.view',
     ),
   ]

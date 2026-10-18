@@ -134,6 +134,13 @@ function resolveRequiredWorkspacePermission(
     pathname.startsWith(
       '/geofencing/',
     )
+    ||
+    pathname ===
+      '/fleet-map'
+    ||
+    pathname.startsWith(
+      '/fleet-map/',
+    )
   ) {
     return 'workspace.android.view'
   }

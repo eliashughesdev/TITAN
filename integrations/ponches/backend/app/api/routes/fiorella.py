@@ -225,7 +225,7 @@ async def chat(
             content={
                 "detail": (
                     "Fiorella no pudo completar "
-                    f"la solicitud: {exc}"
+                    "la solicitud."
                 )
             },
         )

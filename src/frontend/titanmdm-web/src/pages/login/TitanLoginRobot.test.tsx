@@ -79,6 +79,21 @@ describe('TitanLoginRobot', () => {
     expect(root.className).not.toContain('titan-mech--booting')
     expect(
       screen.getByText(
+        'Hola. Soy Titan, tu guardián de acceso.',
+      ),
+    ).toBeInTheDocument()
+
+    expect(root).toHaveAttribute(
+      'data-animation-state',
+      'greeting',
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(800)
+    })
+
+    expect(
+      screen.getByText(
         'Sistema de acceso Titan en espera.',
       ),
     ).toBeInTheDocument()
@@ -92,6 +107,10 @@ describe('TitanLoginRobot', () => {
 
     expect(rootOf(container).className).not.toContain(
       'titan-mech--booting',
+    )
+    expect(rootOf(container)).toHaveAttribute(
+      'data-animation-state',
+      'reduced-motion',
     )
   })
 

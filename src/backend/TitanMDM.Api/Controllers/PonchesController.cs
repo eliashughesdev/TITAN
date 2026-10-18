@@ -103,6 +103,28 @@ public sealed class PonchesController : ControllerBase
             "workspace.ponches.view");
     }
 
+    [HttpPost("fiorella/chat")]
+    public Task<IActionResult> FiorellaChat(
+        CancellationToken cancellationToken)
+    {
+        return ForwardAsync(
+            route:
+                "/api/v1/chat",
+
+            method:
+                HttpMethod.Post,
+
+            hasBody:
+                true,
+
+            deviceOperation:
+                false,
+
+            cancellationToken,
+
+            "ponches.fiorella.use");
+    }
+
     // ============================================================
     // DASHBOARD
     // ============================================================

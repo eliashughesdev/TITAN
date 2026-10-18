@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 using TitanMDM.Api.AI.Assistant;
+using TitanMDM.Api.Security;
 using TitanMDM.Application.Assistant;
 using TitanMDM.Application.Security;
+using TitanMDM.Infrastructure.Assistant;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -22,12 +25,16 @@ public sealed class TitanAssistantController
     private readonly IAssistantOrchestrator _orchestrator;
     private readonly IAssistantSessionStore _sessionStore;
     private readonly IScopeAccessService _scopeAccess;
+    private readonly IAssistantProviderRegistry _providerRegistry;
+    private readonly AssistantOptions _options;
 
     public TitanAssistantController(
         AssistantPrincipalResolver resolver,
         IAssistantOrchestrator orchestrator,
         IAssistantSessionStore sessionStore,
-        IScopeAccessService scopeAccess)
+        IScopeAccessService scopeAccess,
+        IAssistantProviderRegistry providerRegistry,
+        IOptions<AssistantOptions> options)
     {
         _resolver =
             resolver;
@@ -40,6 +47,38 @@ public sealed class TitanAssistantController
 
         _scopeAccess =
             scopeAccess;
+
+        _providerRegistry =
+            providerRegistry;
+
+        _options =
+            options.Value;
+    }
+
+    [HttpGet("providers")]
+    [RequirePermission(PermissionCodes.Settings.View)]
+    public async Task<IActionResult> GetProviders(
+        CancellationToken cancellationToken)
+    {
+        var statuses =
+            await _providerRegistry.GetStatusesAsync(
+                cancellationToken);
+
+        return Ok(
+            new
+            {
+                preferredProvider =
+                    _options.Provider,
+                requestTimeoutSeconds =
+                    _options.RequestTimeoutSeconds,
+                maxTokens =
+                    _options.MaxTokens,
+                maxTurnsPerWindow =
+                    _options.MaxTurnsPerWindow,
+                quotaWindowSeconds =
+                    _options.QuotaWindowSeconds,
+                providers = statuses
+            });
     }
 
     [HttpGet("capabilities")]

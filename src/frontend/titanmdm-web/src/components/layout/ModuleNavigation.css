@@ -42,13 +42,13 @@
 }
 
 .module-navigation__link:hover {
-  color: #315ac5;
-  background: #f1f5ff;
+  color: var(--workspace-primary, #315ac5);
+  background: var(--workspace-soft, #f1f5ff);
 }
 
 .module-navigation__link--active {
-  color: #315ac5;
-  background: #eaf0ff;
+  color: var(--workspace-primary, #315ac5);
+  background: var(--workspace-soft, #eaf0ff);
 }
 
 @media (max-width: 700px) {

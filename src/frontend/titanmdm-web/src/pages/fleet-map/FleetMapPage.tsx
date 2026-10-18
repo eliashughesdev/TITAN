@@ -2,16 +2,26 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   useRef,
 } from 'react'
 import {
-  MapPin,
-  Search,
+  Activity,
   AlertTriangle,
+  CheckCircle2,
+  Clock3,
   ExternalLink,
-  RefreshCw,
-  Map as MapIcon,
+  Info,
   List,
+  MapPin,
+  MapPinOff,
+  MapPinned,
+  Navigation,
+  Radio,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Smartphone,
 } from 'lucide-react'
 import {
   locationApi,
@@ -74,12 +84,20 @@ declare global {
 
 const POLL_INTERVAL_MS = 60_000
 
+type MapsStatus =
+  | 'unconfigured'
+  | 'loading'
+  | 'ready'
+  | 'error'
+
+type LoadMode = 'initial' | 'refresh' | 'poll'
+
 const LOCATION_STATE_COLORS: Record<
   FleetLocationState,
   string
 > = {
-  Fresh: '#22c55e',
-  Stale: '#facc15',
+  Fresh: '#16a34a',
+  Stale: '#f59e0b',
   Offline: '#94a3b8',
   NoLocation: '#64748b',
   PermissionDenied: '#ef4444',
@@ -100,6 +118,7 @@ const EMPTY_FILTERS: FleetLocationFilters = {
   search: '',
   manufacturer: '',
   department: '',
+  siteId: '',
   locationState: '',
   maxSignalAgeMinutes: undefined,
 }
@@ -113,7 +132,12 @@ function markerColorFor(
   )
 }
 
-type LoadMode = 'initial' | 'refresh' | 'poll'
+function hasPosition(location: FleetLocation): boolean {
+  return (
+    location.latitude !== null &&
+    location.longitude !== null
+  )
+}
 
 export function FleetMapPage() {
   const navigate = useNavigate()
@@ -124,23 +148,25 @@ export function FleetMapPage() {
   )
 
   const [mapsConfigured] = useState(
-    isGoogleMapsConfigured(),
+    isGoogleMapsConfigured,
   )
-  const [mapsLoadFailed, setMapsLoadFailed] =
-    useState(false)
-  const [mapsSdkReady, setMapsSdkReady] =
-    useState(false)
+  const [mapsStatus, setMapsStatus] =
+    useState<MapsStatus>(() =>
+      isGoogleMapsConfigured()
+        ? 'loading'
+        : 'unconfigured',
+    )
 
   const [locations, setLocations] = useState<
     FleetLocation[]
   >([])
-  const [loading, setLoading] = useState(
-    isGoogleMapsConfigured(),
-  )
+  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(
     null,
   )
+  const [lastUpdatedAt, setLastUpdatedAt] =
+    useState<Date | null>(null)
 
   const [filters, setFilters] =
     useState<FleetLocationFilters>(EMPTY_FILTERS)
@@ -154,13 +180,16 @@ export function FleetMapPage() {
         setRefreshing(true)
       }
 
-      setError(null)
+      if (mode !== 'poll') {
+        setError(null)
+      }
 
       try {
         const data = await locationApi.getFleet(
           filters,
         )
         setLocations(data)
+        setLastUpdatedAt(new Date())
       } catch (err) {
         console.error(
           'Error loading fleet locations:',
@@ -198,14 +227,11 @@ export function FleetMapPage() {
   }, [loadFleet])
 
   /*
-   * Polling acotado: solo mientras la pagina esta
-   * visible.
+   * Monitoreo periodico acotado: solo mientras la
+   * pagina esta visible. No es seguimiento continuo:
+   * refleja lo ultimo reportado por el agente.
    */
   useEffect(() => {
-    if (!mapsConfigured) {
-      return
-    }
-
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void loadFleet('poll')
@@ -213,12 +239,10 @@ export function FleetMapPage() {
     }, POLL_INTERVAL_MS)
 
     return () => window.clearInterval(interval)
-  }, [loadFleet, mapsConfigured])
+  }, [loadFleet])
 
   /*
    * Carga perezosa del SDK de Google Maps.
-   * Sin clave configurada se muestra el estado
-   * "Configuracion pendiente".
    */
   useEffect(() => {
     if (!mapsConfigured) {
@@ -228,13 +252,11 @@ export function FleetMapPage() {
     let cancelled = false
 
     void loadGoogleMaps().then((loaded) => {
-      if (!cancelled && loaded) {
-        setMapsSdkReady(true)
+      if (cancelled) {
+        return
       }
 
-      if (!cancelled && !loaded) {
-        setMapsLoadFailed(true)
-      }
+      setMapsStatus(loaded ? 'ready' : 'error')
     })
 
     return () => {
@@ -252,7 +274,7 @@ export function FleetMapPage() {
 
     if (
       !maps ||
-      !mapsSdkReady ||
+      mapsStatus !== 'ready' ||
       !mapNodeRef.current
     ) {
       return
@@ -278,7 +300,7 @@ export function FleetMapPage() {
           e,
         )
         window.setTimeout(() => {
-          setError('Error al inicializar el mapa.')
+          setMapsStatus('error')
         }, 0)
         return
       }
@@ -295,11 +317,7 @@ export function FleetMapPage() {
     let hasLocations = false
 
     locations
-      .filter(
-        (loc) =>
-          loc.latitude !== null &&
-          loc.longitude !== null,
-      )
+      .filter(hasPosition)
       .forEach((loc) => {
         const position: MapsLatLng = {
           lat: loc.latitude as number,
@@ -316,7 +334,7 @@ export function FleetMapPage() {
             fillOpacity: 0.9,
             strokeWeight: 2,
             strokeColor: '#fff',
-            scale: 8,
+            scale: 9,
           },
         })
 
@@ -333,7 +351,7 @@ export function FleetMapPage() {
     if (hasLocations) {
       map.fitBounds(bounds)
     }
-  }, [locations, mapsSdkReady])
+  }, [locations, mapsStatus])
 
   const handleFilterChange = (
     key: keyof FleetLocationFilters,
@@ -342,413 +360,541 @@ export function FleetMapPage() {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
-  const stateCounts = locations.reduce<
-    Record<string, number>
-  >(
-    (acc, loc) => {
-      acc[loc.locationState] =
-        (acc[loc.locationState] ?? 0) + 1
-      return acc
-    },
-    {},
+  const stateCounts = useMemo(
+    () =>
+      locations.reduce<Record<string, number>>(
+        (acc, loc) => {
+          acc[loc.locationState] =
+            (acc[loc.locationState] ?? 0) + 1
+          return acc
+        },
+        {},
+      ),
+    [locations],
   )
 
-  const withCoordinates = locations.filter(
-    (loc) =>
-      loc.latitude !== null && loc.longitude !== null,
-  ).length
+  const withCoordinates = useMemo(
+    () => locations.filter(hasPosition).length,
+    [locations],
+  )
+
+  const siteOptions = useMemo(() => {
+    const map = new Map<string, string>()
+
+    locations.forEach((loc) => {
+      if (loc.siteId && loc.siteName) {
+        map.set(loc.siteId, loc.siteName)
+      }
+    })
+
+    return Array.from(map.entries()).map(
+      ([id, name]) => ({ id, name }),
+    )
+  }, [locations])
+
+  const kpis: Array<{
+    key: string
+    label: string
+    value: number
+    tone: string
+    icon: typeof Smartphone
+  }> = [
+    {
+      key: 'total',
+      label: 'Dispositivos',
+      value: locations.length,
+      tone: 'neutral',
+      icon: Smartphone,
+    },
+    {
+      key: 'position',
+      label: 'Con posición',
+      value: withCoordinates,
+      tone: 'info',
+      icon: Navigation,
+    },
+    {
+      key: 'fresh',
+      label: 'Recientes',
+      value: stateCounts.Fresh ?? 0,
+      tone: 'ok',
+      icon: Activity,
+    },
+    {
+      key: 'stale',
+      label: 'Antiguas',
+      value: stateCounts.Stale ?? 0,
+      tone: 'warn',
+      icon: Clock3,
+    },
+    {
+      key: 'noloc',
+      label: 'Sin ubicación',
+      value: stateCounts.NoLocation ?? 0,
+      tone: 'muted',
+      icon: MapPinOff,
+    },
+    {
+      key: 'denied',
+      label: 'Permiso denegado',
+      value: stateCounts.PermissionDenied ?? 0,
+      tone: 'danger',
+      icon: ShieldAlert,
+    },
+  ]
+
+  const mapsStatusLabel: Record<MapsStatus, string> = {
+    unconfigured: 'Google Maps: sin configurar',
+    loading: 'Google Maps: cargando',
+    ready: 'Google Maps: listo',
+    error: 'Google Maps: error',
+  }
 
   return (
     <div className="fleet-map-page">
-      <header className="fleet-map-header">
-        <div className="header-title">
-          <MapIcon size={24} />
+      <header className="fleet-map-hero">
+        <div className="fleet-map-hero__identity">
+          <MapPinned size={26} />
           <div>
-            <h1>Centro de Geolocalización</h1>
+            <div className="fleet-map-eyebrow">
+              ANDROID ENTERPRISE · CENTRO DE GEOLOCALIZACIÓN
+            </div>
+            <h1>Mapa de Flota</h1>
             <p>
-              Monitoreo de flota Android — las
+              Monitoreo periódico de la flota Android. Las
               posiciones se muestran solo cuando el
-              dispositivo las reporta
+              dispositivo las reporta mediante el flujo
+              autorizado.
             </p>
           </div>
         </div>
 
-        <div className="header-actions">
+        <div className="fleet-map-hero__actions">
+          <span
+            className={`fleet-maps-status fleet-maps-status--${mapsStatus}`}
+          >
+            <Radio size={13} />
+            {mapsStatusLabel[mapsStatus]}
+          </span>
           <button
-            className="btn-refresh"
-            onClick={() =>
-              void loadFleet('refresh')
-            }
+            type="button"
+            className="fleet-btn fleet-btn--ghost"
+            onClick={() => void loadFleet('refresh')}
             disabled={loading || refreshing}
           >
             <RefreshCw
               size={16}
-              className={loading ? 'spin' : ''}
+              className={
+                loading || refreshing ? 'spin' : ''
+              }
             />
             Actualizar
           </button>
         </div>
       </header>
 
-      <section className="fleet-map-toolbar">
-        <div className="filter-group">
-          <div className="input-with-icon">
-            <Search size={16} />
-            <input
-              type="text"
-              placeholder="Buscar dispositivo..."
-              value={filters.search || ''}
-              onChange={(e) =>
-                handleFilterChange(
-                  'search',
-                  e.target.value,
-                )
-              }
-            />
-          </div>
+      <section
+        className="fleet-kpi-grid"
+        aria-label="Indicadores de flota"
+      >
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon
 
-          <div className="input-with-icon">
-            <input
-              type="text"
-              placeholder="Fabricante"
-              value={filters.manufacturer || ''}
-              onChange={(e) =>
-                handleFilterChange(
-                  'manufacturer',
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div className="input-with-icon">
-            <input
-              type="text"
-              placeholder="Departamento"
-              value={filters.department || ''}
-              onChange={(e) =>
-                handleFilterChange(
-                  'department',
-                  e.target.value,
-                )
-              }
-            />
-          </div>
-
-          <div className="input-with-icon">
-            <select
-              aria-label="Estado de ubicación"
-              value={filters.locationState || ''}
-              onChange={(e) =>
-                handleFilterChange(
-                  'locationState',
-                  e.target.value,
-                )
-              }
+          return (
+            <article
+              key={kpi.key}
+              className={`fleet-kpi fleet-kpi--${kpi.tone}`}
             >
-              <option value="">
-                Todos los estados
+              <span className="fleet-kpi__icon">
+                <Icon size={18} />
+              </span>
+              <span className="fleet-kpi__value">
+                {kpi.value}
+              </span>
+              <span className="fleet-kpi__label">
+                {kpi.label}
+              </span>
+            </article>
+          )
+        })}
+      </section>
+
+      <section
+        className="fleet-map-toolbar"
+        aria-label="Filtros de flota"
+      >
+        <div className="fleet-filter-lead">
+          <Search size={16} />
+          <input
+            type="search"
+            aria-label="Buscar dispositivo"
+            placeholder="Buscar por nombre o serie..."
+            value={filters.search || ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'search',
+                e.target.value,
+              )
+            }
+          />
+        </div>
+
+        <label className="fleet-field">
+          <span>Fabricante</span>
+          <input
+            type="text"
+            placeholder="Todos"
+            value={filters.manufacturer || ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'manufacturer',
+                e.target.value,
+              )
+            }
+          />
+        </label>
+
+        <label className="fleet-field">
+          <span>Localidad / Sitio</span>
+          <select
+            value={filters.siteId || ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'siteId',
+                e.target.value,
+              )
+            }
+          >
+            <option value="">Todos</option>
+            {siteOptions.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
               </option>
-              {(
-                Object.keys(
-                  LOCATION_STATE_LABELS,
-                ) as FleetLocationState[]
-              ).map((state) => (
-                <option key={state} value={state}>
-                  {LOCATION_STATE_LABELS[state]}
-                </option>
-              ))}
-            </select>
-          </div>
+            ))}
+          </select>
+        </label>
 
-          <div className="input-with-icon">
-            <span className="label-small">
-              Máx. Edad (min)
-            </span>
-            <input
-              type="number"
-              min={1}
-              value={
-                filters.maxSignalAgeMinutes ?? ''
-              }
-              onChange={(e) =>
-                handleFilterChange(
-                  'maxSignalAgeMinutes',
-                  e.target.value
-                    ? parseInt(e.target.value, 10)
-                    : undefined,
-                )
-              }
-            />
-          </div>
-        </div>
+        <label className="fleet-field">
+          <span>Departamento</span>
+          <input
+            type="text"
+            placeholder="Todos"
+            value={filters.department || ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'department',
+                e.target.value,
+              )
+            }
+          />
+        </label>
 
-        <div className="fleet-stats">
-          <div className="stat-item">
-            <span className="stat-value">
-              {locations.length}
-            </span>
-            <span className="stat-label">
-              Dispositivos
-            </span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">
-              {withCoordinates}
-            </span>
-            <span className="stat-label">
-              Con posición
-            </span>
-          </div>
-          {Object.entries(stateCounts).map(
-            ([state, count]) => (
-              <div
-                key={state}
-                className="stat-item state"
-              >
-                <span
-                  className="stat-dot"
-                  style={{
-                    backgroundColor:
-                      LOCATION_STATE_COLORS[
-                        state as FleetLocationState
-                      ] ?? '#94a3b8',
-                  }}
-                />
-                <span className="stat-value">
-                  {count}
-                </span>
-                <span className="stat-label">
-                  {LOCATION_STATE_LABELS[
-                    state as FleetLocationState
-                  ] ?? state}
-                </span>
-              </div>
-            ),
-          )}
-        </div>
+        <label className="fleet-field">
+          <span>Estado de ubicación</span>
+          <select
+            aria-label="Estado de ubicación"
+            value={filters.locationState || ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'locationState',
+                e.target.value,
+              )
+            }
+          >
+            <option value="">Todos los estados</option>
+            {(
+              Object.keys(
+                LOCATION_STATE_LABELS,
+              ) as FleetLocationState[]
+            ).map((state) => (
+              <option key={state} value={state}>
+                {LOCATION_STATE_LABELS[state]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="fleet-field">
+          <span>Última comunicación (min)</span>
+          <input
+            type="number"
+            min={1}
+            placeholder="Sin límite"
+            value={filters.maxSignalAgeMinutes ?? ''}
+            onChange={(e) =>
+              handleFilterChange(
+                'maxSignalAgeMinutes',
+                e.target.value
+                  ? parseInt(e.target.value, 10)
+                  : undefined,
+              )
+            }
+          />
+        </label>
       </section>
 
       <main className="fleet-map-container">
-        {!mapsConfigured ? (
-          <div className="map-error-state">
-            <AlertTriangle size={48} />
-            <h2>Configuración Pendiente</h2>
-            <p>
-              Falta la clave de Google Maps API.
-            </p>
-            <div className="error-hint">
-              Configure la variable de entorno
-              <code>
-                {' '}
-                VITE_GOOGLE_MAPS_API_KEY{' '}
-              </code>
-              en el frontend y reinicie el build.
-            </div>
-          </div>
-        ) : mapsLoadFailed || error ? (
-          <div className="map-error-state">
-            <AlertTriangle size={48} />
-            <h2>Error</h2>
-            <p>
-              {mapsLoadFailed
-                ? 'No se pudo cargar Google Maps. Verifique la clave API.'
-                : error}
-            </p>
-          </div>
-        ) : loading ? (
-          <div className="map-loading-state">
-            <RefreshCw size={48} className="spin" />
-            <p>Cargando flota...</p>
-          </div>
-        ) : (
-          <div className="fleet-map-split">
-            <aside className="fleet-device-list">
-              <div className="list-header">
-                <List size={16} />
-                <span>
-                  {locations.length} dispositivos
-                </span>
-              </div>
-
-              {locations.length === 0 ? (
-                <div className="list-empty">
-                  No hay dispositivos que coincidan
-                  con los filtros.
-                </div>
-              ) : (
-                <ul>
-                  {locations.map((loc) => (
-                    <li
-                      key={loc.deviceId}
-                      className={
-                        selectedDevice?.deviceId ===
-                        loc.deviceId
-                          ? 'selected'
-                          : ''
-                      }
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDevice(loc)
-                          if (
-                            loc.latitude !== null &&
-                            loc.longitude !== null
-                          ) {
-                            mapRef.current?.panTo({
-                              lat: loc.latitude,
-                              lng: loc.longitude,
-                            })
-                          }
-                        }}
-                      >
-                        <span
-                          className="state-dot"
-                          style={{
-                            backgroundColor:
-                              markerColorFor(loc),
-                          }}
-                        />
-                        <span className="device-name">
-                          {loc.deviceName}
-                        </span>
-                        <span className="device-state">
-                          {LOCATION_STATE_LABELS[
-                            loc.locationState
-                          ] ?? loc.locationState}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+        <div className="fleet-map-split">
+          <aside
+            className="fleet-device-list"
+            aria-label="Dispositivos"
+          >
+            <div className="fleet-list-header">
+              <List size={16} />
+              <span>
+                {locations.length} dispositivos
+              </span>
+              {refreshing && (
+                <RefreshCw
+                  size={13}
+                  className="spin fleet-list-refresh"
+                />
               )}
-            </aside>
+            </div>
 
-            <div className="map-viewport">
+            {loading ? (
+              <div className="fleet-list-empty">
+                Cargando dispositivos...
+              </div>
+            ) : locations.length === 0 ? (
+              <div className="fleet-list-empty">
+                No hay dispositivos que coincidan con los
+                filtros.
+              </div>
+            ) : (
+              <ul>
+                {locations.map((loc) => (
+                  <li
+                    key={loc.deviceId}
+                    className={
+                      selectedDevice?.deviceId ===
+                      loc.deviceId
+                        ? 'selected'
+                        : undefined
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDevice(loc)
+                        if (hasPosition(loc)) {
+                          mapRef.current?.panTo({
+                            lat: loc.latitude as number,
+                            lng: loc.longitude as number,
+                          })
+                        }
+                      }}
+                    >
+                      <span
+                        className="fleet-state-dot"
+                        style={{
+                          backgroundColor:
+                            markerColorFor(loc),
+                        }}
+                      />
+                      <span className="fleet-device-name">
+                        {loc.deviceName}
+                      </span>
+                      <span className="fleet-device-state">
+                        {LOCATION_STATE_LABELS[
+                          loc.locationState
+                        ] ?? loc.locationState}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
+
+          <div className="fleet-map-viewport">
+            {mapsStatus === 'ready' ? (
               <div
                 id="google-map"
                 ref={mapNodeRef}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                }}
+                className="fleet-map-canvas"
               />
+            ) : mapsStatus === 'loading' ? (
+              <div className="fleet-map-state">
+                <RefreshCw size={40} className="spin" />
+                <p>Cargando Google Maps...</p>
+              </div>
+            ) : mapsStatus === 'error' ? (
+              <div className="fleet-map-state fleet-map-state--error">
+                <AlertTriangle size={40} />
+                <h2>Error de Google Maps</h2>
+                <p>
+                  No se pudo cargar el SDK de Google Maps.
+                  Verifique que la clave API sea válida y
+                  esté habilitada para Maps JavaScript API.
+                </p>
+              </div>
+            ) : (
+              <div className="fleet-map-state fleet-map-state--config">
+                <AlertTriangle size={40} />
+                <h2>Configuración Pendiente</h2>
+                <p>Falta la clave de Google Maps API.</p>
+                <div className="fleet-config-hint">
+                  <p>
+                    Configure la variable de entorno{' '}
+                    <code>VITE_GOOGLE_MAPS_API_KEY</code>{' '}
+                    y reinicie el build del frontend.
+                  </p>
+                  <ol>
+                    <li>
+                      Cree el archivo{' '}
+                      <code>.env</code> en{' '}
+                      <code>src/frontend/titanmdm-web</code>.
+                    </li>
+                    <li>
+                      Añada{' '}
+                      <code>
+                        VITE_GOOGLE_MAPS_API_KEY=&lt;su-clave&gt;
+                      </code>
+                      .
+                    </li>
+                    <li>
+                      Habilite <em>Maps JavaScript API</em> en
+                      Google Cloud Console.
+                    </li>
+                    <li>
+                      Reinicie{' '}
+                      <code>npm run dev</code> o vuelva a
+                      construir.
+                    </li>
+                  </ol>
+                  <p className="fleet-config-note">
+                    <Info size={14} />
+                    La lista de dispositivos y los
+                    indicadores siguen disponibles sin la
+                    clave. No se muestran posiciones
+                    estimadas.
+                  </p>
+                </div>
+              </div>
+            )}
 
-              {selectedDevice && (
-                <div className="device-info-card">
+            {error && (
+              <div className="fleet-map-toast" role="alert">
+                <AlertTriangle size={15} />
+                {error}
+              </div>
+            )}
+
+            {mapsStatus === 'ready' && lastUpdatedAt && (
+              <div className="fleet-map-updated">
+                <CheckCircle2 size={13} />
+                Actualizado{' '}
+                {lastUpdatedAt.toLocaleTimeString()} ·
+                monitoreo periódico (60 s)
+              </div>
+            )}
+
+            {selectedDevice && mapsStatus === 'ready' && (
+              <div className="fleet-device-card">
+                <button
+                  type="button"
+                  className="fleet-device-card__close"
+                  aria-label="Cerrar detalle"
+                  onClick={() => setSelectedDevice(null)}
+                >
+                  ×
+                </button>
+
+                <div className="fleet-device-card__head">
+                  <MapPin
+                    size={20}
+                    color={markerColorFor(selectedDevice)}
+                  />
+                  <h3>{selectedDevice.deviceName}</h3>
+                </div>
+
+                <div className="fleet-device-card__body">
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Estado:
+                    </span>
+                    <span
+                      className={`fleet-location-pill ${selectedDevice.locationState.toLowerCase()}`}
+                    >
+                      {LOCATION_STATE_LABELS[
+                        selectedDevice.locationState
+                      ] ?? selectedDevice.locationState}
+                    </span>
+                  </div>
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Plataforma:
+                    </span>
+                    <span>{selectedDevice.status}</span>
+                  </div>
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Fabricante:
+                    </span>
+                    <span>
+                      {selectedDevice.manufacturer || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Sitio:
+                    </span>
+                    <span>
+                      {selectedDevice.siteName || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Última señal:
+                    </span>
+                    <span>
+                      {selectedDevice.capturedAtUtc
+                        ? new Date(
+                            selectedDevice.capturedAtUtc,
+                          ).toLocaleString()
+                        : 'Sin datos'}
+                    </span>
+                  </div>
+                  <div className="fleet-info-row">
+                    <span className="fleet-info-label">
+                      Edad de señal:
+                    </span>
+                    <span>
+                      {selectedDevice.signalAgeMinutes !==
+                      null
+                        ? `${Math.round(selectedDevice.signalAgeMinutes)} min`
+                        : 'N/D'}
+                    </span>
+                  </div>
+
+                  {!hasPosition(selectedDevice) && (
+                    <div className="fleet-no-location-note">
+                      Este dispositivo no ha reportado
+                      coordenadas. No se muestra una
+                      posición estimada.
+                    </div>
+                  )}
+                </div>
+
+                <div className="fleet-device-card__footer">
                   <button
-                    className="close-card"
+                    type="button"
+                    className="fleet-btn fleet-btn--primary"
                     onClick={() =>
-                      setSelectedDevice(null)
+                      navigate(
+                        `/devices/${selectedDevice.deviceId}?workspace=android&platform=Android`,
+                      )
                     }
                   >
-                    ×
+                    Ver ficha Android
+                    <ExternalLink size={14} />
                   </button>
-                  <div className="card-header">
-                    <MapPin
-                      size={20}
-                      color={markerColorFor(
-                        selectedDevice,
-                      )}
-                    />
-                    <h3>
-                      {selectedDevice.deviceName}
-                    </h3>
-                  </div>
-                  <div className="card-body">
-                    <div className="info-row">
-                      <span className="label">
-                        Estado:
-                      </span>
-                      <span
-                        className={`location-state-pill ${selectedDevice.locationState.toLowerCase()}`}
-                      >
-                        {LOCATION_STATE_LABELS[
-                          selectedDevice
-                            .locationState
-                        ] ??
-                          selectedDevice.locationState}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">
-                        Plataforma:
-                      </span>
-                      <span
-                        className={`status-pill ${selectedDevice.status.toLowerCase()}`}
-                      >
-                        {selectedDevice.status}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">
-                        Fabricante:
-                      </span>
-                      <span>
-                        {selectedDevice.manufacturer ||
-                          'N/A'}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">
-                        Sitio:
-                      </span>
-                      <span>
-                        {selectedDevice.siteName ||
-                          'N/A'}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">
-                        Última señal:
-                      </span>
-                      <span>
-                        {selectedDevice.capturedAtUtc
-                          ? new Date(
-                              selectedDevice.capturedAtUtc,
-                            ).toLocaleString()
-                          : 'Sin datos'}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span className="label">
-                        Edad de señal:
-                      </span>
-                      <span>
-                        {selectedDevice.signalAgeMinutes !==
-                        null
-                          ? `${Math.round(selectedDevice.signalAgeMinutes)} min`
-                          : 'N/D'}
-                      </span>
-                    </div>
-                    {selectedDevice.latitude ===
-                      null && (
-                      <div className="no-location-note">
-                        Este dispositivo no ha
-                        reportado coordenadas. No se
-                        muestra una posición estimada.
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-footer">
-                    <button
-                      className="btn-view-detail"
-                      onClick={() =>
-                        navigate(
-                          `/devices/${selectedDevice.deviceId}`,
-                        )
-                      }
-                    >
-                      Ver Ficha de Equipo
-                      <ExternalLink size={14} />
-                    </button>
-                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   )

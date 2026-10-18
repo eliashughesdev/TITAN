@@ -65,6 +65,44 @@ describe('titanAssistantApi contracts', () => {
     expect(capabilities.tools).toHaveLength(1)
   })
 
+  it('loads sanitized provider status without credentials', async () => {
+    const controller = new AbortController()
+
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: {
+        preferredProvider: 'Auto',
+        requestTimeoutSeconds: 60,
+        maxTokens: 700,
+        maxTurnsPerWindow: 30,
+        quotaWindowSeconds: 60,
+        providers: [
+          {
+            name: 'OpenRouter',
+            enabled: true,
+            available: true,
+            model: 'openrouter/free',
+            checkedAtUtc: '2026-10-18T00:00:00Z',
+            latencyMs: 42,
+          },
+        ],
+      },
+    } as never)
+
+    const configuration =
+      await titanAssistantApi.getProviderConfiguration(
+        controller.signal,
+      )
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/titan-assistant/providers',
+      { signal: controller.signal },
+    )
+    expect(configuration.providers[0]).not.toHaveProperty(
+      'apiKey',
+    )
+    expect(configuration.providers[0].latencyMs).toBe(42)
+  })
+
   it('normalizes missing capability fields safely', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: {

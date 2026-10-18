@@ -134,6 +134,9 @@ import {
 import {
   SettingsPage,
 } from './pages/settings/SettingsPage'
+import {
+  AssistantProviderSettingsPage,
+} from './pages/settings/AssistantProviderSettingsPage'
 
 import {
   MyHelpdeskPage,
@@ -788,7 +791,9 @@ const applicationRoutes:
         <AutomationPage />,
 
       permissions: [
-        'devices.commands',
+        'automation.view',
+        'automation.manage',
+        'automation.admin',
       ],
     },
 
@@ -861,6 +866,18 @@ const applicationRoutes:
 
       permissions: [
         'sites.view',
+      ],
+    },
+
+    {
+      path:
+        'settings/ai-providers',
+
+      page:
+        <AssistantProviderSettingsPage />,
+
+      permissions: [
+        'settings.view',
       ],
     },
 

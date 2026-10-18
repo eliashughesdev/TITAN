@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Microsoft.Extensions.Options;
 
 using TitanMDM.Application.Assistant;
@@ -29,7 +31,7 @@ public sealed class OpenRouterAssistantProvider
     public string Name =>
         "OpenRouter";
 
-    public Task<AssistantProviderStatus> GetStatusAsync(
+    public async Task<AssistantProviderStatus> GetStatusAsync(
         CancellationToken cancellationToken = default)
     {
         cancellationToken
@@ -39,18 +41,37 @@ public sealed class OpenRouterAssistantProvider
             _options.Enabled &&
             _options.EnableAssistant;
 
-        var status =
-            new AssistantProviderStatus(
+        if (!enabled || !_ai.IsEnabled)
+        {
+            return new AssistantProviderStatus(
                 Name,
                 enabled,
-                enabled && _ai.IsEnabled,
+                false,
                 _options.ResolveAssistantModel(),
                 enabled
-                    ? null
-                    : "OpenRouter deshabilitado por configuración.");
+                    ? "OpenRouter no tiene una credencial configurada en el servidor."
+                    : "OpenRouter deshabilitado por configuración.",
+                DateTime.UtcNow,
+                0);
+        }
 
-        return Task.FromResult(
-            status);
+        var stopwatch =
+            Stopwatch.StartNew();
+        var available =
+            await _ai.CheckHealthAsync(
+                cancellationToken);
+        stopwatch.Stop();
+
+        return new AssistantProviderStatus(
+            Name,
+            true,
+            available,
+            _options.ResolveAssistantModel(),
+            available
+                ? null
+                : "OpenRouter no respondió a la verificación de conectividad.",
+            DateTime.UtcNow,
+            stopwatch.ElapsedMilliseconds);
     }
 
     public async Task<AssistantProviderResponse> CompleteAsync(

@@ -6,6 +6,10 @@ import {
 } from 'react'
 
 import './TitanLoginRobot.css'
+import {
+  preloadLoginAnimationAssets,
+  resolveLoginAnimationState,
+} from './TitanLoginAnimationManifest'
 
 export type TitanLoginRobotMode =
   | 'idle'
@@ -28,6 +32,7 @@ interface TitanLoginRobotProps {
 }
 
 const BOOT_DURATION_MS = 900
+const GREETING_DURATION_MS = 700
 const REACTION_FIELD_MS = 520
 const REACTION_PULSE_MS = 420
 
@@ -88,6 +93,9 @@ export function TitanLoginRobot({
   const [booting, setBooting] =
     useState(bootMs > 0)
 
+  const [greeting, setGreeting] =
+    useState(false)
+
   const [reaction, setReaction] =
     useState<RobotReaction>('none')
 
@@ -101,13 +109,32 @@ export function TitanLoginRobot({
       return
     }
 
-    const timer = window.setTimeout(
-      () => setBooting(false),
-      bootMs,
-    )
+    const timer = window.setTimeout(() => {
+      setBooting(false)
+      setGreeting(
+        previousMode.current === 'idle',
+      )
+    }, bootMs)
 
     return () => window.clearTimeout(timer)
   }, [bootMs])
+
+  useEffect(() => {
+    preloadLoginAnimationAssets()
+  }, [])
+
+  useEffect(() => {
+    if (!greeting) {
+      return
+    }
+
+    const timer = window.setTimeout(
+      () => setGreeting(false),
+      GREETING_DURATION_MS,
+    )
+
+    return () => window.clearTimeout(timer)
+  }, [greeting])
 
   // La secuencia de encendido nunca debe solaparse con una
   // autenticación real: si el operador ya envio credenciales, se
@@ -123,6 +150,7 @@ export function TitanLoginRobot({
       mode === 'launch'
     ) {
       setBooting(false)
+      setGreeting(false)
     }
   }, [mode, booting])
 
@@ -183,6 +211,17 @@ export function TitanLoginRobot({
       `${eyeShift}px`,
   } as CSSProperties
 
+  const reducedMotion = bootMs <= 0
+  const animationState = resolveLoginAnimationState(
+    mode,
+    {
+      booting,
+      greeting,
+      attention: reaction !== 'none',
+      reducedMotion,
+    },
+  )
+
   return (
     <div
       className={
@@ -192,6 +231,8 @@ export function TitanLoginRobot({
         reactClass
       }
       style={style}
+      data-animation-state={animationState}
+      data-reduced-motion={reducedMotion}
       aria-hidden="true"
     >
       <div className="titan-mech__message">
@@ -199,6 +240,8 @@ export function TitanLoginRobot({
 
         {booting
           ? 'Sistema Titan encendiendo...'
+          : greeting
+            ? 'Hola. Soy Titan, tu guardián de acceso.'
           : getMessage(
               mode,
               showPassword,

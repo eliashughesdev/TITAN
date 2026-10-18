@@ -17,6 +17,8 @@ public sealed class AutomationService
     private readonly TitanMdmDbContext _db;
     private readonly IDeviceCommandService _commands;
     private readonly IScopeAccessService _scopeAccess;
+    private readonly IAutomationAuthorizationService?
+        _authorization;
 
     /*
      * AUT-1 — Motor empresarial opcional.
@@ -37,6 +39,8 @@ public sealed class AutomationService
         _db = db;
         _commands = commands;
         _scopeAccess = scopeAccess;
+        _authorization = services
+            .GetService<IAutomationAuthorizationService>();
         _ingest = services
             .GetService<IAutomationEventIngest>();
     }
@@ -704,6 +708,31 @@ public sealed class AutomationService
         {
             throw new InvalidOperationException(
                 $"{rule.ActionType} requires a device.");
+        }
+
+        if (_authorization is null)
+        {
+            throw new AutomationAuthorizationException(
+                "La autorización empresarial no está disponible para validar el comando legacy.");
+        }
+
+        await _authorization.EnsurePermissionAsync(
+            rule.OrganizationId,
+            userId,
+            PermissionCodes.Devices.Commands,
+            cancellationToken);
+
+        var canAccessDevice =
+            await _authorization.CanAccessDeviceAsync(
+                rule.OrganizationId,
+                userId,
+                deviceId.Value,
+                cancellationToken);
+
+        if (!canAccessDevice)
+        {
+            throw new AutomationAuthorizationException(
+                "El dispositivo no está dentro del alcance del actor de la automatización.");
         }
 
         var command =

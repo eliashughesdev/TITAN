@@ -114,7 +114,8 @@ function resolveWorkspace(
 
   if (
     pathname.startsWith('/kiosk') ||
-    pathname.startsWith('/geofencing')
+    pathname.startsWith('/geofencing') ||
+    pathname.startsWith('/fleet-map')
   ) {
     return 'android'
   }

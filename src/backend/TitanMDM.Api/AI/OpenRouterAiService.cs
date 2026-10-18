@@ -45,6 +45,55 @@ public sealed class OpenRouterAiService
         !string.IsNullOrWhiteSpace(
             _options.ApiKey);
 
+    public async Task<bool> CheckHealthAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    "models");
+
+            ApplyRequestHeaders(request);
+
+            using var timeout =
+                CancellationTokenSource
+                    .CreateLinkedTokenSource(
+                        cancellationToken);
+
+            timeout.CancelAfter(
+                TimeSpan.FromSeconds(10));
+
+            using var response =
+                await _httpClient.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    timeout.Token);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException)
+            when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "OpenRouter health check agotó el tiempo de espera.");
+            return false;
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "OpenRouter health check no pudo conectar con el proveedor.");
+            return false;
+        }
+    }
+
     // ============================================================
     // COMPLETION
     // ============================================================
@@ -293,6 +342,18 @@ public sealed class OpenRouterAiService
                 HttpMethod.Post,
                 "chat/completions");
 
+        ApplyRequestHeaders(httpRequest);
+
+        httpRequest.Content =
+            JsonContent.Create(
+                payload);
+
+        return httpRequest;
+    }
+
+    private void ApplyRequestHeaders(
+        HttpRequestMessage httpRequest)
+    {
         httpRequest.Headers.Authorization =
             new AuthenticationHeaderValue(
                 "Bearer",
@@ -326,11 +387,6 @@ public sealed class OpenRouterAiService
                     title);
         }
 
-        httpRequest.Content =
-            JsonContent.Create(
-                payload);
-
-        return httpRequest;
     }
 
     // ============================================================

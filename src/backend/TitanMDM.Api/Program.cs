@@ -13,6 +13,7 @@ using TitanMDM.Application.Commands;
 using TitanMDM.Application.Location;
 
 using TitanMDM.Infrastructure.DependencyInjection;
+using TitanMDM.Infrastructure.Automation.Enterprise;
 using TitanMDM.Infrastructure.Location;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Bootstrap;
@@ -146,6 +147,9 @@ builder.Services.AddTitanOpenRouter(
 // ============================================================================
 
 builder.Services.AddTitanMdmInfrastructure(
+    configuration);
+
+builder.Services.AddTitanAutomationPlatform(
     configuration);
 
 builder.Services.AddTitanAuthorization();

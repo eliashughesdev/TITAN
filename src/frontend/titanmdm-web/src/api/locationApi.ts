@@ -23,6 +23,7 @@ export type FleetLocationState =
 export interface FleetLocation {
   deviceId: string
   deviceName: string
+  platform: 'Android'
   manufacturer: string | null
   model: string | null
   department: string | null
@@ -176,7 +177,9 @@ export const locationApi = {
         },
       )
 
-    return response.data
+    return response.data.filter(
+      location => location.platform === 'Android',
+    )
   },
 
   async getReportingPolicy():

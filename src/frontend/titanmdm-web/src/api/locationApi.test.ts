@@ -23,6 +23,7 @@ vi.mock('./apiClient', () => ({
 const baseFleetRow: FleetLocation = {
   deviceId: 'device-1',
   deviceName: 'Tablet Alfa',
+  platform: 'Android',
   manufacturer: 'Samsung',
   model: 'Tab A9',
   department: 'Operaciones',
@@ -90,6 +91,23 @@ describe('locationApi ANDROID-GEO-01 contracts', () => {
     expect(row.latitude).toBeNull()
     expect(row.longitude).toBeNull()
     expect(row.locationState).toBe('NoLocation')
+  })
+
+  it('rejects non-Android rows if the backend contract regresses', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: [
+        baseFleetRow,
+        {
+          ...baseFleetRow,
+          deviceId: 'windows-1',
+          platform: 'Windows',
+        },
+      ],
+    })
+
+    const result = await locationApi.getFleet()
+
+    expect(result).toEqual([baseFleetRow])
   })
 
   it('updates the reporting policy with a typed body', async () => {

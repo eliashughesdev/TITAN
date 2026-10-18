@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Clock3,
   CloudCog,
+  Cpu,
   Mail,
   MapPinned,
   Settings,
@@ -357,6 +358,27 @@ export function SettingsPage() {
           'Configuraciones generales relacionadas con identidad, seguridad y estructura administrativa de TitanMDM.',
 
         cards: [
+          {
+            title:
+              'Proveedores de inteligencia artificial',
+
+            description:
+              'Estado seguro de OpenRouter y Ollama, modelo efectivo, latencia, timeout y límites del asistente.',
+
+            path:
+              '/settings/ai-providers?workspace=administration',
+
+            icon:
+              Cpu,
+
+            permissions: [
+              'settings.view',
+              'settings.manage',
+            ],
+
+            badge:
+              'AI-2',
+          },
           {
             title:
               'Usuarios y roles',

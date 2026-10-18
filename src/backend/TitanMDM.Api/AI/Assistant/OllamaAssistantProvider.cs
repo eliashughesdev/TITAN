@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -53,8 +54,13 @@ public sealed class OllamaAssistantProvider
                 false,
                 false,
                 _options.Model,
-                "Ollama deshabilitado por configuración.");
+                "Ollama deshabilitado por configuración.",
+                DateTime.UtcNow,
+                0);
         }
+
+        var stopwatch =
+            Stopwatch.StartNew();
 
         try
         {
@@ -63,6 +69,8 @@ public sealed class OllamaAssistantProvider
                     "api/tags",
                     cancellationToken);
 
+            stopwatch.Stop();
+
             return new AssistantProviderStatus(
                 Name,
                 true,
@@ -70,18 +78,24 @@ public sealed class OllamaAssistantProvider
                 _options.Model,
                 response.IsSuccessStatusCode
                     ? null
-                    : "Ollama no responde en el endpoint configurado.");
+                    : "Ollama no responde en el endpoint configurado.",
+                DateTime.UtcNow,
+                stopwatch.ElapsedMilliseconds);
         }
         catch (Exception exception)
             when (exception is HttpRequestException or
                 TaskCanceledException)
         {
+            stopwatch.Stop();
+
             return new AssistantProviderStatus(
                 Name,
                 true,
                 false,
                 _options.Model,
-                "Ollama no está accesible.");
+                "Ollama no está accesible.",
+                DateTime.UtcNow,
+                stopwatch.ElapsedMilliseconds);
         }
     }
 

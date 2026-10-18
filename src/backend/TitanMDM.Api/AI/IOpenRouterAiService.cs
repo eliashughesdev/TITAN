@@ -4,6 +4,9 @@ public interface IOpenRouterAiService
 {
     bool IsEnabled { get; }
 
+    Task<bool> CheckHealthAsync(
+        CancellationToken cancellationToken = default);
+
     Task<string> CompleteAsync(
         OpenRouterRequest request,
         CancellationToken cancellationToken = default);

@@ -1,0 +1,417 @@
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
+import L from 'leaflet'
+import {
+  Search,
+  Filter,
+  AlertTriangle,
+  ExternalLink,
+  RefreshCw,
+  Map as MapIcon,
+  Smartphone,
+  Navigation,
+  Activity,
+  Clock3,
+  MapPinOff,
+  ShieldAlert,
+  List,
+} from 'lucide-react'
+import {
+  locationApi,
+  type FleetLocation,
+  type FleetLocationFilters,
+} from '../../api/locationApi'
+import { useNavigate } from 'react-router-dom'
+import { getActiveProvider } from '../../config/mapConfig'
+import 'leaflet/dist/leaflet.css'
+import './FleetMapPage.css'
+
+// Fix for Leaflet default marker icons in Vite/Webpack
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+})
+
+/* 
+ * Custom Marker Component for the Enterprise Look 
+ * Uses a circle instead of the standard pin for a modern UI
+ */
+const FleetMarker = ({ location, onClick }: { location: FleetLocation; onClick: () => void }) => {
+  const color = getMarkerColor(location)
+  
+  // Create a custom SVG icon for the marker
+  const customIcon = L.divIcon({
+    className: 'fleet-marker-container',
+    html: `<div class="fleet-marker" style="background-color: ${color};"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  })
+
+  return (
+    <Marker 
+      position={[location.latitude, location.longitude]} 
+      icon={customIcon} 
+      eventHandlers={{ click: onClick }}
+    />
+  )
+}
+
+// Map Controller to handle panning and zooming programmatically
+function MapController({ 
+  center, 
+  zoom, 
+  bounds 
+}: { 
+  center?: [number, number], 
+  zoom?: number, 
+  bounds?: L.LatLngBounds 
+}) {
+  const map = useMap()
+  
+  useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 })
+    } else if (center) {
+      map.setView(center, zoom || 11)
+    }
+  }, [center, zoom, bounds, map])
+
+  return null
+}
+
+export function FleetMapPage() {
+  const navigate = useNavigate()
+  const [locations, setLocations] = useState<FleetLocation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
+  
+  const [filters, setFilters] = useState<FleetLocationFilters>({
+    search: '',
+    manufacturer: '',
+    department: '',
+    maxSignalAgeMinutes: undefined,
+  })
+
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+
+  const loadFleet = useCallback(async (mode: 'initial' | 'refresh' | 'poll') => {
+    if (mode === 'refresh' || mode === 'poll') setRefreshing(true)
+    if (mode !== 'poll') setError(null)
+
+    try {
+      const data = await locationApi.getFleet(filters)
+      setLocations(data)
+      setLastUpdatedAt(new Date())
+    } catch (err) {
+      console.error('Error loading fleet locations:', err)
+      setError('No fue posible cargar la ubicación de la flota.')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [filters])
+
+  useEffect(() => {
+    void loadFleet('initial')
+  }, [loadFleet])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadFleet('poll')
+      }
+    }, 60_000)
+    return () => window.clearInterval(interval)
+  }, [loadFleet])
+
+  const handleFilterChange = (key: keyof FleetLocationFilters, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  const selectedDevice = useMemo(
+    () => locations.find(l => l.deviceId === selectedDeviceId) ?? null,
+    [locations, selectedDeviceId]
+  )
+
+  const fleetBounds = useMemo(() => {
+    const bounds = L.latLngBounds([])
+    let hasPositions = false
+    locations.forEach(loc => {
+      if (loc.latitude && loc.longitude) {
+        bounds.extend([loc.latitude, loc.longitude])
+        hasPositions = true
+      }
+    })
+    return hasPositions ? bounds : null
+  }, [locations])
+
+  // KPI Calculations
+  const stats = useMemo(() => {
+    return {
+      total: locations.length,
+      withPos: locations.filter(l => l.latitude && l.longitude).length,
+      fresh: locations.filter(l => l.status === 'Online' && isFresh(l)).length,
+      stale: locations.filter(l => l.status === 'Online' && !isFresh(l)).length,
+      noPos: locations.filter(l => !l.latitude || !l.longitude).length,
+      errors: locations.filter(l => l.status === 'PermissionDenied' || l.status === 'Error').length
+    }
+  }, [locations])
+
+  return (
+    <div className="fleet-map-page">
+      <header className="fleet-map-header">
+        <div className="header-title">
+          <MapIcon size={24} />
+          <div>
+            <h1>Centro de Geolocalización</h1>
+            <p>Monitoreo de flota Android corporativa · Leaflet + OSM</p>
+          </div>
+        </div>
+
+        <div className="header-actions">
+          <span className="connection-status">
+            <div className="status-dot" />
+            {lastUpdatedAt ? `Actualizado: ${lastUpdatedAt.toLocaleTimeString()}` : 'Sincronizando...'}
+          </span>
+          <button 
+            className="btn-refresh" 
+            onClick={() => void loadFleet('refresh')} 
+            disabled={loading || refreshing}
+          >
+            <RefreshCw size={16} className={loading || refreshing ? 'spin' : ''} />
+            Actualizar Flota
+          </button>
+        </div>
+      </header>
+
+      <section className="fleet-kpi-bar">
+        <KpiCard icon={<Smartphone />} label="Registrados" value={stats.total} tone="neutral" />
+        <KpiCard icon={<Navigation />} label="Con Posición" value={stats.withPos} tone="info" />
+        <KpiCard icon={<Activity />} label="Recientes" value={stats.fresh} tone="ok" />
+        <KpiCard icon={<Clock3 />} label="Desactualizados" value={stats.stale} tone="warn" />
+        <KpiCard icon={<MapPinOff />} label="Sin Ubicación" value={stats.noPos} tone="muted" />
+        <KpiCard icon={<ShieldAlert />} label="Errores/Permisos" value={stats.errors} tone="danger" />
+      </section>
+
+      <div className="fleet-main-layout">
+        {/* LEFT PANEL: Device List */}
+        <aside className="fleet-panel-left">
+          <div className="panel-header">
+            <div className="panel-title">
+              <List size={18} />
+              <span>Dispositivos</span>
+            </div>
+            <div className="panel-count">{locations.length}</div>
+          </div>
+
+          <div className="panel-filters">
+            <div className="filter-input">
+              <Search size={14} />
+              <input 
+                type="text" 
+                placeholder="Buscar equipo..." 
+                value={filters.search || ''}
+                onChange={e => handleFilterChange('search', e.target.value)}
+              />
+            </div>
+            <div className="filter-grid">
+              <div className="filter-item">
+                <label>Fabricante</label>
+                <input 
+                  type="text" 
+                  value={filters.manufacturer || ''}
+                  onChange={e => handleFilterChange('manufacturer', e.target.value)}
+                />
+              </div>
+              <div className="filter-item">
+                <label>Departamento</label>
+                <input 
+                  type="text" 
+                  value={filters.department || ''}
+                  onChange={e => handleFilterChange('department', e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="device-scroll-area">
+            {loading ? (
+              <div className="panel-empty">Cargando flota...</div>
+            ) : locations.length === 0 ? (
+              <div className="panel-empty">No hay dispositivos disponibles.</div>
+            ) : (
+              <ul className="device-list">
+                {locations.map(loc => (
+                  <li 
+                    key={loc.deviceId} 
+                    className={`device-item ${selectedDeviceId === loc.deviceId ? 'active' : ''}`}
+                    onClick={() => setSelectedDeviceId(loc.deviceId)}
+                  >
+                    <div className="device-info">
+                      <div className="device-name">{loc.deviceName}</div>
+                      <div className="device-meta">{loc.manufacturer || 'Genérico'}</div>
+                    </div>
+                    <div className="device-status-indicator" style={{ backgroundColor: getMarkerColor(loc) }} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        {/* CENTER PANEL: Map */}
+        <main className="fleet-panel-center">
+          {error ? (
+            <div className="map-error-state">
+              <AlertTriangle size={48} />
+              <h2>Error de Geolocalización</h2>
+              <p>{error}</p>
+              <button className="btn-retry" onClick={() => void loadFleet('refresh')}>Reintentar</button>
+            </div>
+          ) : (
+            <MapContainer 
+              center={[18.4861, -69.9312]} 
+              zoom={11} 
+              className="fleet-map-canvas"
+            >
+              <TileLayer
+                url={getActiveProvider().url}
+                attribution={getActiveProvider().attribution}
+              />
+              <MapController 
+                center={selectedDevice ? [selectedDevice.latitude, selectedDevice.longitude] : undefined}
+                bounds={fleetBounds}
+              />
+              {locations.filter(l => l.latitude && l.longitude).map(loc => (
+                <FleetMarker 
+                  key={loc.deviceId} 
+                  location={loc} 
+                  onClick={() => setSelectedDeviceId(loc.deviceId)} 
+                />
+              ))}
+            </MapContainer>
+          )}
+        </main>
+
+        {/* RIGHT PANEL: Device Details */}
+        <aside className="fleet-panel-right">
+          {selectedDevice ? (
+            <div className="device-detail-card">
+              <div className="detail-header">
+                <div className="detail-title">
+                  <h3>{selectedDevice.deviceName}</h3>
+                  <span className={`status-pill ${selectedDevice.status.toLowerCase()}`}>
+                    {selectedDevice.status}
+                  </span>
+                </div>
+                <button className="btn-close" onClick={() => setSelectedDeviceId(null)}>×</button>
+              </div>
+
+              <div className="detail-body">
+                <div className="detail-section">
+                  <label>Ubicación Actual</label>
+                  <div className="detail-value">
+                    {selectedDevice.latitude && selectedDevice.longitude 
+                      ? `${selectedDevice.latitude.toFixed(5)}, ${selectedDevice.longitude.toFixed(5)}`
+                      : 'Sin coordenadas válidas'}
+                  </div>
+                </div>
+
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <label>Fabricante</label>
+                    <span>{selectedDevice.manufacturer || 'N/A'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Modelo</label>
+                    <span>{selectedDevice.model || 'N/A'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Departamento</label>
+                    <span>{selectedDevice.department || 'N/A'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Precisión</label>
+                    <span>{selectedDevice.accuracyMeters ? `${selectedDevice.accuracyMeters}m` : 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div className="detail-footer">
+                  <div className="last-update">
+                    <Clock3 size={14} />
+                    <span>Última actualización: {new Date(selectedDevice.capturedAtUtc).toLocaleString()}</span>
+                  </div>
+                  <button 
+                    className="btn-primary" 
+                    onClick={() => navigate(`/devices/${selectedDevice.deviceId}`)}
+                  >
+                    Gestionar Equipo <ExternalLink size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="panel-empty-detail">
+              <MapPinOff size={48} />
+              <p>Seleccione un dispositivo en el mapa o en la lista para ver los detalles.</p>
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode, label: string, value: number, tone: string }) {
+  return (
+    <div className={`kpi-card kpi--${tone}`}>
+      <div className="kpi-icon">{icon}</div>
+      <div className="kpi-content">
+        <span className="kpi-value">{value}</span>
+        <span className="kpi-label">{label}</span>
+      </div>
+    </div>
+  )
+}
+
+function getMarkerColor(location: FleetLocation) {
+  if (location.status === 'Offline') return '#94a3b8'
+  if (location.status === 'PermissionDenied') return '#ef4444'
+  
+  // signalAge is a TimeSpan string from .NET (e.g., "00:15:00")
+  try {
+    const parts = location.signalAge.split(':').map(Number)
+    const totalMinutes = parts.reduce((acc, val, idx) => {
+      const multiplier = Math.pow(60, parts.length - 1 - idx)
+      return acc + val * multiplier
+    }, 0)
+    
+    return totalMinutes > 60 ? '#f59e0b' : '#22c55e'
+  } catch {
+    return '#94a3b8'
+  }
+}
+
+function isFresh(location: FleetLocation) {
+  try {
+    const parts = location.signalAge.split(':').map(Number)
+    const totalMinutes = parts.reduce((acc, val, idx) => {
+      const multiplier = Math.pow(60, parts.length - 1 - idx)
+      return acc + val * multiplier
+    }, 0)
+    return totalMinutes <= 60
+  } catch {
+    return false
+  }
+}

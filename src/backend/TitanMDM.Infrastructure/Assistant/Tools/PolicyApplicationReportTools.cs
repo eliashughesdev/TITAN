@@ -1,10 +1,13 @@
 using System.Text.Json.Nodes;
 
+using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Application.Applications;
 using TitanMDM.Application.Assistant;
 using TitanMDM.Application.Policies;
 using TitanMDM.Application.Reports;
 using TitanMDM.Application.Security;
+using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Assistant.Tools;
 
@@ -48,6 +51,91 @@ public sealed class PolicyListTool
             $"Se encontraron {policies.Count} políticas.",
             AssistantDataSanitizer.WrapUntrustedData(
                 "policies.list",
+                AssistantDataSanitizer.ToCompactJson(
+                    policies,
+                    4000)));
+    }
+}
+
+public sealed class DevicePoliciesTool
+    : AssistantToolBase
+{
+    private readonly TitanMdmDbContext _db;
+    private readonly IScopeAccessService _scopeAccess;
+
+    public DevicePoliciesTool(
+        TitanMdmDbContext db,
+        IScopeAccessService scopeAccess)
+    {
+        _db = db;
+        _scopeAccess = scopeAccess;
+    }
+
+    public override AssistantToolDescriptor Descriptor =>
+        new(
+            "policies.device",
+            "Políticas de un dispositivo",
+            "Lista políticas asignadas y su estado para un dispositivo autorizado. Requiere el argumento deviceId.",
+            AssistantToolKind.Read,
+            new[]
+            {
+                PermissionCodes.Devices.View,
+                PermissionCodes.Policies.View
+            });
+
+    public override async Task<AssistantToolResult> ExecuteAsync(
+        AssistantToolContext context,
+        JsonObject arguments,
+        CancellationToken cancellationToken = default)
+    {
+        var deviceId = ReadGuid(arguments, "deviceId");
+        if (deviceId is null || deviceId == Guid.Empty)
+        {
+            return AssistantToolResult.Fail(
+                "invalid_argument",
+                "Indica el identificador del dispositivo.");
+        }
+
+        var principal = context.Principal;
+        var allowed = await _scopeAccess.CanAccessDeviceAsync(
+            principal.OrganizationId,
+            principal.UserId,
+            deviceId.Value,
+            cancellationToken);
+
+        if (!allowed)
+        {
+            return AssistantToolResult.Fail(
+                "forbidden",
+                "El dispositivo no está dentro de tu alcance.");
+        }
+
+        var policies = await (
+            from assignment in _db.DevicePolicyAssignments.AsNoTracking()
+            join policy in _db.Policies.AsNoTracking()
+                on assignment.PolicyId equals policy.Id
+            where
+                assignment.OrganizationId == principal.OrganizationId &&
+                assignment.DeviceId == deviceId.Value &&
+                policy.OrganizationId == principal.OrganizationId
+            orderby assignment.AssignedAtUtc descending
+            select new
+            {
+                policy.Id,
+                policy.Name,
+                policy.Platform,
+                policy.Status,
+                assignment.PolicyVersion,
+                assignmentStatus = assignment.Status,
+                assignment.AssignedAtUtc,
+                assignment.AppliedAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        return AssistantToolResult.Ok(
+            $"El dispositivo tiene {policies.Count} políticas asignadas.",
+            AssistantDataSanitizer.WrapUntrustedData(
+                "policies.device",
                 AssistantDataSanitizer.ToCompactJson(
                     policies,
                     4000)));

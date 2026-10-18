@@ -178,7 +178,9 @@ public sealed record AssistantProviderStatus(
     bool Enabled,
     bool Available,
     string Model,
-    string? Detail = null);
+    string? Detail = null,
+    DateTime? CheckedAtUtc = null,
+    long? LatencyMs = null);
 
 public sealed record AssistantCapabilities(
     bool Enabled,
