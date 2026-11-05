@@ -9,6 +9,8 @@ using TitanMDM.Api.Ponches;
 using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
+using TitanMDM.Api.Inventory;
+using TitanMDM.Application.Contracts.Persistence;
 using TitanMDM.Application.Commands;
 using TitanMDM.Application.Location;
 
@@ -18,8 +20,36 @@ using TitanMDM.Infrastructure.Location;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Bootstrap;
 
+// ============================================================================
+// WINDOWS SERVICE (produccion IIS)
+//
+// Como servicio, el directorio de trabajo es System32: el content root se
+// fija a la carpeta publicada para encontrar appsettings*.json. En
+// desarrollo (dotnet run) el comportamiento no cambia.
+// ============================================================================
+
+var runningAsWindowsService =
+    Microsoft.Extensions.Hosting.WindowsServices
+        .WindowsServiceHelpers
+        .IsWindowsService();
+
 var builder =
-    WebApplication.CreateBuilder(args);
+    WebApplication.CreateBuilder(
+        new WebApplicationOptions
+        {
+            Args = args,
+            ContentRootPath =
+                runningAsWindowsService
+                    ? AppContext.BaseDirectory
+                    : null
+        });
+
+builder.Host.UseWindowsService(
+    options =>
+    {
+        options.ServiceName =
+            "TitanMDM.Api";
+    });
 
 // ============================================================================
 // ENVIRONMENT / CONFIGURATION
@@ -225,6 +255,14 @@ builder.Services.AddHostedService<
 builder.Services.AddHostedService<
     HelpdeskRoutingWorker>();
 
+// ITAM: "hoy" se evalua en la zona del negocio (Inventory:TimeZoneId).
+builder.Services.AddSingleton(
+    new TitanMDM.Infrastructure.Persistence.ItamDateRules(
+        configuration["Inventory:TimeZoneId"]));
+
+builder.Services.AddScoped<
+    IInventoryService, InventoryService>();
+
 builder.Services.AddHostedService<
     HelpdeskMailWorker>();
 
@@ -365,6 +403,26 @@ builder.Services
                 .ParseAdd(
                     "TitanMDM-PonchesGateway/1.0");
         });
+
+// ============================================================================
+// INVENTORY HTTP GATEWAY
+// ============================================================================
+
+builder.Services
+    .AddHttpClient<
+        IInventoryGateway,
+        InventoryGateway>(
+    client =>
+    {
+        client.Timeout =
+            Timeout.InfiniteTimeSpan;
+
+        client
+            .DefaultRequestHeaders
+            .UserAgent
+            .ParseAdd(
+                "TitanMDM-InventoryGateway/1.0");
+    });
 
 // ============================================================================
 // IMPORTANTE

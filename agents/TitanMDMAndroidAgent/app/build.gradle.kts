@@ -45,34 +45,51 @@ android {
         it.contains("release", ignoreCase = true)
     }
 
+    /*
+     * Inscripcion interna por QR: el servidor viaja en el QR y puede ser
+     * http://<IP-LAN>:8020 (sin certificado). Solo hosts privados
+     * (ServerEndpointPolicy). Release: -PtitanAllowLanHttp=true.
+     */
+    val releaseAllowsLanHttp = providers.gradleProperty("titanAllowLanHttp")
+        .orElse(providers.environmentVariable("TITAN_ALLOW_LAN_HTTP"))
+        .map { it.trim().equals("true", ignoreCase = true) }
+        .getOrElse(false)
+
     buildTypes {
         debug {
             isMinifyEnabled = false
             buildConfigField("String", "TITAN_API_BASE_URL", "\"http://10.0.2.2:8020/\"")
+            buildConfigField("boolean", "ALLOW_LAN_HTTP", "true")
+            manifestPlaceholders["allowCleartext"] = "true"
         }
 
         release {
             isMinifyEnabled = true
 
+            buildConfigField("boolean", "ALLOW_LAN_HTTP", releaseAllowsLanHttp.toString())
+            manifestPlaceholders["allowCleartext"] = releaseAllowsLanHttp.toString()
+
             if (configuredReleaseEndpoint.isNullOrEmpty()) {
                 if (isReleaseBuildRequested) {
-                    error("TITAN_API_BASE_URL is required for release builds")
+                    logger.lifecycle(
+                        "TITAN_API_BASE_URL no definido: el servidor se tomará del QR de inscripción."
+                    )
                 }
 
-                // Placeholder inerte: nunca se usa porque el build release
-                // falla en configuración si no hay endpoint válido.
+                // Sin servidor de fabrica: el agente exige escanear el QR.
                 buildConfigField(
                     "String",
                     "TITAN_API_BASE_URL",
-                    "\"https://unconfigured.titanmdm.invalid/\""
+                    "\"\""
                 )
             } else {
                 require(
-                    configuredReleaseEndpoint.startsWith("https://") &&
+                    (configuredReleaseEndpoint.startsWith("https://") ||
+                        (releaseAllowsLanHttp && configuredReleaseEndpoint.startsWith("http://"))) &&
                         !configuredReleaseEndpoint.contains('"') &&
                         !configuredReleaseEndpoint.contains('\\')
                 ) {
-                    "Release API URL must be valid HTTPS"
+                    "Release API URL must be HTTPS (or http:// with titanAllowLanHttp=true)"
                 }
 
                 buildConfigField(
@@ -159,6 +176,9 @@ dependencies {
     implementation(
         libs.kotlinx.serialization.json
     )
+
+    // QR de inscripcion con camara (ZXing, sin Google Play Services)
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     // Tests
     testImplementation(libs.junit)

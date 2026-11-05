@@ -1,5 +1,6 @@
 package com.titanmdm.agent.launcher
 
+import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -11,6 +12,8 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.graphics.BitmapFactory
+import androidx.core.net.toUri
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -26,6 +29,8 @@ import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.titanmdm.agent.BuildConfig
+import com.titanmdm.agent.kiosk.KioskController
+import com.titanmdm.agent.service.AgentForegroundService
 import com.titanmdm.agent.ui.theme.TitanMDMAndroidAgentTheme
 import java.io.File
 
@@ -34,6 +39,7 @@ import java.io.File
  *
  * Relee la política administrada sin reiniciar el dispositivo mediante:
  *  - ACTION_APPLICATION_RESTRICTIONS_CHANGED (cambios de managed config);
+ *  - TitanServerLauncherStore.ACTION_CHANGED (política del servidor TitanMDM);
  *  - PACKAGE_ADDED / PACKAGE_REMOVED / PACKAGE_CHANGED / PACKAGE_REPLACED.
  *
  * Nunca abre aplicaciones fuera de la lista autorizada ni concede permisos.
@@ -48,6 +54,14 @@ class TitanLauncherActivity : ComponentActivity() {
     private var syncStatus by mutableStateOf("Sin sincronizar")
     private var resourceJob: Job? = null
     private var policyOrigin = TitanLauncherPolicyOrigin.None
+    private var deviceStatus by mutableStateOf(TitanDeviceStatus())
+
+    private val deviceStatusReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                deviceStatus = TitanDeviceStatus.read(this@TitanLauncherActivity)
+            }
+        }
 
     private val restrictionsReceiver =
         object : BroadcastReceiver() {
@@ -55,10 +69,14 @@ class TitanLauncherActivity : ComponentActivity() {
                 context: Context?,
                 intent: Intent?
             ) {
-                if (intent?.action ==
-                    Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED
-                ) {
-                    refresh()
+                when (intent?.action) {
+                    Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED,
+                    TitanServerLauncherStore.ACTION_CHANGED -> {
+                        // Nueva política: bloqueos y apps permitidas.
+                        runCatching { KioskController.apply(this@TitanLauncherActivity) }
+                        refresh()
+                        syncLockTask()
+                    }
                 }
             }
         }
@@ -91,9 +109,11 @@ class TitanLauncherActivity : ComponentActivity() {
                     appState = { appStates[it] ?: TitanLauncherAppState.Unavailable },
                     iconProvider = ::loadIcon,
                     onLaunch = ::launchApp,
+                    onInstall = ::requestInstall,
                     wallpaper = wallpaper,
                     logo = logo,
-                    syncStatus = syncStatus
+                    syncStatus = syncStatus,
+                    deviceStatus = deviceStatus
                 )
             }
         }
@@ -105,9 +125,10 @@ class TitanLauncherActivity : ComponentActivity() {
         ContextCompat.registerReceiver(
             this,
             restrictionsReceiver,
-            IntentFilter(
-                Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED
-            ),
+            IntentFilter().apply {
+                addAction(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED)
+                addAction(TitanServerLauncherStore.ACTION_CHANGED)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
@@ -127,12 +148,52 @@ class TitanLauncherActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
+        ContextCompat.registerReceiver(
+            this,
+            deviceStatusReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_BATTERY_CHANGED)
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
+        // Kiosco: con Device Owner fija el HOME y bloquea la barra de estado.
+        runCatching { KioskController.apply(this) }
+
+        AgentForegroundService.start(this)
+
         refresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncLockTask()
+    }
+
+    /**
+     * Teclas del sistema (Recientes / salida al escritorio): con la
+     * política "bloquear teclas" y Device Owner, el launcher entra en
+     * lock task; sale cuando la política o el técnico lo liberan.
+     */
+    private fun syncLockTask() {
+        val activityManager = getSystemService(ActivityManager::class.java) ?: return
+        val locked = activityManager.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
+        val wanted = runCatching { KioskController.shouldLockTask(this) }.getOrDefault(false)
+
+        runCatching {
+            when {
+                wanted && !locked -> startLockTask()
+                !wanted && locked -> stopLockTask()
+            }
+        }
     }
 
     override fun onStop() {
         runCatching { unregisterReceiver(restrictionsReceiver) }
         runCatching { unregisterReceiver(packageReceiver) }
+        runCatching { unregisterReceiver(deviceStatusReceiver) }
         super.onStop()
     }
 
@@ -155,7 +216,8 @@ class TitanLauncherActivity : ComponentActivity() {
                 officialRestrictions = officialRestrictions,
                 labProfileJson = labProfileJson,
                 labEnabled = labEnabled,
-                deviceManaged = deviceManaged
+                deviceManaged = deviceManaged,
+                serverRestrictions = TitanServerLauncherStore.read(this)
             )
 
         val newPolicy = resolution.policy
@@ -181,6 +243,7 @@ class TitanLauncherActivity : ComponentActivity() {
         }
 
         homeStatus = readHomeStatus()
+        deviceStatus = TitanDeviceStatus.read(this)
     }
 
     /**
@@ -197,6 +260,9 @@ class TitanLauncherActivity : ComponentActivity() {
 
         val result = mutableMapOf<String, String>()
         for (key in bundle.keySet()) {
+            // Restricciones heterogeneas (String/Boolean/Int): Bundle.get(key)
+            // no tiene reemplazo generico; solo se usa toString().
+            @Suppress("DEPRECATION")
             val value = bundle.get(key) ?: continue
             result[key] = value.toString()
         }
@@ -313,6 +379,37 @@ class TitanLauncherActivity : ComponentActivity() {
         } catch (_: Exception) {
             refresh()
         }
+    }
+
+    /**
+     * App autorizada pero no instalada: abre su ficha en la tienda del
+     * equipo (Play Store / tienda Honeywell). Sin tienda, avisa al operador.
+     */
+    private fun requestInstall(packageName: String) {
+        if (policy.applications.none { it.packageName == packageName }) return
+
+        val intents = listOf(
+            Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri()),
+            Intent(
+                Intent.ACTION_VIEW,
+                "https://play.google.com/store/apps/details?id=$packageName".toUri()
+            )
+        )
+
+        for (intent in intents) {
+            try {
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) {
+                // Siguiente alternativa.
+            }
+        }
+
+        Toast.makeText(
+            this,
+            "Solicite a TI la instalación de $packageName.",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun readHomeStatus(): TitanLauncherHomeStatus {

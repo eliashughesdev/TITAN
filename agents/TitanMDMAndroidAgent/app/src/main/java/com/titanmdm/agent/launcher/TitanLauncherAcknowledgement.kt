@@ -44,7 +44,8 @@ object TitanLauncherAcknowledgementStore {
         origin: TitanLauncherPolicyOrigin,
         resourceFailed: Boolean
     ): TitanLauncherAcknowledgement {
-        val official = origin == TitanLauncherPolicyOrigin.AndroidDevicePolicy &&
+        val official = (origin == TitanLauncherPolicyOrigin.AndroidDevicePolicy ||
+            origin == TitanLauncherPolicyOrigin.TitanServer) &&
             !policy.isLabProfile
         val status = when {
             !official -> "Absent"

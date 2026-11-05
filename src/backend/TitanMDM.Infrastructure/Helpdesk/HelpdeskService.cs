@@ -961,6 +961,12 @@ public sealed partial class HelpdeskService
         var previousStatus =
             ticket.Status;
 
+        // P1: no cerrar/resolver con trabajo tecnico en curso.
+        await EnsureTicketCanBeClosedAsync(
+            ticket,
+            status,
+            cancellationToken);
+
         ticket.Transition(
             status);
 

@@ -190,7 +190,68 @@ export interface RemoteSupportSignalRHandlers {
     error?: Error,
   ) => void
 
-  
+  onStreamProfileChanged?: (
+    profile: RemoteStreamProfile,
+  ) => void
+}
+
+/*
+ * ============================================================
+ * PERFIL DE STREAMING / TRANSFERENCIA DE ARCHIVOS
+ * ============================================================
+ */
+
+export type RemoteStreamPreset =
+  | 'auto'
+  | 'speed'
+  | 'balanced'
+  | 'quality'
+
+export interface RemoteStreamProfile {
+  sessionId?: string
+  preset: RemoteStreamPreset
+  /** 0 = automatico */
+  maxWidth: number
+  /** 0 = automatico */
+  maxFps: number
+}
+
+export interface RemoteFileTransferProgress {
+  fileName: string
+  sentBytes: number
+  totalBytes: number
+}
+
+export interface RemoteFileTransferResult {
+  fileName: string
+  savedAs: string
+  bytes: number
+}
+
+/* Por encima de este tamano se omite el SHA-256 del navegador (memoria). */
+const MAX_HASHED_FILE_BYTES =
+  64 * 1024 * 1024
+
+async function sha256Hex(
+  file: Blob,
+): Promise<string> {
+  if (
+    file.size > MAX_HASHED_FILE_BYTES ||
+    !globalThis.crypto?.subtle
+  ) {
+    return ''
+  }
+
+  const digest =
+    await crypto.subtle.digest(
+      'SHA-256',
+      await file.arrayBuffer(),
+    )
+
+  return Array.from(
+    new Uint8Array(digest),
+    byte => byte.toString(16).padStart(2, '0'),
+  ).join('')
 }
 
 /*
@@ -336,6 +397,19 @@ export class RemoteSupportSignalRClient {
      * SERVER EVENTS
      * ========================================================
      */
+
+    connection.on(
+      'RemoteStreamProfile',
+      (
+        profile:
+          RemoteStreamProfile,
+      ) => {
+        handlers
+          .onStreamProfileChanged?.(
+            profile,
+          )
+      },
+    )
 
     connection.on(
       'RemoteFrame',
@@ -697,6 +771,140 @@ export class RemoteSupportSignalRClient {
         virtualKey,
         keyDown,
       )
+  }
+
+  /*
+   * ==========================================================
+   * LATENCIA: RTT medido con el reloj del navegador
+   * ==========================================================
+   */
+
+  public async ping(): Promise<number> {
+    const started =
+      performance.now()
+
+    await this
+      .invoke<number>(
+        'Ping',
+        Date.now(),
+      )
+
+    return Math.round(
+      performance.now() - started,
+    )
+  }
+
+  /*
+   * ==========================================================
+   * PERFIL DE STREAMING
+   * ==========================================================
+   */
+
+  public async setStreamProfile(
+    sessionId: string,
+    profile: RemoteStreamProfile,
+  ): Promise<void> {
+    await this
+      .invoke(
+        'SetStreamProfile',
+        sessionId,
+        profile.preset,
+        profile.maxWidth,
+        profile.maxFps,
+      )
+  }
+
+  /*
+   * ==========================================================
+   * CTRL + ALT + SUPR (lo ejecuta el servicio SYSTEM del agente)
+   * ==========================================================
+   */
+
+  public async sendSecureAttention(
+    sessionId: string,
+  ): Promise<{ commandId: string; status: string }> {
+    return await this
+      .invoke<{ commandId: string; status: string }>(
+        'SendSecureAttention',
+        sessionId,
+      )
+  }
+
+  /*
+   * ==========================================================
+   * TRANSFERENCIA DE ARCHIVOS (tecnico -> equipo)
+   * ==========================================================
+   */
+
+  public async sendFile(
+    sessionId: string,
+    file: File,
+    onProgress?: (progress: RemoteFileTransferProgress) => void,
+    signal?: AbortSignal,
+  ): Promise<RemoteFileTransferResult> {
+    const ticket =
+      await this
+        .invoke<{ transferId: string; chunkSize: number; fileName: string }>(
+          'BeginFileTransfer',
+          sessionId,
+          file.name,
+          file.size,
+        )
+
+    const hashPromise =
+      sha256Hex(file)
+
+    let offset = 0
+
+    try {
+      while (offset < file.size) {
+        if (signal?.aborted) {
+          throw new DOMException('Transferencia cancelada.', 'AbortError')
+        }
+
+        const chunk =
+          new Uint8Array(
+            await file
+              .slice(offset, offset + ticket.chunkSize)
+              .arrayBuffer(),
+          )
+
+        // Cada bloque espera el acuse del equipo (contrapresion).
+        offset =
+          await this
+            .invoke<number>(
+              'SendFileChunk',
+              sessionId,
+              ticket.transferId,
+              offset,
+              chunk,
+            )
+
+        onProgress?.({
+          fileName: ticket.fileName,
+          sentBytes: offset,
+          totalBytes: file.size,
+        })
+      }
+
+      return await this
+        .invoke<RemoteFileTransferResult>(
+          'CompleteFileTransfer',
+          sessionId,
+          ticket.transferId,
+          await hashPromise,
+        )
+    } catch (error) {
+      await this
+        .invoke(
+          'CancelFileTransfer',
+          sessionId,
+          ticket.transferId,
+        )
+        .catch(() => undefined)
+
+      throw error
+    }
   }
 
   /*

@@ -114,6 +114,52 @@ export const Permissions = {
     view: 'settings.view',
     manage: 'settings.manage',
   },
+
+  /* ITAM: deben coincidir con PermissionCodes.Inventory y TitanMdmSeeder. */
+  inventory: {
+    workspace: 'workspace.inventory.view',
+    view: 'inventory.view',
+    manage: 'inventory.manage',
+    dashboard: 'inventory.dashboard.view',
+    reportsView: 'inventory.reports.view',
+    reportsExport: 'inventory.reports.export',
+    assetsView: 'inventory.assets.view',
+    assetsManage: 'inventory.assets.manage',
+    deliveries: 'inventory.deliveries.view',
+    returns: 'inventory.returns.view',
+    receptions: 'inventory.receptions.view',
+    employees: 'inventory.employees.view',
+    sessions: 'inventory.sessions.view',
+    counts: 'inventory.counts.view',
+    history: 'inventory.history.view',
+    catalogsView: 'inventory.catalogs.view',
+    catalogsManage: 'inventory.catalogs.manage',
+  },
 } as const
 
 export type PermissionCatalog = typeof Permissions
+
+/*
+ * Acceso al modulo de Inventario: SOLO permisos de inventario. Antes la
+ * ruta y la tarjeta aceptaban dashboard.view o workspace.*.view, por lo
+ * que cualquier usuario veia el modulo.
+ */
+export const INVENTORY_ACCESS_PERMISSIONS: readonly string[] = [
+  Permissions.inventory.workspace,
+  Permissions.inventory.view,
+  Permissions.inventory.manage,
+  Permissions.inventory.dashboard,
+  Permissions.inventory.reportsView,
+  Permissions.inventory.reportsExport,
+  Permissions.inventory.assetsView,
+  Permissions.inventory.assetsManage,
+  Permissions.inventory.deliveries,
+  Permissions.inventory.returns,
+  Permissions.inventory.receptions,
+  Permissions.inventory.employees,
+  Permissions.inventory.sessions,
+  Permissions.inventory.counts,
+  Permissions.inventory.history,
+  Permissions.inventory.catalogsView,
+  Permissions.inventory.catalogsManage,
+]

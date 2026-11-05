@@ -67,9 +67,11 @@ fun TitanLauncherScreen(
     appState: (String) -> TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
     onLaunch: (String) -> Unit,
+    onInstall: (String) -> Unit = {},
     wallpaper: ImageBitmap? = null,
     logo: ImageBitmap? = null,
-    syncStatus: String = "Sin sincronizar"
+    syncStatus: String = "Sin sincronizar",
+    deviceStatus: TitanDeviceStatus = TitanDeviceStatus()
 ) {
     val primaryColor = policyColor(policy.primaryColor, TitanGreen)
     val backgroundColor = policyColor(policy.backgroundColor, TitanDark)
@@ -95,7 +97,22 @@ fun TitanLauncherScreen(
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            CorporateHeader(policy, homeStatus, primaryColor, logo, syncStatus)
+            CorporateHeader(policy, homeStatus, primaryColor, logo, syncStatus, deviceStatus)
+
+            val missingRequired =
+                if (policy.state == TitanLauncherPolicyState.Valid) {
+                    policy.applications.count {
+                        it.required && appState(it.packageName) == TitanLauncherAppState.NotInstalled
+                    }
+                } else 0
+
+            if (missingRequired > 0) {
+                StatusBanner(
+                    text = "$missingRequired aplicación(es) obligatoria(s) sin instalar. " +
+                        "Toque la aplicación para instalarla o avise a TI.",
+                    color = TitanWarn
+                )
+            }
 
             if (policy.isLabProfile) {
                 StatusBanner(
@@ -120,6 +137,7 @@ fun TitanLauncherScreen(
                     appState = appState,
                     iconProvider = iconProvider,
                     onLaunch = onLaunch,
+                    onInstall = onInstall,
                     primaryColor = primaryColor
                 )
 
@@ -147,7 +165,8 @@ private fun CorporateHeader(
     homeStatus: TitanLauncherHomeStatus,
     primaryColor: Color,
     logo: ImageBitmap?,
-    syncStatus: String
+    syncStatus: String,
+    deviceStatus: TitanDeviceStatus
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -200,6 +219,22 @@ private fun CorporateHeader(
             }
 
             HorizontalDivider(color = TitanSurfaceSoft)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusChip(
+                    text = deviceStatus.batteryLabel,
+                    positive = !deviceStatus.batteryLow,
+                    positiveColor = primaryColor
+                )
+
+                StatusChip(
+                    text = deviceStatus.network,
+                    positive = deviceStatus.online,
+                    positiveColor = primaryColor
+                )
+            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -392,6 +427,7 @@ private fun ApplicationGrid(
     appState: (String) -> TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
     onLaunch: (String) -> Unit,
+    onInstall: (String) -> Unit,
     primaryColor: Color
 ) {
     Column(
@@ -430,6 +466,7 @@ private fun ApplicationGrid(
                     state = appState(app.packageName),
                     iconProvider = iconProvider,
                     onLaunch = onLaunch,
+                    onInstall = onInstall,
                     primaryColor = primaryColor
                 )
             }
@@ -443,6 +480,7 @@ private fun ApplicationTile(
     state: TitanLauncherAppState,
     iconProvider: (String) -> ImageBitmap?,
     onLaunch: (String) -> Unit,
+    onInstall: (String) -> Unit,
     primaryColor: Color
 ) {
     val icon by produceState<ImageBitmap?>(
@@ -459,9 +497,15 @@ private fun ApplicationTile(
             .fillMaxWidth()
             .heightIn(min = 132.dp)
             .clickable(
-                enabled = state == TitanLauncherAppState.Launchable,
-                onClickLabel = "Abrir ${app.label}"
-            ) { onLaunch(app.packageName) },
+                enabled = state == TitanLauncherAppState.Launchable ||
+                    state == TitanLauncherAppState.NotInstalled,
+                onClickLabel =
+                    if (state == TitanLauncherAppState.NotInstalled) "Instalar ${app.label}"
+                    else "Abrir ${app.label}"
+            ) {
+                if (state == TitanLauncherAppState.NotInstalled) onInstall(app.packageName)
+                else onLaunch(app.packageName)
+            },
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = TitanSurface)
     ) {
@@ -496,8 +540,8 @@ private fun ApplicationTile(
                     state == TitanLauncherAppState.Disabled -> "Deshabilitada"
                     state == TitanLauncherAppState.NotLaunchable -> "Sin inicio disponible"
                     state == TitanLauncherAppState.Unavailable -> "No disponible"
-                    app.required -> "Pendiente de instalación"
-                    else -> "No instalada"
+                    app.required -> "Obligatoria · tocar para instalar"
+                    else -> "No instalada · tocar para instalar"
                 },
                 color = when {
                     state == TitanLauncherAppState.Launchable -> primaryColor

@@ -1,8 +1,6 @@
 // frontend/src/pages/AdvancedReports.tsx
 import { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { FileSpreadsheet, FileText, Table as TableIcon, RefreshCw } from "lucide-react";
 import { authFetch } from "../lib/api";
 
@@ -264,8 +262,13 @@ export default function AdvancedReports() {
     XLSX.writeFile(workbook, `Reporte_Avanzado_${fechaDesde}_al_${fechaHasta}.xlsx`);
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     if (!groupedData.length) return;
+    // Carga diferida: jsPDF solo se descarga al exportar.
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF();
     doc.setFontSize(14);
     doc.text("Reporte avanzado de recargos", 14, 15);
@@ -408,7 +411,7 @@ export default function AdvancedReports() {
             <FileSpreadsheet className="w-4 h-4" /> Excel
           </button>
           <button
-            onClick={exportPDF}
+            onClick={() => void exportPDF()}
             disabled={!groupedData.length}
             className="flex items-center gap-2 px-3 py-2 bg-red-700 text-white rounded-lg text-sm disabled:opacity-50"
           >

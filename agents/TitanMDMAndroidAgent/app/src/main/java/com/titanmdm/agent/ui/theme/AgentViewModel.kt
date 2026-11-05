@@ -8,11 +8,14 @@ import com.titanmdm.agent.commands.CommandRepository
 import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.storage.AgentIdentity
 import com.titanmdm.agent.core.storage.AgentIdentityStore
+import com.titanmdm.agent.enrollment.EnrollmentPayloadParser
 import com.titanmdm.agent.enrollment.registration.RegistrationRepository
 import com.titanmdm.agent.enrollment.registration.RegistrationResult
 import com.titanmdm.agent.heartbeat.HeartbeatRepository
 import com.titanmdm.agent.heartbeat.HeartbeatResult
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
+import com.titanmdm.agent.kiosk.KioskController
+import com.titanmdm.agent.service.AgentForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +28,11 @@ data class AgentUiState(
     val enrolled: Boolean = false,
 
     val enrollmentToken: String = "",
+
+    /** Servidor leido del QR; null = el configurado en el agente. */
+    val enrollmentServer: String? = null,
+
+    val activeServer: String? = null,
 
     val identity: AgentIdentity? = null,
 
@@ -120,12 +128,63 @@ class AgentViewModel(
         value: String
     ) {
 
+        // Lector Honeywell en modo teclado: el QR completo llega al campo.
+        if (value.startsWith("${EnrollmentPayloadParser.SCHEME}://", ignoreCase = true) ||
+            value.trimStart().startsWith("{")
+        ) {
+            if (applyScannedPayload(value, autoRegister = false)) return
+        }
+
         _uiState.value =
             _uiState.value.copy(
                 enrollmentToken = value,
                 error = null,
                 message = null
             )
+    }
+
+    /**
+     * QR leido por camara o por el lector Honeywell.
+     * @param autoRegister true solo para la camara del propio agente; las
+     * lecturas que llegan por broadcast exigen tocar "Inscribir".
+     */
+    fun applyScannedPayload(
+        raw: String,
+        autoRegister: Boolean
+    ): Boolean {
+
+        val payload = EnrollmentPayloadParser.parse(raw)
+
+        if (payload == null) {
+            _uiState.value =
+                _uiState.value.copy(
+                    error = "El código leído no es un QR de inscripción TitanMDM.",
+                    message = null
+                )
+            return false
+        }
+
+        val server = payload.serverUrl?.let { url ->
+            AgentConfig.validateServerUrl(url).getOrElse {
+                _uiState.value =
+                    _uiState.value.copy(
+                        error = it.message,
+                        message = null
+                    )
+                return false
+            }
+        }
+
+        _uiState.value =
+            _uiState.value.copy(
+                enrollmentToken = payload.token,
+                enrollmentServer = server,
+                error = null,
+                message = server?.let { "QR leído. Servidor: $it" } ?: "Token leído."
+            )
+
+        if (autoRegister) register()
+        return true
     }
 
     /*
@@ -151,6 +210,10 @@ class AgentViewModel(
 
                 val identity =
                     identityStore.get()
+
+                if (identity != null) {
+                    AgentForegroundService.start(appContext)
+                }
 
                 _uiState.value =
                     _uiState.value.copy(
@@ -185,7 +248,10 @@ class AgentViewModel(
                             inventory.batteryLevel,
 
                         ipAddress =
-                            inventory.ipAddress
+                            inventory.ipAddress,
+
+                        activeServer =
+                            runCatching { AgentConfig.normalizedBaseUrl() }.getOrNull()
                     )
 
             } catch (exception: Exception) {
@@ -242,7 +308,10 @@ class AgentViewModel(
             when (
                 val result =
                     registrationRepository
-                        .register(token)
+                        .register(
+                            token,
+                            _uiState.value.enrollmentServer
+                        )
             ) {
 
                 is RegistrationResult.Success -> {
@@ -255,6 +324,11 @@ class AgentViewModel(
 
                             enrollmentToken = "",
 
+                            enrollmentServer = null,
+
+                            activeServer =
+                                runCatching { AgentConfig.normalizedBaseUrl() }.getOrNull(),
+
                             identity =
                                 result.identity,
 
@@ -266,6 +340,14 @@ class AgentViewModel(
 
                             error = null
                         )
+
+                    // Con Device Owner: HOME fijo, barra bloqueada y
+                    // permisos de ubicación concedidos al inscribirse.
+                    runCatching {
+                        KioskController.apply(appContext)
+                    }
+
+                    AgentForegroundService.start(appContext)
 
                     synchronize()
                 }

@@ -30,6 +30,10 @@
   --titan-workspace-soft: #f2efff;
 }
 
+.titan-enterprise-layout[data-titan-workspace="inventory"] {
+  --titan-workspace-accent: #0ea5e9;
+}
+
 .titan-enterprise-layout[data-titan-workspace="administration"] {
   --titan-workspace-accent: #64748b;
   --titan-workspace-soft: #f1f5f9;

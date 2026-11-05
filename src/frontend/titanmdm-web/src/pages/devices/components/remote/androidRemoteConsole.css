@@ -320,6 +320,16 @@
   color: var(--arc-warning);
 }
 
+.arc-badge--unauthorized {
+  background: #f1f2f4;
+  color: #5f6672;
+}
+
+.arc-badge--executing {
+  background: #eaf1fb;
+  color: #2b5cab;
+}
+
 .arc-command-legend {
   display: flex;
   flex-wrap: wrap;
@@ -436,7 +446,8 @@
   color: #2b5cab;
 }
 
-.arc-state--accepted {
+.arc-state--accepted,
+.arc-state--completed {
   background: var(--arc-green-soft);
   color: var(--arc-green-deep);
 }

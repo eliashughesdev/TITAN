@@ -38,6 +38,10 @@ export interface LauncherDraft {
   packageName: string
   activityName: string
   requiredForSetup: boolean
+  /** Bloqueos del equipo: los aplica TitanMDM Agent como Device Owner. */
+  persistentHome: boolean
+  lockStatusBar: boolean
+  lockSystemKeys: boolean
   schemaVersion: 1 | 2
   applications: LauncherApplication[]
 }
@@ -68,6 +72,9 @@ export const createLauncherDraft = (): LauncherDraft => ({
   packageName: 'com.titanmdm.agent',
   activityName: 'com.titanmdm.agent.launcher.TitanLauncherActivity',
   requiredForSetup: true,
+  persistentHome: true,
+  lockStatusBar: true,
+  lockSystemKeys: false,
   schemaVersion: 2,
   applications: [],
 })
@@ -221,6 +228,9 @@ export function buildLauncherConfiguration(draft: LauncherDraft) {
           : undefined,
         updatedAt: (draft.updatedAt || '').trim(),
         requiredForSetup: draft.requiredForSetup,
+        persistentHome: draft.persistentHome,
+        lockStatusBar: draft.lockStatusBar,
+        lockSystemKeys: draft.lockSystemKeys,
         schemaVersion: 2,
       },
     },
@@ -293,6 +303,10 @@ export function parseLauncherConfiguration(
       requiredForSetup: typeof launcher.requiredForSetup === 'boolean'
         ? launcher.requiredForSetup
         : defaults.requiredForSetup,
+      // Perfiles guardados antes de estos campos: HOME fijo, sin bloqueos.
+      persistentHome: typeof launcher.persistentHome === 'boolean' ? launcher.persistentHome : true,
+      lockStatusBar: launcher.lockStatusBar === true,
+      lockSystemKeys: launcher.lockSystemKeys === true,
       schemaVersion: launcher.schemaVersion === 1 ? 1 : 2,
       applications: packages.flatMap((value) => {
         const application = asObject(value)

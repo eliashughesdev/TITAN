@@ -76,10 +76,16 @@ class LocationCommandHandler(
                 }
             }
 
+        // Sin última posición: fix actual con LocationManager (sin Google).
         val location =
             locations.maxByOrNull {
                 it.time
             }
+                ?: com.titanmdm.agent.location.NativeLocationProvider
+                    .current(
+                        appContext,
+                        CURRENT_FIX_TIMEOUT_MS
+                    )
 
         if (location == null) {
             return CommandExecutionResult.Failure(
@@ -132,6 +138,10 @@ class LocationCommandHandler(
                     payload
                 )
         )
+    }
+
+    private companion object {
+        const val CURRENT_FIX_TIMEOUT_MS = 20_000L
     }
 
     @Serializable

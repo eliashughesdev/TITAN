@@ -492,6 +492,20 @@ public sealed class DeviceCommandAgentService
 
                     break;
                 }
+
+            // =====================================================
+            // POLÍTICA / TITAN LAUNCHER (TITANMDM AGENT KOTLIN)
+            // =====================================================
+
+            case "APPLY_LAUNCHER_POLICY":
+                {
+                    await UpdatePolicyAssignmentAsync(
+                        command,
+                        errorMessage: null,
+                        cancellationToken);
+
+                    break;
+                }
         }
 
         command
@@ -550,6 +564,17 @@ public sealed class DeviceCommandAgentService
                 $"El comando ya terminó con estado {command.Status}.");
         }
 
+        if (string.Equals(
+                command.CommandType.Trim(),
+                "APPLY_LAUNCHER_POLICY",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            await UpdatePolicyAssignmentAsync(
+                command,
+                $"{errorCode}: {errorMessage}",
+                cancellationToken);
+        }
+
         command
             .CompleteFailure(
                 errorCode,
@@ -561,6 +586,47 @@ public sealed class DeviceCommandAgentService
                 cancellationToken);
 
         await NotifyUpdatedAsync(command, cancellationToken);
+    }
+
+    /// <summary>
+    /// Refleja en DevicePolicyAssignments el resultado que el agente
+    /// informa para la política entregada por la cola de comandos.
+    /// </summary>
+    private async Task UpdatePolicyAssignmentAsync(
+        DeviceCommand command,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var assignment =
+            await _dbContext
+                .DevicePolicyAssignments
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            command.OrganizationId &&
+                        x.DeviceId ==
+                            command.DeviceId &&
+                        x.CommandId ==
+                            command.Id,
+                    cancellationToken);
+
+        if (assignment is null)
+        {
+            // Reasignado después: el comando ya no es el vigente.
+            return;
+        }
+
+        if (errorMessage is null)
+        {
+            assignment.MarkApplied();
+        }
+        else
+        {
+            assignment.MarkFailed(
+                errorMessage.Length > 1000
+                    ? errorMessage[..1000]
+                    : errorMessage);
+        }
     }
 
     // ============================================================

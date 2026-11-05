@@ -103,6 +103,18 @@ export function AndroidCommandPanel({
                     canExecute,
                     busyAction !== null,
                   )
+                  const isExecuting =
+                    busyAction === definition.action
+                  const badgeClass = !canExecute
+                    ? 'unauthorized'
+                    : isExecuting
+                      ? 'executing'
+                      : view.status.toLowerCase()
+                  const badgeLabel = !canExecute
+                    ? 'No autorizado'
+                    : isExecuting
+                      ? 'En ejecución'
+                      : capabilityStatusLabels[view.status]
                   const Icon = definition.icon
 
                   return (
@@ -126,9 +138,9 @@ export function AndroidCommandPanel({
                       </span>
 
                       <span
-                        className={`arc-badge arc-badge--${view.status.toLowerCase()}`}
+                        className={`arc-badge arc-badge--${badgeClass}`}
                       >
-                        {capabilityStatusLabels[view.status]}
+                        {badgeLabel}
                       </span>
                     </button>
                   )
@@ -148,6 +160,9 @@ export function AndroidCommandPanel({
         </span>
         <span className="arc-legend-item">
           <AlertTriangle size={13} /> No compatible
+        </span>
+        <span className="arc-legend-item">
+          <ShieldAlert size={13} /> No autorizado
         </span>
       </div>
 

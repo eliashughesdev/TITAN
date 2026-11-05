@@ -14,7 +14,7 @@ using TitanMDM.Infrastructure.Persistence;
 namespace TitanMDM.Api.Hubs;
 
 [AllowAnonymous]
-public sealed class RemoteSupportHub
+public sealed partial class RemoteSupportHub
     : Hub
 {
     public const string Route =
@@ -42,14 +42,21 @@ public sealed class RemoteSupportHub
         RemoteSupportHub>
         _logger;
 
+    private readonly TitanMDM.Application.Commands.IDeviceCommandService
+        _deviceCommands;
+
     public RemoteSupportHub(
         TitanMdmDbContext dbContext,
         RemoteHostTokenService tokenService,
         RemoteSupportConnectionRegistry connections,
         RemoteControlLeaseService controlLeases,
         IScopeAccessService scopeAccessService,
-        ILogger<RemoteSupportHub> logger)
+        ILogger<RemoteSupportHub> logger,
+        TitanMDM.Application.Commands.IDeviceCommandService deviceCommands)
     {
+        _deviceCommands =
+            deviceCommands;
+
         _dbContext =
             dbContext;
 

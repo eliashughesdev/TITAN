@@ -15,4 +15,6 @@ public sealed record AdministrativeAuditEntry(
     string? TargetId,
     string Result,
     string CorrelationId,
-    string? IpAddress);
+    string? IpAddress,
+    string? BeforeJson = null,
+    string? AfterJson = null);

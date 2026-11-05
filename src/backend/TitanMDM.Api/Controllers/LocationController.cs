@@ -244,21 +244,31 @@ public sealed class LocationController
             userId is null)
             return Unauthorized();
 
-        var result =
-            await _locations.CreateGeofenceAsync(
+        try
+        {
+            var result =
+                await _locations.CreateGeofenceAsync(
+                    organizationId.Value,
+                    request,
+                    cancellationToken);
+
+            await WriteAuditAsync(
                 organizationId.Value,
-                request,
+                userId.Value,
+                "Location.Geofence.Create",
+                result.Id.ToString(),
+                "Success",
                 cancellationToken);
 
-        await WriteAuditAsync(
-            organizationId.Value,
-            userId.Value,
-            "Location.Geofence.Create",
-            result.Id.ToString(),
-            "Success",
-            cancellationToken);
-
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
     }
 
     [HttpPost("geofences/{geofenceId:guid}/devices")]
@@ -276,21 +286,31 @@ public sealed class LocationController
             userId is null)
             return Unauthorized();
 
-        await _locations.AssignDevicesAsync(
-            organizationId.Value,
-            geofenceId,
-            request.DeviceIds,
-            cancellationToken);
+        try
+        {
+            await _locations.AssignDevicesAsync(
+                organizationId.Value,
+                geofenceId,
+                request.DeviceIds,
+                cancellationToken);
 
-        await WriteAuditAsync(
-            organizationId.Value,
-            userId.Value,
-            "Location.Geofence.Assign",
-            geofenceId.ToString(),
-            "Success",
-            cancellationToken);
+            await WriteAuditAsync(
+                organizationId.Value,
+                userId.Value,
+                "Location.Geofence.Assign",
+                geofenceId.ToString(),
+                "Success",
+                cancellationToken);
 
-        return NoContent();
+            return NoContent();
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
     }
 
     [HttpDelete("geofences/{geofenceId:guid}")]

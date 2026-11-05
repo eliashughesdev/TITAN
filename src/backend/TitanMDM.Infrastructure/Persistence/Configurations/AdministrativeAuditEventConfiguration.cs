@@ -54,6 +54,16 @@ public sealed class AdministrativeAuditEventConfiguration
                     x.IpAddress)
             .HasMaxLength(64);
 
+        builder.Property(
+                x =>
+                    x.BeforeJson)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(
+                x =>
+                    x.AfterJson)
+            .HasColumnType("nvarchar(max)");
+
         builder.HasIndex(
             x =>
                 new

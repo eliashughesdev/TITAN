@@ -35,6 +35,7 @@ import type {
 
 import type {
   AndroidDeviceDetails,
+  DeviceDetails,
 } from '../../../../types/device'
 
 import {
@@ -63,6 +64,7 @@ vi.mock('../../../../api/androidEnterpriseApi', () => ({
 vi.mock('../../../../api/devicesApi', () => ({
   devicesApi: {
     getAndroidDeviceDetails: vi.fn(),
+    getDeviceById: vi.fn(),
   },
 }))
 
@@ -109,6 +111,35 @@ const details = {
   lastPolicySyncTimeUtc: '2026-10-14T10:00:00Z',
 } as unknown as AndroidDeviceDetails
 
+const device: DeviceDetails = {
+  id: 'device-1',
+  organizationId: 'organization-1',
+  deviceName: 'Pixel 8',
+  platform: 'Android',
+  status: 'Online',
+  complianceStatus: 'Compliant',
+  serialNumber: 'SERIAL-1',
+  imei: null,
+  manufacturer: 'Google',
+  model: 'Pixel 8',
+  operatingSystem: 'Android',
+  operatingSystemVersion: '14',
+  agentVersion: null,
+  ipAddress: '10.0.0.8',
+  macAddress: null,
+  assignedUser: null,
+  department: null,
+  batteryLevel: 72,
+  isManaged: true,
+  enrolledAtUtc: '2026-10-01T10:00:00Z',
+  lastSeenAtUtc: '2026-10-14T10:00:00Z',
+  interactiveUser: null,
+  interactiveSessionId: null,
+  interactiveUserUpdatedAtUtc: null,
+  createdAtUtc: '2026-10-01T10:00:00Z',
+  updatedAtUtc: '2026-10-14T10:00:00Z',
+}
+
 function renderConsole(ui: ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
@@ -124,6 +155,9 @@ describe('AndroidRemoteConsole', () => {
 
     vi.mocked(devicesApi.getAndroidDeviceDetails)
       .mockResolvedValue(details)
+
+    vi.mocked(devicesApi.getDeviceById)
+      .mockResolvedValue(device)
 
     vi.mocked(androidEnterpriseApi.getAudit)
       .mockResolvedValue({
@@ -144,9 +178,11 @@ describe('AndroidRemoteConsole', () => {
       await screen.findByRole('heading', { name: 'Pixel 8' }),
     ).toBeInTheDocument()
 
-    expect(
-      screen.getByRole('button', { name: /Bloquear pantalla/ }),
-    ).toBeEnabled()
+    const lockButton = screen.getByRole('button', {
+      name: /Bloquear pantalla/,
+    })
+
+    await waitFor(() => expect(lockButton).toBeEnabled())
 
     expect(
       screen.getByRole('button', {
@@ -177,11 +213,12 @@ describe('AndroidRemoteConsole', () => {
       <AndroidRemoteConsole deviceId="device-1" deviceName="Pixel 8" />,
     )
 
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: /Bloquear pantalla/,
-      }),
-    )
+    const lockButton = await screen.findByRole('button', {
+      name: /Bloquear pantalla/,
+    })
+
+    await waitFor(() => expect(lockButton).toBeEnabled())
+    fireEvent.click(lockButton)
 
     await waitFor(() =>
       expect(
@@ -190,8 +227,37 @@ describe('AndroidRemoteConsole', () => {
     )
 
     expect(
-      await screen.findByText('Aceptado por Google'),
+      await screen.findByText('Solicitado · verificación pendiente'),
     ).toBeInTheDocument()
+  })
+
+  it('records a failed command when the API rejects the request', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    vi.mocked(
+      androidEnterpriseApi.executeDeviceAction,
+    ).mockRejectedValue(
+      new Error('Google rechazó la operación.'),
+    )
+
+    renderConsole(
+      <AndroidRemoteConsole deviceId="device-1" deviceName="Pixel 8" />,
+    )
+
+    const lockButton = await screen.findByRole('button', {
+      name: /Bloquear pantalla/,
+    })
+
+    await waitFor(() => expect(lockButton).toBeEnabled())
+    fireEvent.click(lockButton)
+
+    expect(
+      await screen.findByText('Fallido'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.getByRole('alert'),
+    ).toHaveTextContent('Google rechazó la operación.')
   })
 
   it('blocks destructive commands when confirmation does not match', async () => {
@@ -201,16 +267,36 @@ describe('AndroidRemoteConsole', () => {
       <AndroidRemoteConsole deviceId="device-1" deviceName="Pixel 8" />,
     )
 
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: /Borrar dispositivo/,
-      }),
-    )
+    const wipeButton = await screen.findByRole('button', {
+      name: /Borrar dispositivo/,
+    })
+
+    await waitFor(() => expect(wipeButton).toBeEnabled())
+    fireEvent.click(wipeButton)
 
     expect(
       await screen.findByText(/Confirmación reforzada cancelada/),
     ).toBeInTheDocument()
 
+    expect(
+      androidEnterpriseApi.executeDeviceAction,
+    ).not.toHaveBeenCalled()
+  })
+
+  it('keeps critical commands disabled without action permission', async () => {
+    auth.allowed = false
+
+    renderConsole(
+      <AndroidRemoteConsole deviceId="device-1" deviceName="Pixel 8" />,
+    )
+
+    expect(
+      await screen.findByRole('button', { name: /Bloquear pantalla/ }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /Borrar dispositivo/ }),
+    ).toBeDisabled()
+    expect(screen.getAllByText('No autorizado').length).toBeGreaterThan(0)
     expect(
       androidEnterpriseApi.executeDeviceAction,
     ).not.toHaveBeenCalled()

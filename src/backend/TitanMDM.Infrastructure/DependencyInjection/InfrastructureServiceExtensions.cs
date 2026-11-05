@@ -135,6 +135,68 @@ public static class InfrastructureServiceExtensions
                     });
 
         // ============================================================
+        // ITAM DATABASE (inventory module)
+        // ============================================================
+
+        var itamConnectionString =
+            configuration
+                .GetConnectionString(
+                    "ItamDatabase");
+
+        if (
+            string.IsNullOrWhiteSpace(
+                itamConnectionString))
+        {
+            var itamBuilder =
+                new Microsoft.Data.SqlClient
+                    .SqlConnectionStringBuilder(
+                        connectionString)
+                {
+                    InitialCatalog = "cisa_ti_itam"
+                };
+
+            itamConnectionString =
+                itamBuilder.ConnectionString;
+        }
+
+        services
+            .AddDbContext<
+                ItamDbContext>(
+                    options =>
+                    {
+                        options.UseSqlServer(
+                            itamConnectionString,
+                            sqlOptions =>
+                            {
+                                sqlOptions
+                                    .CommandTimeout(
+                                        Math.Max(
+                                            30,
+                                            databaseOptions
+                                                .CommandTimeoutSeconds));
+
+                                sqlOptions
+                                    .EnableRetryOnFailure(
+                                        maxRetryCount:
+                                            Math.Max(
+                                                0,
+                                                databaseOptions
+                                                    .MaxRetryCount),
+
+                                        maxRetryDelay:
+                                            TimeSpan
+                                                .FromSeconds(
+                                                    Math.Max(
+                                                        1,
+                                                        databaseOptions
+                                                            .MaxRetryDelaySeconds)),
+
+                                        errorNumbersToAdd:
+                                            null);
+                            });
+                    });
+
+        // ============================================================
         // JWT
         // ============================================================
 
@@ -421,6 +483,24 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             ISecurityPostureService,
             SecurityPostureService>();
+
+        // P1: Motor de Remediacion Activa Windows.
+        services
+            .AddOptions<
+                WindowsRemediationOptions>()
+            .Bind(
+                configuration.GetSection(
+                    WindowsRemediationOptions
+                        .SectionName));
+
+        services.AddScoped<
+            IWindowsRemediationEngine,
+            WindowsRemediationEngine>();
+
+        // Fase 3: centro de notificaciones unificado.
+        services.AddScoped<
+            TitanMDM.Application.Notifications.INotificationFeedService,
+            TitanMDM.Infrastructure.Notifications.NotificationFeedService>();
 
         // ============================================================
         // DEVICE GROUPS

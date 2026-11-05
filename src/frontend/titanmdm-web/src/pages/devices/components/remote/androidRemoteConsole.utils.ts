@@ -110,7 +110,8 @@ const actionLabels: Record<string, string> = {
 export const commandStateLabels: Record<AndroidCommandState, string> = {
   pending: 'Pendiente',
   executing: 'Ejecutando',
-  accepted: 'Aceptado por Google',
+  accepted: 'Solicitado · verificación pendiente',
+  completed: 'Completada',
   failed: 'Fallido',
   expired: 'Expirada',
 }
@@ -119,9 +120,9 @@ export const capabilityStatusLabels: Record<
   AndroidCapabilityStatus,
   string
 > = {
-  Available: 'Compatible',
+  Available: 'Disponible',
   NotSupported: 'No compatible',
-  PendingValidation: 'Pendiente de validación',
+  PendingValidation: 'Pendiente de validación física',
 }
 
 export function actionLabel(action: string): string {
@@ -200,6 +201,10 @@ export function auditResultToCommandState(
 
   if (normalized === 'failure' || normalized === 'denied') {
     return 'failed'
+  }
+
+  if (normalized === 'completed' || normalized === 'executed') {
+    return 'completed'
   }
 
   return 'accepted'

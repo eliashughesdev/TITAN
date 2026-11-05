@@ -18,6 +18,7 @@ import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.location.LocationCaptureDecision
 import com.titanmdm.agent.location.LocationCapturePayload
 import com.titanmdm.agent.location.LocationCapturePolicy
+import com.titanmdm.agent.location.NativeLocationProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
@@ -61,6 +62,12 @@ class LocationReportingWorker(
             val identity =
                 identityStore.get()
                     ?: return Result.success()
+
+            // P1: mantener geocercas del SO al dia (independiente del muestreo).
+            GeofenceSyncWorker.syncGeofences(
+                applicationContext,
+                force = false
+            )
 
             val policyResponse =
                 TitanApiClient.service
@@ -174,8 +181,9 @@ class LocationReportingWorker(
                             payloadJson
                         )
 
-                    if (uploaded is
-                        Result.Success
+                    // Result.Success es API restringida de WorkManager.
+                    if (uploaded ==
+                        Result.success()
                     ) {
                         writeLastReportAtEpochMillis(
                             System.currentTimeMillis()
@@ -219,14 +227,24 @@ class LocationReportingWorker(
                         applicationContext
                     )
 
+            val fused =
+                runCatching {
+                    withTimeoutOrNull(
+                        LOCATION_FIX_TIMEOUT_MS
+                    ) {
+                        awaitCurrentLocation(
+                            fusedLocationClient
+                        )
+                    }
+                }.getOrNull()
+
+            // Sin Play Services (o sin fix): LocationManager nativo.
             val location =
-                withTimeoutOrNull(
-                    LOCATION_FIX_TIMEOUT_MS
-                ) {
-                    awaitCurrentLocation(
-                        fusedLocationClient
+                fused
+                    ?: NativeLocationProvider.current(
+                        applicationContext,
+                        LOCATION_FIX_TIMEOUT_MS
                     )
-                }
 
             location?.let {
                 LocationCapturePayload(

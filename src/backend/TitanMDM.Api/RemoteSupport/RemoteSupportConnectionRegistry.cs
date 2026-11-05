@@ -215,6 +215,29 @@ public sealed class RemoteSupportConnectionRegistry
         return state;
     }
 
+    /*
+     * Conexion concreta del RemoteHost de una sesion. Necesaria para
+     * Clients.Client(id).InvokeAsync<T> (acuse por bloque en la
+     * transferencia de archivos); los grupos no admiten resultados.
+     */
+    public bool TryGetRemoteHostConnectionId(
+        Guid organizationId,
+        Guid sessionId,
+        out string connectionId)
+    {
+        var host =
+            _connections.Values
+                .Where(x =>
+                    x.Kind == RemoteConnectionKind.RemoteHost &&
+                    x.OrganizationId == organizationId &&
+                    x.RemoteSessionId == sessionId)
+                .OrderByDescending(x => x.ConnectedAtUtc)
+                .FirstOrDefault();
+
+        connectionId = host?.ConnectionId ?? string.Empty;
+        return host is not null;
+    }
+
     public bool HasRemoteHost(
         Guid sessionId)
     {

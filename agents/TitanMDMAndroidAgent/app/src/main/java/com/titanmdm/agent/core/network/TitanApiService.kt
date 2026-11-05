@@ -142,4 +142,14 @@ interface TitanApiService {
         @Header("X-Titan-Device-Secret")
         deviceSecret: String
     ): Response<LocationReportingPolicyResponse>
+
+
+    @GET("api/device/commands/location/geofences")
+    suspend fun getDeviceGeofences(
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String
+    ): Response<List<DeviceGeofenceResponse>>
 }

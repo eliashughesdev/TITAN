@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Políticas del administrador de dispositivo de TitanMDM Agent.
+    force-lock: comando LOCK_DEVICE (geocercas / consola).
+    Con Device Owner (dpm set-device-owner) además se habilitan
+    el bloqueo de la barra de estado y el HOME persistente.
+-->
+<device-admin>
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

@@ -44,7 +44,8 @@ object TitanLauncherResourceUrl {
         if (host.isEmpty() || host.all { it.isDigit() } || !isPublicHost(host)) return null
 
         val path = try {
-            java.net.URLDecoder.decode(uri.rawPath ?: uri.path.orEmpty(), Charsets.UTF_8)
+            // Sobrecarga (String, String): la de Charset requiere API 33 (CK65 usa Android 8-11).
+            java.net.URLDecoder.decode(uri.rawPath ?: uri.path.orEmpty(), "UTF-8")
         } catch (_: Exception) {
             return null
         }

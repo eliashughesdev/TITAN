@@ -34,7 +34,8 @@ function isValidWorkspace(value: string | null): value is TitanModuleId {
     value === 'android' ||
     value === 'helpdesk' ||
     value === 'administration' ||
-    value === 'ponches'
+    value === 'ponches' ||
+    value === 'inventory'
   )
 }
 
@@ -72,6 +73,10 @@ function resolveWorkspace(
   // La ruta del módulo prevalece sobre cualquier selección anterior.
   if (pathname === '/ponches' || pathname.startsWith('/ponches/')) {
     return 'ponches'
+  }
+
+  if (pathname === '/inventory' || pathname.startsWith('/inventory/')) {
+    return 'inventory'
   }
 
   if (

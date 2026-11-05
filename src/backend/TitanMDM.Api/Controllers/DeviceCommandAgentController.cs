@@ -236,6 +236,34 @@ public sealed class DeviceCommandAgentController
         }
     }
 
+    /*
+     * P1 Geofencing proactivo: el agente descarga sus
+     * geocercas, las registra en el SO y reporta
+     * transiciones al instante (source
+     * AndroidAgent-GeofenceTransition).
+     */
+    [HttpGet("location/geofences")]
+    public async Task<IActionResult> GetDeviceGeofences(
+        CancellationToken cancellationToken)
+    {
+        var authentication =
+            await AuthenticateDeviceAsync(
+                cancellationToken);
+
+        if (!authentication.Success)
+        {
+            return authentication.Error!;
+        }
+
+        var geofences =
+            await _locationService
+                .GetDeviceGeofencesAsync(
+                    authentication.DeviceId,
+                    cancellationToken);
+
+        return Ok(geofences);
+    }
+
     [HttpGet("location/policy")]
     public async Task<IActionResult> GetLocationPolicy(
         CancellationToken cancellationToken)

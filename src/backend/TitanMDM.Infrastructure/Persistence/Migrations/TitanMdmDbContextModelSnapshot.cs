@@ -400,6 +400,12 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ActorUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CorrelationId")
                         .IsRequired()
                         .HasMaxLength(100)

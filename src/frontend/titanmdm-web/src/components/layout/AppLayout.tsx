@@ -1,9 +1,11 @@
 
 import {
+  Suspense,
   useEffect,
   useState,
 } from 'react'
 
+import { RouteFallback } from './RouteFallback'
 import {
   AnimatePresence,
   motion,
@@ -49,6 +51,7 @@ type WorkspaceName =
   | 'android'
   | 'helpdesk'
   | 'ponches'
+  | 'inventory'
   | 'administration'
 
 interface MobileMenuState {
@@ -62,6 +65,10 @@ function resolveWorkspace(
 ): WorkspaceName {
   if (pathname.startsWith('/ponches')) {
     return 'ponches'
+  }
+
+  if (pathname.startsWith('/inventory')) {
+    return 'inventory'
   }
 
   if (
@@ -369,7 +376,9 @@ export function AppLayout() {
                   ease: 'easeOut',
                 }}
               >
-                <Outlet />
+                <Suspense fallback={<RouteFallback />}>
+                  <Outlet />
+                </Suspense>
               </motion.div>
             </main>
           </div>

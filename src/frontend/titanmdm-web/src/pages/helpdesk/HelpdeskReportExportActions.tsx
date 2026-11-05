@@ -1,8 +1,6 @@
 
 import { useState } from 'react'
 import { Download, FileSpreadsheet, FileText } from 'lucide-react'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import type ExcelJS from 'exceljs'
 
 type Count = {
@@ -749,6 +747,12 @@ async function exportPdf(
   from: string,
   to: string,
 ) {
+  // Carga diferida: jsPDF solo se descarga al exportar.
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+
   const pdf = new jsPDF({
     unit: 'mm',
     format: 'a4',

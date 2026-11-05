@@ -4,17 +4,30 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 
 import { authApi } from '../api/authApi'
+import {
+  AUTH_EVENTS,
+  decodeJwtClaims,
+  sameSet,
+} from './jwtClaims'
 import { tokenStorage } from './tokenStorage'
 
 import type {
   AuthenticatedUser,
   LoginRequest,
+  LoginResponse,
 } from '../types/auth'
+
+/* Resincronizacion periodica de permisos (5 min). */
+const PERMISSION_SYNC_INTERVAL_MS = 5 * 60 * 1000
+
+/* Evita rafagas de /me ante varios 403 o eventos de foco. */
+const PERMISSION_SYNC_THROTTLE_MS = 15 * 1000
 
 interface AuthContextValue {
   user: AuthenticatedUser | null
@@ -100,17 +113,170 @@ export function AuthProvider({
     }
 
     window.addEventListener(
-      'titanmdm:session-expired',
+      AUTH_EVENTS.sessionExpired,
       handleSessionExpired,
     )
 
     return () => {
       window.removeEventListener(
-        'titanmdm:session-expired',
+        AUTH_EVENTS.sessionExpired,
         handleSessionExpired,
       )
     }
   }, [clearSession])
+
+  /*
+   * P1 RBAC - Sincronizacion de UI con permisos.
+   *
+   * Los menus, rutas y botones dependen de user.permissions.
+   * Se mantienen alineados con el backend cuando:
+   *   - se renueva el access token (claims nuevos);
+   *   - el API responde 403 (rol revocado);
+   *   - la pestana recupera el foco;
+   *   - cada PERMISSION_SYNC_INTERVAL_MS.
+   */
+  const applyAuthorization =
+    useCallback(
+      (
+        permissions: readonly string[],
+        roles: readonly string[],
+      ) => {
+        setUser((current) => {
+          if (
+            !current ||
+            (sameSet(current.permissions, permissions) &&
+              sameSet(current.roles, roles))
+          ) {
+            return current
+          }
+
+          return {
+            ...current,
+            permissions: [...permissions],
+            roles: [...roles],
+          }
+        })
+      },
+      [],
+    )
+
+  const lastSyncRef = useRef(0)
+  const syncingRef = useRef(false)
+
+  const syncPermissions =
+    useCallback(
+      async (force = false) => {
+        if (!tokenStorage.getAccessToken()) {
+          return
+        }
+
+        const now = Date.now()
+
+        if (
+          syncingRef.current ||
+          (!force &&
+            now - lastSyncRef.current <
+              PERMISSION_SYNC_THROTTLE_MS)
+        ) {
+          return
+        }
+
+        syncingRef.current = true
+        lastSyncRef.current = now
+
+        try {
+          const current = await authApi.me()
+          applyAuthorization(
+            current.permissions,
+            current.roles,
+          )
+        } catch {
+          // 401 lo resuelve apiClient (refresh o sesion expirada).
+        } finally {
+          syncingRef.current = false
+        }
+      },
+      [applyAuthorization],
+    )
+
+  const hasSession = user !== null
+
+  useEffect(() => {
+    if (!hasSession) {
+      return
+    }
+
+    const handleTokenRefreshed = (event: Event) => {
+      const detail =
+        (event as CustomEvent<LoginResponse | undefined>)
+          .detail
+
+      if (detail?.user) {
+        applyAuthorization(
+          detail.user.permissions,
+          detail.user.roles,
+        )
+        return
+      }
+
+      const claims = decodeJwtClaims(
+        tokenStorage.getAccessToken(),
+      )
+
+      if (claims) {
+        applyAuthorization(
+          claims.permissions,
+          claims.roles,
+        )
+      }
+    }
+
+    const handleStale = () => {
+      void syncPermissions()
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void syncPermissions()
+      }
+    }
+
+    window.addEventListener(
+      AUTH_EVENTS.tokenRefreshed,
+      handleTokenRefreshed,
+    )
+    window.addEventListener(
+      AUTH_EVENTS.permissionsStale,
+      handleStale,
+    )
+    window.addEventListener('focus', handleStale)
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibility,
+    )
+
+    const interval = window.setInterval(
+      () => void syncPermissions(true),
+      PERMISSION_SYNC_INTERVAL_MS,
+    )
+
+    return () => {
+      window.removeEventListener(
+        AUTH_EVENTS.tokenRefreshed,
+        handleTokenRefreshed,
+      )
+      window.removeEventListener(
+        AUTH_EVENTS.permissionsStale,
+        handleStale,
+      )
+      window.removeEventListener('focus', handleStale)
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibility,
+      )
+      window.clearInterval(interval)
+    }
+  }, [hasSession, applyAuthorization, syncPermissions])
 
   const login =
     useCallback(

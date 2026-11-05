@@ -1,7 +1,6 @@
 package com.titanmdm.agent.core.config
 
 import com.titanmdm.agent.BuildConfig
-import java.net.URI
 
 object AgentConfig {
     const val AGENT_NAME = "TitanMDM Android Agent"
@@ -24,18 +23,18 @@ object AgentConfig {
     val platform get() = PLATFORM
     val heartbeatIntervalMinutes get() = HEARTBEAT_INTERVAL_MINUTES
     val commandPollIntervalMinutes get() = COMMAND_POLL_INTERVAL_MINUTES
+    /**
+     * Servidor activo: el recibido por QR (ServerEndpointStore) o el del build.
+     */
     fun normalizedBaseUrl(): String {
-        val raw = BuildConfig.TITAN_API_BASE_URL.trim()
-        require(raw.isNotBlank()) { "TitanMDM API URL not configured" }
-        val url = if (raw.endsWith('/')) raw else "$raw/"
-        val uri = URI(url)
-        require(!uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) {
-            "Invalid TitanMDM API URL"
-        }
-        val secure = uri.scheme.equals("https", ignoreCase = true)
-        val emulatorDebug = BuildConfig.DEBUG && uri.scheme.equals("http", ignoreCase = true) &&
-            uri.host in setOf("10.0.2.2", "localhost", "127.0.0.1")
-        require(secure || emulatorDebug) { "HTTPS is mandatory outside the local debug emulator" }
-        return url
+        val raw = ServerEndpointStore.current() ?: BuildConfig.TITAN_API_BASE_URL
+        return validateServerUrl(raw).getOrThrow()
     }
+
+    fun validateServerUrl(raw: String): Result<String> =
+        ServerEndpointPolicy.normalize(
+            raw = raw,
+            allowLanHttp = BuildConfig.ALLOW_LAN_HTTP,
+            debug = BuildConfig.DEBUG
+        )
 }

@@ -19,7 +19,9 @@ public sealed record AuditEventDto(
     string? ErrorCode,
     string? ErrorMessage,
     string? PayloadJson,
-    string? ResultJson);
+    string? ResultJson,
+    string? BeforeJson,
+    string? AfterJson);
 
 public sealed record AuditListResultDto(
     IReadOnlyCollection<AuditEventDto> Items,

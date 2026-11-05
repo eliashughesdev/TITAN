@@ -694,6 +694,150 @@ public sealed class DeviceLocationServiceTests
                 """{ "latitude": 0.0, "longitude": 0.0 }"""));
     }
 
+    [Fact]
+    public async Task CreateGeofence_PersistsCenterRadiusAndAlerts()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var service = CreateService(db);
+
+        var created = await service.CreateGeofenceAsync(
+            organizationId,
+            new CreateGeofenceRequest(
+                "Oficina principal",
+                "Sede corporativa",
+                Latitude: 18.4861,
+                Longitude: -69.9312,
+                RadiusMeters: 350,
+                AlertOnEnter: true,
+                AlertOnExit: false));
+
+        var geofence = Assert.Single(db.Geofences);
+        Assert.Equal(created.Id, geofence.Id);
+        Assert.Equal(organizationId, geofence.OrganizationId);
+        Assert.Equal(18.4861, geofence.Latitude);
+        Assert.Equal(-69.9312, geofence.Longitude);
+        Assert.Equal(350, geofence.RadiusMeters);
+        Assert.True(geofence.AlertOnEnter);
+        Assert.False(geofence.AlertOnExit);
+        Assert.Equal(0, created.AssignedDevices);
+    }
+
+    [Fact]
+    public async Task AssignDevices_AcceptsAndroidDeviceFromOrganization()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var device = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Android tablet",
+            DevicePlatform.Android);
+        var geofence = await SeedGeofenceAsync(db, organizationId);
+        var service = CreateService(db);
+
+        await service.AssignDevicesAsync(
+            organizationId,
+            geofence.Id,
+            [device.Id]);
+
+        var assignment = Assert.Single(db.GeofenceDeviceAssignments);
+        Assert.Equal(device.Id, assignment.DeviceId);
+        Assert.Equal(geofence.Id, assignment.GeofenceId);
+        Assert.Equal(organizationId, assignment.OrganizationId);
+    }
+
+    [Fact]
+    public async Task AssignDevices_RejectsWindowsDevice()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var windows = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Windows laptop",
+            DevicePlatform.Windows);
+        var geofence = await SeedGeofenceAsync(db, organizationId);
+        var service = CreateService(db);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AssignDevicesAsync(
+                organizationId,
+                geofence.Id,
+                [windows.Id]));
+
+        Assert.Contains("Android", exception.Message);
+        Assert.Empty(db.GeofenceDeviceAssignments);
+    }
+
+    [Fact]
+    public async Task AssignDevices_RejectsDeviceFromAnotherOrganization()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var foreign = await SeedDeviceAsync(
+            db,
+            Guid.NewGuid(),
+            "Foreign Android",
+            DevicePlatform.Android);
+        var geofence = await SeedGeofenceAsync(db, organizationId);
+        var service = CreateService(db);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AssignDevicesAsync(
+                organizationId,
+                geofence.Id,
+                [foreign.Id]));
+
+        Assert.Empty(db.GeofenceDeviceAssignments);
+    }
+
+    [Fact]
+    public async Task AssignDevices_RejectsWholeRequest_WhenAnyDeviceIsInvalid()
+    {
+        await using var db = Open();
+        var organizationId = Guid.NewGuid();
+        var android = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Android tablet",
+            DevicePlatform.Android);
+        var windows = await SeedDeviceAsync(
+            db,
+            organizationId,
+            "Windows laptop",
+            DevicePlatform.Windows);
+        var geofence = await SeedGeofenceAsync(db, organizationId);
+        var service = CreateService(db);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AssignDevicesAsync(
+                organizationId,
+                geofence.Id,
+                [android.Id, windows.Id]));
+
+        Assert.Empty(db.GeofenceDeviceAssignments);
+    }
+
+    private static async Task<Geofence> SeedGeofenceAsync(
+        TitanMdmDbContext db,
+        Guid organizationId)
+    {
+        var geofence = new Geofence(
+            organizationId,
+            "Zona de prueba",
+            null,
+            18.4861,
+            -69.9312,
+            250,
+            alertOnEnter: true,
+            alertOnExit: true);
+
+        db.Geofences.Add(geofence);
+        await db.SaveChangesAsync();
+        return geofence;
+    }
+
     private static DeviceLocationService CreateService(
         TitanMdmDbContext db,
         StubNotifier? notifier = null,

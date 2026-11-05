@@ -11,9 +11,7 @@ import {
   MapPin,
   MonitorSmartphone,
   RefreshCcw,
-  RotateCcw,
   Search,
-  ShieldAlert,
   ShieldCheck,
   Smartphone,
   Wifi,
@@ -34,8 +32,6 @@ import type {
   AndroidAuditEvent,
   AndroidDeviceInventorySummary,
   AndroidInventoryItem,
-  AndroidRemoteAction,
-  AndroidRemoteActionResponse,
 } from '../../../types/androidEnterprise'
 import './AndroidFleetCommandCenter.css'
 
@@ -77,42 +73,9 @@ function getErrorMessage(error: unknown): string {
     : 'La operación no pudo completarse.'
 }
 
-interface ActionConfig {
-  id: AndroidRemoteAction
-  title: string
-  description: string
-  warning?: boolean
-}
-
-const quickActions: ActionConfig[] = [
-  {
-    id: 'lock',
-    title: 'Bloquear pantalla',
-    description: 'Solicitar bloqueo mediante Android Enterprise.',
-  },
-  {
-    id: 'reboot',
-    title: 'Reiniciar dispositivo',
-    description: 'Disponible únicamente cuando Google lo admite.',
-    warning: true,
-  },
-  {
-    id: 'start-lost-mode',
-    title: 'Iniciar modo perdido',
-    description: 'Solicitar el modo de recuperación empresarial.',
-    warning: true,
-  },
-  {
-    id: 'stop-lost-mode',
-    title: 'Detener modo perdido',
-    description: 'Solicitar la finalización del modo perdido.',
-  },
-]
-
 export function AndroidFleetCommandCenter() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission(Permissions.androidEnterprise.manage)
-  const canExecute = hasPermission(Permissions.androidEnterprise.actions)
 
   const [summary, setSummary] =
     useState<AndroidDeviceInventorySummary | null>(null)
@@ -126,12 +89,8 @@ export function AndroidFleetCommandCenter() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [runningAction, setRunningAction] = useState<AndroidRemoteAction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [lastAction, setLastAction] =
-    useState<AndroidRemoteActionResponse | null>(null)
-  const [showRemoteConsole, setShowRemoteConsole] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -161,7 +120,11 @@ export function AndroidFleetCommandCenter() {
   }, [page, appliedQuery])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [load])
 
   const manufacturers = useMemo(() => {
@@ -204,40 +167,6 @@ export function AndroidFleetCommandCenter() {
       setError(getErrorMessage(failure))
     } finally {
       setSyncing(false)
-    }
-  }
-
-  async function execute(action: AndroidRemoteAction) {
-    if (!canExecute || !selectedDevice || runningAction) return
-
-    const confirmed = window.confirm(
-      `Dispositivo: ${selectedDevice.deviceName}\n\n` +
-      `¿Confirmas la solicitud "${action}"?\n` +
-      'Esta acción puede modificar el estado del dispositivo.',
-    )
-
-    if (!confirmed) return
-
-    setRunningAction(action)
-    setError(null)
-    setNotice(null)
-    setLastAction(null)
-
-    try {
-      const result = await androidEnterpriseApi.executeDeviceAction(
-        selectedDevice.deviceId,
-        { action },
-      )
-      setLastAction(result)
-      setNotice(
-        'Solicitud emitida. Debes verificar posteriormente ' +
-        'el resultado real en el dispositivo.',
-      )
-      await load()
-    } catch (failure) {
-      setError(getErrorMessage(failure))
-    } finally {
-      setRunningAction(null)
     }
   }
 
@@ -317,6 +246,9 @@ export function AndroidFleetCommandCenter() {
         <Link to="/kiosk?workspace=android">
           <LockKeyhole size={17} /> Kiosk
         </Link>
+        <Link to="/fleet-map?workspace=android">
+          <MapPin size={17} /> Geolocalización
+        </Link>
       </nav>
 
       <div className="afcc-layout">
@@ -359,88 +291,112 @@ export function AndroidFleetCommandCenter() {
             <button type="submit">Buscar</button>
           </form>
 
-          <div className="afcc-table-scroll">
-            <table className="afcc-table">
-              <thead>
-                <tr>
-                  <th>Dispositivo</th>
-                  <th>Fabricante</th>
-                  <th>Gestión</th>
-                  <th>Estado</th>
-                  <th>Cumplimiento</th>
-                  <th>Último contacto</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDevices.map(device => (
-                  <tr
-                    key={device.deviceId}
-                    className={
-                      selectedDeviceId === device.deviceId
-                        ? 'afcc-selected-row'
-                        : ''
-                    }
-                  >
-                    <td>
-                      <strong>{device.deviceName}</strong>
-                      <small>{device.serialNumber || device.deviceId}</small>
-                    </td>
-                    <td>
-                      {manufacturerLabel(device)}
-                      <small>{device.model ?? 'Modelo desconocido'}</small>
-                    </td>
-                    <td>
-                      {device.managementMode || 'No determinado'}
-                    </td>
-                    <td>
-                      <span className={
-                        isOnline(device)
-                          ? 'afcc-status afcc-online'
-                          : 'afcc-status afcc-offline'
-                      }>
-                        {device.status || 'Sin estado'}
-                      </span>
-                    </td>
-                    <td>{deviceCompliance(device)}</td>
-                    <td>{dateLabel(device.lastSeenAtUtc)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDeviceId(device.deviceId)}
-                      >
-                        Gestionar <ArrowRight size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {visibleDevices.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="afcc-empty">
-                      No hay dispositivos que coincidan con los filtros.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <footer className="afcc-pager">
-            <span>
-              Página {page} de {Math.max(1, Math.ceil(total / PAGE_SIZE))}
-            </span>
-            <div>
-              <button type="button" disabled={page <= 1 || loading}
-                onClick={() => setPage(current => current - 1)}>
-                Anterior
-              </button>
-              <button type="button"
-                disabled={page * PAGE_SIZE >= total || loading}
-                onClick={() => setPage(current => current + 1)}>
-                Siguiente
-              </button>
+          {!loading && total === 0 ? (
+            <div className="afcc-empty afcc-empty-state" role="status">
+              <Smartphone size={34} />
+              <div>
+                <strong>
+                  No hay dispositivos Android Enterprise enrolados.
+                </strong>
+                <p>
+                  La inscripción, las políticas, las aplicaciones, Kiosk y
+                  Titan Launcher siguen disponibles para configurar la flota.
+                </p>
+                <Link
+                  className="afcc-empty-link"
+                  to="/enrollment?workspace=android"
+                >
+                  Configurar inscripción Android
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
             </div>
-          </footer>
+          ) : (
+            <>
+              <div className="afcc-table-scroll">
+                <table className="afcc-table">
+                  <thead>
+                    <tr>
+                      <th>Dispositivo</th>
+                      <th>Fabricante</th>
+                      <th>Gestión</th>
+                      <th>Estado</th>
+                      <th>Cumplimiento</th>
+                      <th>Último contacto</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleDevices.map(device => (
+                      <tr
+                        key={device.deviceId}
+                        className={
+                          selectedDeviceId === device.deviceId
+                            ? 'afcc-selected-row'
+                            : ''
+                        }
+                      >
+                        <td>
+                          <strong>{device.deviceName}</strong>
+                          <small>{device.serialNumber || device.deviceId}</small>
+                        </td>
+                        <td>
+                          {manufacturerLabel(device)}
+                          <small>{device.model ?? 'Modelo desconocido'}</small>
+                        </td>
+                        <td>
+                          {device.managementMode || 'No determinado'}
+                        </td>
+                        <td>
+                          <span className={
+                            isOnline(device)
+                              ? 'afcc-status afcc-online'
+                              : 'afcc-status afcc-offline'
+                          }>
+                            {device.status || 'Sin estado'}
+                          </span>
+                        </td>
+                        <td>{deviceCompliance(device)}</td>
+                        <td>{dateLabel(device.lastSeenAtUtc)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDeviceId(device.deviceId)}
+                          >
+                            Gestionar <ArrowRight size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {visibleDevices.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="afcc-empty">
+                          No hay dispositivos que coincidan con los filtros.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <footer className="afcc-pager">
+                <span>
+                  Página {page} de {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+                </span>
+                <div>
+                  <button type="button" disabled={page <= 1 || loading}
+                    onClick={() => setPage(current => current - 1)}>
+                    Anterior
+                  </button>
+                  <button type="button"
+                    disabled={page * PAGE_SIZE >= total || loading}
+                    onClick={() => setPage(current => current + 1)}>
+                    Siguiente
+                  </button>
+                </div>
+              </footer>
+            </>
+          )}
         </section>
 
         <aside className="afcc-side">
@@ -475,6 +431,15 @@ export function AndroidFleetCommandCenter() {
 
                 <dl className="afcc-device-info">
                   <div>
+                    <dt>Versión Android</dt>
+                    <dd>
+                      {selectedDevice.androidVersion ?? 'Sin información'}
+                      {selectedDevice.apiLevel
+                        ? ` · API ${selectedDevice.apiLevel}`
+                        : ''}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>Política aplicada</dt>
                     <dd>{selectedDevice.appliedPolicyName || 'Sin información'}</dd>
                   </div>
@@ -483,71 +448,39 @@ export function AndroidFleetCommandCenter() {
                     <dd>{selectedDevice.appliedPolicyState || 'Desconocido'}</dd>
                   </div>
                   <div>
-                    <dt>Última sincronización</dt>
+                    <dt>Última sincronización de política</dt>
                     <dd>{dateLabel(selectedDevice.lastPolicySyncTimeUtc)}</dd>
+                  </div>
+                  <div>
+                    <dt>Última sincronización de inventario</dt>
+                    <dd>{dateLabel(selectedDevice.lastSynchronizedAtUtc)}</dd>
                   </div>
                 </dl>
 
-                <div className="afcc-action-grid">
-                  {quickActions.map(action => {
-                    const Icon = action.id === 'lock'
-                      ? LockKeyhole
-                      : action.id === 'reboot'
-                        ? RotateCcw
-                        : action.id === 'start-lost-mode'
-                          ? MapPin
-                          : ShieldAlert
-                    return (
-                      <button
-                        type="button"
-                        key={action.id}
-                        className={action.warning ? 'afcc-caution' : ''}
-                        disabled={!canExecute || runningAction !== null ||
-                          !selectedDevice.isManaged ||
-                          selectedDevice.isDeletedInGoogle}
-                        title={action.description}
-                        onClick={() => void execute(action.id)}
-                      >
-                        <Icon size={17} />
-                        <span>{runningAction === action.id
-                          ? 'Procesando...'
-                          : action.title}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-
                 <p className="afcc-advisory">
-                  Las operaciones incompatibles con el modelo o modo de gestión
-                  serán rechazadas por el backend. La emisión no equivale a
-                  ejecución confirmada.
+                  La consola inferior evalúa cada acción contra el modo de
+                  gestión, la versión de Android, el fabricante y tus permisos
+                  antes de habilitarla. Una emisión no equivale a ejecución
+                  confirmada en el dispositivo.
                 </p>
 
-                <button
-                  type="button"
-                  className="afcc-remote-console-toggle"
-                  onClick={() => setShowRemoteConsole(current => !current)}
-                >
-                  {showRemoteConsole
-                    ? 'Ocultar centro de control remoto'
-                    : 'Abrir centro de control remoto'}
-                </button>
-
-                <Link className="afcc-detail-link"
-                  to={`/devices/${selectedDevice.deviceId}?workspace=android&platform=Android`}>
-                  Abrir ficha completa y acciones sensibles
-                  <ExternalLink size={15} />
-                </Link>
-
-                {lastAction && (
-                  <div className="afcc-result" role="status">
-                    <strong>Solicitud: {lastAction.status}</strong>
-                    <small>{lastAction.action} · {dateLabel(lastAction.issuedAtUtc)}</small>
-                    <small>
-                      Correlación: {lastAction.correlationId || 'No disponible'}
-                    </small>
-                  </div>
-                )}
+                <div className="afcc-device-links">
+                  <Link className="afcc-detail-link"
+                    to={`/devices/${selectedDevice.deviceId}?workspace=android&platform=Android`}>
+                    Ficha Android
+                    <ExternalLink size={15} />
+                  </Link>
+                  <Link className="afcc-detail-link"
+                    to="/fleet-map?workspace=android">
+                    Ubicación de flota
+                    <MapPin size={15} />
+                  </Link>
+                  <Link className="afcc-detail-link"
+                    to="/policies?workspace=android">
+                    Política y restricciones
+                    <ShieldCheck size={15} />
+                  </Link>
+                </div>
               </>
             )}
           </section>
@@ -583,8 +516,9 @@ export function AndroidFleetCommandCenter() {
         </aside>
       </div>
 
-      {showRemoteConsole && selectedDevice && (
+      {selectedDevice && (
         <AndroidRemoteConsole
+          key={selectedDevice.deviceId}
           deviceId={selectedDevice.deviceId}
           deviceName={selectedDevice.deviceName}
         />

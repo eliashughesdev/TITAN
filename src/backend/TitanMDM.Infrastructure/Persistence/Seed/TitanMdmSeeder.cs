@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Domain.Entities;
@@ -920,7 +920,114 @@ public sealed partial class TitanMdmSeeder
                 "android.enterprise.actions",
                 "Ejecutar acciones Android",
                 "AndroidEnterprise",
-                "Permite ejecutar acciones remotas sobre dispositivos Android administrados (bloquear, reiniciar, borrar, lost mode).")
+                "Permite ejecutar acciones remotas sobre dispositivos Android administrados (bloquear, reiniciar, borrar, lost mode)."),
+
+            new(
+                "workspace.inventory.view",
+                "Acceder a Inventario",
+                "Inventory",
+                "Permite ver la tarjeta y el espacio de Inventario."),
+
+            new(
+                "inventory.view",
+                "Ver inventario",
+                "Inventory",
+                "Permite consultar activos, entregas y conteos."),
+
+            new(
+                "inventory.manage",
+                "Administrar inventario",
+                "Inventory",
+                "Permite registrar entregas, recepciones y conteos."),
+
+            // -----------------------------------------------------
+            // ITAM granular: los exige ItamController y controlan
+            // el menu y las acciones del modulo de Inventario.
+            // -----------------------------------------------------
+
+            new(
+                "inventory.dashboard.view",
+                "Ver dashboard de inventario",
+                "Inventory",
+                "Permite ver KPIs, valor en libros y reportes del inventario."),
+
+            new(
+                "inventory.reports.view",
+                "Ver reportes de inventario",
+                "Inventory",
+                "Permite consultar reportes operativos y analíticos del inventario."),
+
+            new(
+                "inventory.reports.export",
+                "Exportar reportes de inventario",
+                "Inventory",
+                "Permite exportar reportes de inventario a Excel y PDF."),
+
+            new(
+                "inventory.assets.view",
+                "Ver activos",
+                "Inventory",
+                "Permite consultar activos, depreciación y códigos QR."),
+
+            new(
+                "inventory.assets.manage",
+                "Administrar activos",
+                "Inventory",
+                "Permite crear, editar y dar de baja activos y registrar entregas y devoluciones."),
+
+            new(
+                "inventory.deliveries.view",
+                "Ver entregas",
+                "Inventory",
+                "Permite consultar entregas de equipos."),
+
+            new(
+                "inventory.returns.view",
+                "Ver devoluciones",
+                "Inventory",
+                "Permite consultar devoluciones de equipos."),
+
+            new(
+                "inventory.receptions.view",
+                "Ver recepciones",
+                "Inventory",
+                "Permite consultar recepciones de equipos."),
+
+            new(
+                "inventory.employees.view",
+                "Ver colaboradores",
+                "Inventory",
+                "Permite consultar colaboradores y sus asignaciones."),
+
+            new(
+                "inventory.sessions.view",
+                "Ver sesiones de conteo",
+                "Inventory",
+                "Permite consultar sesiones de conteo físico."),
+
+            new(
+                "inventory.counts.view",
+                "Ver conteos y conciliación",
+                "Inventory",
+                "Permite consultar conteos y la conciliación sobrantes/faltantes."),
+
+            new(
+                "inventory.history.view",
+                "Ver historial de activos",
+                "Inventory",
+                "Permite consultar el historial de cambios de los activos."),
+
+            new(
+                "inventory.catalogs.view",
+                "Ver catálogos de inventario",
+                "Inventory",
+                "Permite consultar sucursales, departamentos, ubicaciones, fabricantes, modelos, proveedores y categorías."),
+
+            new(
+                "inventory.catalogs.manage",
+                "Gestionar catálogos de inventario",
+                "Inventory",
+                "Permite crear, editar y eliminar sucursales, departamentos, ubicaciones, fabricantes, modelos, proveedores y categorías.")
         ];
 
     // ============================================================

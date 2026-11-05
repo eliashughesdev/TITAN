@@ -348,3 +348,7 @@
     padding: 20px;
   }
 }
+/* Barra empresarial como primera fila del visor (incluida en pantalla completa) */
+.wr .wr-viewer--with-tools {
+  grid-template-rows: auto 1fr;
+}

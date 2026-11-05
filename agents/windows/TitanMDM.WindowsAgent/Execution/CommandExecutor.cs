@@ -44,6 +44,9 @@ public sealed class CommandExecutor
     private readonly WindowsKioskExecutor
         _kioskExecutor;
 
+    private readonly WindowsSecureAttentionService?
+        _secureAttention;
+
     public CommandExecutor(
     ILogger<CommandExecutor> logger,
     WindowsInventoryProvider inventoryProvider,
@@ -56,8 +59,12 @@ public sealed class CommandExecutor
     WindowsSoftwareManager softwareManager,
     WindowsSoftwarePackageDownloader packageDownloader,
     WindowsPolicyExecutor policyExecutor,
-    WindowsKioskExecutor kioskExecutor)
+    WindowsKioskExecutor kioskExecutor,
+    WindowsSecureAttentionService? secureAttention = null)
     {
+        _secureAttention =
+            secureAttention;
+
         _logger =
             logger;
 
@@ -354,6 +361,17 @@ public sealed class CommandExecutor
                      * LOCATION
                      * ============================================
                      */
+
+                    /*
+                     * ============================================
+                     * SOPORTE REMOTO: Ctrl+Alt+Supr (SYSTEM)
+                     * ============================================
+                     */
+
+                    "REMOTE_SEND_SAS" =>
+                        (_secureAttention
+                            ?? throw new UnsupportedCommandException(type))
+                            .Send(),
 
                     "LOCATION_REQUEST" =>
                         throw new

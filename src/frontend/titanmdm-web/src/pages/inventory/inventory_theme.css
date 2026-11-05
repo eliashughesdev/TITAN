@@ -1,0 +1,872 @@
+/* ============================================================
+   TITANMDM ITAM - TITAN CORPORATE LIGHT DESIGN SYSTEM
+   Shell-aligned tokens (#f6f8fb background, white surfaces,
+   #e2e7ef borders) with blue/cyan accents and soft elevation.
+   ============================================================ */
+
+.inventory-app,
+.inv-form-page {
+  --itam-bg: #f6f8fb;
+  --itam-surface: rgba(255, 255, 255, 0.94);
+  --itam-surface-solid: #ffffff;
+  --itam-surface-soft: #ffffff;
+  --itam-border: #e2e7ef;
+  --itam-border-strong: #d0d5dd;
+  --itam-text: #172033;
+  --itam-text-soft: #344054;
+  --itam-muted: #7b8799;
+  --itam-dim: #98a2b3;
+  --itam-primary: #4169e1;
+  --itam-primary-2: #3557c9;
+  --itam-accent: #0ea5e9;
+  --itam-success: #047857;
+  --itam-warning: #b45309;
+  --itam-danger: #b91c1c;
+  --itam-violet: #6d28d9;
+  --itam-cyan: #0e7490;
+  --itam-radius: 16px;
+  --itam-radius-sm: 12px;
+  --itam-shadow: 0 24px 60px -40px rgba(23, 32, 51, 0.2);
+  --itam-shadow-soft: 0 18px 40px -30px rgba(23, 32, 51, 0.18);
+
+  color: var(--itam-text-soft);
+  font-feature-settings: 'ss01' on, 'cv02' on;
+}
+
+.inventory-app {
+  background:
+    radial-gradient(760px 340px at 8% -8%, rgba(65, 105, 225, 0.12), transparent 68%),
+    radial-gradient(620px 320px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 65%),
+    var(--itam-bg);
+}
+
+/* ---------- Hero ---------- */
+.inventory-hero {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  overflow: hidden;
+  padding: 28px 30px;
+  border: 1px solid var(--itam-border);
+  border-radius: 20px;
+  background:
+    radial-gradient(420px 190px at 88% 0%, rgba(14, 165, 233, 0.14), transparent 70%),
+    linear-gradient(125deg, #ffffff 0%, rgba(255, 255, 255, 0.96) 55%, #eef4ff 100%);
+  box-shadow: var(--itam-shadow);
+}
+
+.inventory-hero::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(65, 105, 225, 0.08), transparent 45%, rgba(14, 165, 233, 0.08));
+  content: '';
+  pointer-events: none;
+}
+
+.inventory-hero__glow {
+  position: absolute;
+  top: -90px;
+  right: -40px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.22), transparent 68%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.inventory-hero__content {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+}
+
+.inventory-hero__content h1 {
+  margin: 8px 0 6px;
+  color: #172033;
+  font-size: clamp(30px, 4vw, 42px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.inventory-hero__content p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--itam-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.inventory-hero__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- KPI grid ---------- */
+.inventory-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inventory-kpi-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--itam-border);
+  border-radius: var(--itam-radius);
+  background: var(--itam-surface);
+  box-shadow: var(--itam-shadow-soft);
+  backdrop-filter: blur(14px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.inventory-kpi-card::after {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--kpi-accent, #4169e1), transparent);
+  content: '';
+}
+
+.inventory-kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(65, 105, 225, 0.28);
+  box-shadow: 0 30px 54px -32px rgba(23, 32, 51, 0.22);
+}
+
+.inventory-kpi-card--blue { --kpi-accent: #4169e1; }
+.inventory-kpi-card--indigo { --kpi-accent: #3557c9; }
+.inventory-kpi-card--emerald { --kpi-accent: #047857; }
+.inventory-kpi-card--violet { --kpi-accent: #6d28d9; }
+
+.inventory-kpi-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.inventory-kpi-card__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(123, 135, 153, 0.14);
+  border-radius: 12px;
+  color: var(--kpi-accent, #1d4ed8);
+  background: rgba(123, 135, 153, 0.08);
+}
+
+.inventory-kpi-delta {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 999px;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-kpi-card strong {
+  color: #172033;
+  font-size: clamp(28px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-kpi-card__label {
+  margin-top: 8px;
+  color: var(--itam-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inventory-kpi-card small {
+  margin-top: 4px;
+  color: var(--itam-dim);
+  font-size: 11px;
+}
+
+/* Legacy KPI cards keep the same light surface. */
+.inventory-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.inventory-kpi {
+  padding: 16px;
+  border: 1px solid var(--itam-border);
+  border-radius: var(--itam-radius);
+  color: var(--itam-text);
+  background: var(--itam-surface);
+  text-align: left;
+}
+
+.inventory-kpi span {
+  display: block;
+  color: var(--itam-muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.inventory-kpi strong {
+  display: block;
+  margin-top: 8px;
+  color: #172033;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-kpi small {
+  display: block;
+  margin-top: 4px;
+  color: var(--itam-dim);
+  font-size: 11px;
+}
+
+/* Accent deltas for secondary metrics */
+.tone-sky { --kpi-accent: #0ea5e9; }
+.tone-emerald { --kpi-accent: #047857; }
+.tone-amber { --kpi-accent: #b45309; }
+.tone-rose { --kpi-accent: #b91c1c; }
+.tone-violet { --kpi-accent: #6d28d9; }
+.tone-cyan { --kpi-accent: #0e7490; }
+.tone-orange { --kpi-accent: #c2410c; }
+.tone-lime { --kpi-accent: #4d7c0f; }
+.tone-slate { --kpi-accent: #7b8799; }
+
+/* ---------- Values / charts ---------- */
+.executive-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.executive-value {
+  padding: 12px 14px;
+  border: 1px solid var(--itam-border);
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #ffffff);
+}
+
+.executive-value span {
+  display: block;
+  color: var(--itam-muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.executive-value strong {
+  display: block;
+  margin-top: 6px;
+  color: #172033;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.executive-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.executive-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.executive-dashboard .recharts-cartesian-grid line {
+  stroke: #e2e7ef;
+}
+
+.executive-dashboard .recharts-text {
+  fill: var(--itam-muted);
+}
+
+.executive-dashboard .recharts-legend-item-text {
+  color: var(--itam-text-soft) !important;
+}
+
+/* ---------- Reports analytics ---------- */
+.inventory-report-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.inventory-report-kpi {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--itam-border);
+  border-radius: 14px;
+  background: linear-gradient(150deg, #ffffff, #f8fafc);
+}
+
+.inventory-report-kpi__icon {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(123, 135, 153, 0.14);
+  border-radius: 12px;
+  background: rgba(123, 135, 153, 0.08);
+}
+
+.inventory-report-kpi__icon--blue { color: #0ea5e9; }
+.inventory-report-kpi__icon--green { color: #047857; }
+.inventory-report-kpi__icon--violet { color: #6d28d9; }
+.inventory-report-kpi__icon--cyan { color: #0e7490; }
+
+.inventory-report-kpi span {
+  display: block;
+  color: var(--itam-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inventory-report-kpi strong {
+  display: block;
+  margin-top: 2px;
+  color: #172033;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-report-kpi small {
+  display: block;
+  margin-top: 2px;
+  color: var(--itam-dim);
+  font-size: 11px;
+}
+
+.inventory-report-values {
+  margin-top: 14px;
+}
+
+.inventory-report-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: 16px;
+}
+
+.inventory-report-chart--wide {
+  min-width: 0;
+}
+
+.inventory-report-chart {
+  display: flex;
+  flex-direction: column;
+}
+
+.inventory-report-chart .recharts-wrapper {
+  margin-top: 4px;
+}
+
+.inventory-report-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.inventory-report-legend--interactive {
+  gap: 6px;
+}
+
+.inventory-report-legend__item {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--itam-text-soft);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+button.inventory-report-legend__item {
+  cursor: pointer;
+}
+
+button.inventory-report-legend__item:hover {
+  border-color: rgba(65, 105, 225, 0.26);
+  background: rgba(65, 105, 225, 0.08);
+}
+
+.inventory-report-legend__item.is-off {
+  opacity: 0.4;
+}
+
+.inventory-report-legend__item strong {
+  color: #172033;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-report-legend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(123, 135, 153, 0.1);
+}
+
+.inventory-report-note {
+  color: var(--itam-muted);
+  font-size: 11px;
+}
+
+/* ---------- Badges semantic colors ---------- */
+.inventory-badge--ok { border-color: rgba(16, 185, 129, 0.35); color: #047857; background: rgba(16, 185, 129, 0.14); }
+.inventory-badge--info { border-color: rgba(65, 105, 225, 0.26); color: #1d4ed8; background: rgba(65, 105, 225, 0.1); }
+.inventory-badge--maintenance { border-color: rgba(139, 92, 246, 0.4); color: #6d28d9; background: rgba(139, 92, 246, 0.16); }
+.inventory-badge--warn { border-color: rgba(245, 158, 11, 0.35); color: #b45309; background: rgba(245, 158, 11, 0.14); }
+.inventory-badge--danger,
+.inventory-badge--bad { border-color: rgba(239, 68, 68, 0.35); color: #b91c1c; background: rgba(239, 68, 68, 0.14); }
+
+/* ---------- Iframe modal ---------- */
+.itam-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(23, 32, 51, 0.14);
+  backdrop-filter: blur(8px);
+  animation: itam-fade 0.18s ease;
+}
+
+.itam-modal__dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: min(1080px, 96vw);
+  height: min(760px, 90vh);
+  border: 1px solid var(--itam-border-strong);
+  border-radius: 20px;
+  background: var(--itam-surface-solid);
+  box-shadow: 0 50px 140px -50px rgba(23, 32, 51, 0.22);
+  animation: itam-rise 0.22s ease;
+}
+
+.itam-modal__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  color: #fff;
+  border-bottom: 0;
+  background: linear-gradient(120deg, #3557c9, #3557c9);
+}
+
+.itam-modal__title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.itam-modal__icon {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.itam-modal__head strong {
+  display: block;
+  color: #fff;
+  font-size: 16px;
+}
+
+.itam-modal__head small {
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 11px;
+}
+
+.itam-modal__close {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.itam-modal__close:hover {
+  color: #fff;
+  background: rgba(220, 38, 38, 0.85);
+  transform: rotate(90deg);
+}
+
+.itam-modal__body {
+  position: relative;
+  display: flex;
+  flex: 1;
+}
+
+.itam-modal__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: var(--itam-bg);
+}
+
+.itam-modal__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  align-content: center;
+  color: var(--itam-muted);
+  font-size: 13px;
+  background: var(--itam-bg);
+}
+
+.itam-modal__spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(65, 105, 225, 0.16);
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: itam-spin 0.8s linear infinite;
+}
+
+.itam-modal--closing {
+  animation: itam-fade-out 0.18s ease forwards;
+}
+
+.itam-modal--closing .itam-modal__dialog {
+  animation: itam-sink 0.18s ease forwards;
+}
+
+/* ---------- Embedded forms ---------- */
+.inv-form-page {
+  min-height: 100vh;
+  padding: 22px;
+  color: var(--itam-text-soft);
+  color-scheme: light;
+  background:
+    radial-gradient(520px 220px at 0% 0%, rgba(65, 105, 225, 0.1), transparent 70%),
+    var(--itam-bg);
+}
+
+.inv-form-page--embedded {
+  min-height: 100%;
+  padding: 18px 20px 24px;
+  background:
+    radial-gradient(480px 200px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 70%),
+    var(--itam-bg);
+}
+
+.inv-form-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.inv-form-shell > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--itam-border);
+  border-radius: var(--itam-radius);
+  background: var(--itam-surface);
+  box-shadow: var(--itam-shadow-soft);
+}
+
+.inv-form-shell > header strong {
+  color: #172033;
+  font-size: 18px;
+}
+
+.inv-form-shell > header p {
+  margin: 2px 0 0;
+  color: var(--itam-muted);
+  font-size: 12px;
+}
+
+.inv-form-shell > header > div:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.inv-form-page--embedded .inv-form-shell > header {
+  display: none;
+}
+
+.inv-form-page--embedded .inv-form-shell {
+  max-width: none;
+}
+
+.inv-form-page--embedded .inventory-card {
+  border-radius: 16px;
+  box-shadow: var(--itam-shadow-soft);
+}
+
+/* Legacy helpers */
+.inv-typeahead { position: relative; }
+
+.inv-typeahead__list {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  max-height: 230px;
+  overflow: auto;
+  margin-top: 4px;
+  border: 1px solid var(--itam-border-strong);
+  border-radius: 12px;
+  background: var(--itam-surface-solid);
+  box-shadow: var(--itam-shadow);
+}
+
+.inv-typeahead__list button {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid #f1f4f9;
+  color: var(--itam-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inv-typeahead__list button:hover {
+  background: rgba(65, 105, 225, 0.1);
+}
+
+.inv-sign {
+  width: 100%;
+  border: 1px solid var(--itam-border-strong);
+  border-radius: 12px;
+  background: #ffffff;
+  touch-action: none;
+}
+
+/* No access state */
+.inventory-stage--denied {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 56px 24px;
+  border: 1px dashed rgba(65, 105, 225, 0.22);
+  border-radius: var(--itam-radius);
+  color: var(--itam-text);
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.96), #eef4ff);
+  text-align: center;
+}
+
+.inventory-stage--denied p {
+  max-width: 460px;
+  color: var(--itam-muted);
+}
+
+/* ---------- Microinteractions ---------- */
+.inventory-top button:focus-visible,
+.inventory-btn:focus-visible,
+.inventory-chip:focus-visible,
+.inventory-input:focus-visible,
+.inventory-report-legend__item:focus-visible {
+  outline: 3px solid rgba(65, 105, 225, 0.3);
+  outline-offset: 2px;
+}
+
+.inventory-stage--enter > * {
+  animation: itam-rise 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.inventory-stage--enter > *:nth-child(2) { animation-delay: 0.04s; }
+.inventory-stage--enter > *:nth-child(3) { animation-delay: 0.08s; }
+.inventory-stage--enter > *:nth-child(4) { animation-delay: 0.12s; }
+.inventory-stage--enter > *:nth-child(n + 5) { animation-delay: 0.16s; }
+
+.inventory-kpi-card,
+.executive-kpi,
+.inventory-value-card,
+.inventory-report-kpi {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.executive-kpi:hover,
+.inventory-value-card:hover,
+.inventory-report-kpi:hover {
+  transform: translateY(-2px);
+  border-color: rgba(65, 105, 225, 0.22);
+  box-shadow: 0 28px 48px -30px rgba(23, 32, 51, 0.22);
+}
+
+.inventory-table-scroll .inventory-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+@keyframes itam-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes itam-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes itam-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes itam-sink {
+  to { opacity: 0; transform: translateY(14px) scale(0.985); }
+}
+
+@keyframes itam-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1180px) {
+  .inventory-kpi-grid,
+  .inventory-report-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-report-chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .itam-modal { padding: 10px; }
+  .itam-modal__dialog { height: 94vh; }
+  .inventory-stage__head { padding: 18px; }
+  .inventory-card { padding: 14px; }
+  .inventory-hero { padding: 22px; }
+}
+
+@media (max-width: 720px) {
+  .inventory-kpi-grid,
+  .inventory-report-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-hero__actions {
+    width: 100%;
+  }
+
+  .inventory-hero__actions .inventory-btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itam-modal,
+  .itam-modal__dialog,
+  .itam-modal--closing,
+  .itam-modal--closing .itam-modal__dialog,
+  .inventory-columns-panel,
+  .inventory-stage--enter > *,
+  .inventory-card,
+  .inventory-kpi-card,
+  .executive-kpi,
+  .inventory-value-card,
+  .inventory-report-kpi,
+  .inventory-btn,
+  .inventory-top button {
+    animation: none;
+    transition: none;
+  }
+
+  .inventory-kpi-card:hover,
+  .executive-kpi:hover,
+  .inventory-value-card:hover,
+  .inventory-report-kpi:hover,
+  .inventory-btn:hover:not(:disabled),
+  .inventory-top button:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Modal con contenido directo (catalogos) ---------- */
+.itam-modal__dialog--compact {
+  width: min(640px, 96vw);
+  height: auto;
+  max-height: 90vh;
+}
+
+.itam-modal__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 24px 24px;
+  background: var(--itam-bg);
+}
+
+.inventory-catalog-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.inventory-catalog-form .inventory-field--wide { grid-column: 1 / -1; }
+
+.inventory-catalog-form__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .inventory-catalog-form { grid-template-columns: 1fr; }
+}

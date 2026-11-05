@@ -40,6 +40,31 @@ public sealed class RemoteTransportClient : IAsyncDisposable
     public event Action<string>? StatusChanged;
     public event Action? ConnectionLost;
     private readonly RemoteVideoPerformanceProfile _videoProfile = new();
+    private readonly RemoteFileTransferReceiver _fileReceiver = new();
+
+    /*
+     * Supresion de frames identicos: con el escritorio estatico no se
+     * envia nada salvo un keyframe periodico (visores nuevos o
+     * recuperados). Ahorra ancho de banda y CPU del servidor y deja el
+     * canal libre para el primer frame que cambie (menor latencia).
+     */
+    private static readonly TimeSpan KeyframeInterval = TimeSpan.FromMilliseconds(1500);
+    private int _lastFrameHash;
+    private long _lastFrameSentAt;
+    private int _forceNextFrame = 1;
+    private long _framesSkipped;
+
+    private void ForceNextFrame() => Interlocked.Exchange(ref _forceNextFrame, 1);
+
+    private static int ComputeFrameHash(byte[] data, int width, int height, int displayIndex)
+    {
+        var hash = new HashCode();
+        hash.Add(width);
+        hash.Add(height);
+        hash.Add(displayIndex);
+        hash.AddBytes(data);
+        return hash.ToHashCode();
+    }
 
     public RemoteTransportClient(RemoteHostSession session)
     {
@@ -202,6 +227,9 @@ public sealed class RemoteTransportClient : IAsyncDisposable
 
                 StatusChanged?.Invoke("Conectado");
 
+                // El visor puede haber perdido frames durante el corte.
+                ForceNextFrame();
+
                 // No se reinicia un stream que continúa activo.
                 StartStreaming();
             }
@@ -344,6 +372,8 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                 var selected =
                     _captureService.SelectDisplay(monitorIndex);
 
+                ForceNextFrame();
+
                 StatusChanged?.Invoke(
                     $"Transmitiendo · {selected.Label}");
 
@@ -357,6 +387,8 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             {
                 var selected =
                     _captureService.SelectNextDisplay();
+
+                ForceNextFrame();
 
                 StatusChanged?.Invoke(
                     $"Transmitiendo · {selected.Label}");
@@ -372,6 +404,8 @@ public sealed class RemoteTransportClient : IAsyncDisposable
                 var selected =
                     _captureService.SelectPreviousDisplay();
 
+                ForceNextFrame();
+
                 StatusChanged?.Invoke(
                     $"Transmitiendo · {selected.Label}");
 
@@ -385,6 +419,78 @@ public sealed class RemoteTransportClient : IAsyncDisposable
             {
                 await PublishMonitorStateAsync(
                     CancellationToken.None);
+            });
+
+        // ========================================================
+        // PERFIL DE STREAMING (elegido por el tecnico)
+        // ========================================================
+
+        connection.On<string, int, int>(
+            "SetStreamProfile",
+            (preset, maxWidth, maxFps) =>
+            {
+                _videoProfile.ApplyViewerPreference(preset, maxWidth, maxFps);
+                ForceNextFrame();
+
+                StatusChanged?.Invoke(
+                    $"Perfil de transmision: {preset} · objetivo {_videoProfile.TargetFps} FPS");
+            });
+
+        // ========================================================
+        // TRANSFERENCIA DE ARCHIVOS (con resultado al servidor)
+        // ========================================================
+
+        connection.On<Guid, string, long, bool>(
+            "BeginFileTransfer",
+            (transferId, fileName, sizeBytes) =>
+            {
+                if (!_session.AllowFileTransfer || IsDisposing || SessionExpired)
+                {
+                    return false;
+                }
+
+                var accepted = _fileReceiver.Begin(transferId, fileName, sizeBytes);
+
+                if (accepted)
+                {
+                    StatusChanged?.Invoke(
+                        $"{_session.TechnicianName} está enviando: {fileName}");
+                }
+
+                return accepted;
+            });
+
+        connection.On<Guid, long, byte[], long>(
+            "ReceiveFileChunk",
+            (transferId, offset, data) =>
+            {
+                if (!_session.AllowFileTransfer || IsDisposing)
+                {
+                    throw new InvalidOperationException("Transferencia no permitida.");
+                }
+
+                return _fileReceiver.Receive(transferId, offset, data);
+            });
+
+        connection.On<Guid, string, string>(
+            "CompleteFileTransfer",
+            (transferId, sha256) =>
+            {
+                var path = _fileReceiver.Complete(transferId, sha256);
+
+                // Transparencia: el usuario ve el archivo recibido en el indicador.
+                StatusChanged?.Invoke(
+                    $"Archivo recibido de {_session.TechnicianName}: {Path.GetFileName(path)} (Descargas\\TitanMDM)");
+
+                return Path.GetFileName(path);
+            });
+
+        connection.On<Guid>(
+            "CancelFileTransfer",
+            transferId =>
+            {
+                _fileReceiver.Cancel(transferId);
+                StatusChanged?.Invoke("Transferencia de archivo cancelada.");
             });
 
         connection.On(
@@ -620,6 +726,8 @@ private async Task StreamLoopAsync(
         // sincronizar el estado del visor del técnico.
         if (desktop.Changed || channelStateNeedsSync)
         {
+            ForceNextFrame();
+
             StatusChanged?.Invoke(
                 RemoteDesktopTransitionMonitor.Describe(desktop));
 
@@ -710,6 +818,29 @@ private async Task StreamLoopAsync(
                 continue;
             }
 
+            // Pantalla sin cambios: no se envia (salvo keyframe periodico).
+            var frameHash = ComputeFrameHash(
+                frame.Data,
+                frame.Width,
+                frame.Height,
+                frame.DisplayIndex);
+
+            var forced = Interlocked.Exchange(ref _forceNextFrame, 0) == 1 || channelStateNeedsSync;
+
+            if (!forced &&
+                frameHash == _lastFrameHash &&
+                _lastFrameSentAt != 0 &&
+                Stopwatch.GetElapsedTime(_lastFrameSentAt) < KeyframeInterval)
+            {
+                Interlocked.Increment(ref _framesSkipped);
+
+                await DelaySafeAsync(
+                    _videoProfile.FrameIntervalMilliseconds,
+                    cancellationToken);
+
+                continue;
+            }
+
             using var sendCancellation =
                 CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken);
@@ -731,6 +862,9 @@ private async Task StreamLoopAsync(
                 sendCancellation.Token);
 var elapsedFrame = Stopwatch.GetElapsedTime(cycleStarted);
 
+_lastFrameHash = frameHash;
+_lastFrameSentAt = Stopwatch.GetTimestamp();
+
 // Medir TODOS los frames publicados, no solamente
 // uno de cada treinta. De esta forma, el perfil
 // adaptativo recibe la carga real de captura + red.
@@ -746,6 +880,7 @@ if (published == 1 || published % 120 == 0)
     StatusChanged?.Invoke(
         $"Transmitiendo · {frame.DisplayLabel} · " +
         $"{published} frames · " +
+        $"{Interlocked.Read(ref _framesSkipped)} sin cambios omitidos · " +
         $"{elapsedFrame.TotalMilliseconds:F0} ms/frame · " +
         $"objetivo {_videoProfile.TargetFps} FPS");
 }}
@@ -874,6 +1009,9 @@ catch (OperationCanceledException){
             _streamCancellation = null;
             _streamTask = null;
         }
+
+        // Archivos parciales de transferencias interrumpidas.
+        _fileReceiver.Dispose();
 
         await _connectionGate.WaitAsync();
 

@@ -5,6 +5,7 @@ import com.titanmdm.agent.commands.CommandExecutionResult
 import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.network.DeviceCommandDto
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
+import com.titanmdm.agent.scanner.ScannerTelemetry
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -14,9 +15,12 @@ class DeviceInfoCommandHandler(
     context: Context
 ) : CommandHandler {
 
+    private val appContext =
+        context.applicationContext
+
     private val inventoryProvider =
         DeviceInventoryProvider(
-            context.applicationContext
+            appContext
         )
 
     override fun supports(
@@ -108,6 +112,12 @@ class DeviceInfoCommandHandler(
                     put(
                         "agentVersion",
                         AgentConfig.AGENT_VERSION
+                    )
+
+                    // Lector integrado (Honeywell): disponibilidad y uso.
+                    put(
+                        "scanner",
+                        ScannerTelemetry.snapshot(appContext)
                     )
                 }
 

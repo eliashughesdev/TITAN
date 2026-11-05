@@ -51,6 +51,7 @@ export type AndroidCommandState =
   | 'pending'
   | 'executing'
   | 'accepted'
+  | 'completed'
   | 'failed'
   | 'expired'
 

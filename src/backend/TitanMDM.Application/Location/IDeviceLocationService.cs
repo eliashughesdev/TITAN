@@ -46,6 +46,16 @@ public interface IDeviceLocationService
             Guid organizationId,
             CancellationToken cancellationToken = default);
 
+    /*
+     * Geocercas activas asignadas a un dispositivo.
+     * Las consume el agente para registrar zonas en
+     * el SO y reportar transiciones proactivamente.
+     */
+    Task<IReadOnlyCollection<DeviceGeofenceDto>>
+        GetDeviceGeofencesAsync(
+            Guid deviceId,
+            CancellationToken cancellationToken = default);
+
     Task<GeofenceDto>
         CreateGeofenceAsync(
             Guid organizationId,
@@ -129,6 +139,15 @@ public sealed record GeofenceDto(
     bool IsEnabled,
     int AssignedDevices,
     DateTime CreatedAtUtc);
+
+public sealed record DeviceGeofenceDto(
+    Guid Id,
+    string Name,
+    double Latitude,
+    double Longitude,
+    double RadiusMeters,
+    bool AlertOnEnter,
+    bool AlertOnExit);
 
 public sealed record CreateGeofenceRequest(
     string Name,

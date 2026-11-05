@@ -1,9 +1,8 @@
 import {
-  useEffect,
-  useState,
   useCallback,
+  useEffect,
   useMemo,
-  useRef,
+  useState,
 } from 'react'
 import {
   Activity,
@@ -24,78 +23,37 @@ import {
   Smartphone,
 } from 'lucide-react'
 import {
+  CircleMarker,
+  MapContainer,
+  TileLayer,
+  useMap,
+} from 'react-leaflet'
+import type {
+  LatLngBoundsExpression,
+  LatLngExpression,
+} from 'leaflet'
+import { useNavigate } from 'react-router-dom'
+import {
   locationApi,
   type FleetLocation,
   type FleetLocationFilters,
   type FleetLocationState,
 } from '../../api/locationApi'
-import {
-  isGoogleMapsConfigured,
-  loadGoogleMaps,
-} from '../../config/googleMaps'
-import { useNavigate } from 'react-router-dom'
+import { getActiveProvider } from '../../config/mapConfig'
+import 'leaflet/dist/leaflet.css'
 import './FleetMapPage.css'
 
-/*
- * Tipado minimo de la API de Google Maps.
- * Evita la dependencia de @types/google.maps.
- */
-interface MapsLatLng {
-  lat: number
-  lng: number
-}
-
-interface MapsMarker {
-  setMap(map: MapsMap | null): void
-  addListener(
-    event: string,
-    handler: () => void,
-  ): void
-}
-
-interface MapsMap {
-  panTo(position: MapsLatLng): void
-  fitBounds(bounds: MapsLatLngBounds): void
-}
-
-interface MapsLatLngBounds {
-  extend(position: MapsLatLng): void
-}
-
-interface MapsFactory {
-  Map: new (
-    element: HTMLElement,
-    options: Record<string, unknown>,
-  ) => MapsMap
-  Marker: new (
-    options: Record<string, unknown>,
-  ) => MapsMarker
-  LatLngBounds: new () => MapsLatLngBounds
-  SymbolPath: { CIRCLE: number }
-}
-
-declare global {
-  interface Window {
-    google?: {
-      maps?: MapsFactory
-    }
-  }
-}
-
 const POLL_INTERVAL_MS = 60_000
-
-type MapsStatus =
-  | 'unconfigured'
-  | 'loading'
-  | 'ready'
-  | 'error'
+const DEFAULT_CENTER: LatLngExpression = [18.4861, -69.9312]
 
 type LoadMode = 'initial' | 'refresh' | 'poll'
 
-const LOCATION_STATE_COLORS: Record<
-  FleetLocationState,
-  string
-> = {
+type PositionedFleetLocation = FleetLocation & {
+  latitude: number
+  longitude: number
+}
+
+const LOCATION_STATE_COLORS: Record<FleetLocationState, string> = {
   Fresh: '#16a34a',
   Stale: '#f59e0b',
   Offline: '#94a3b8',
@@ -103,10 +61,7 @@ const LOCATION_STATE_COLORS: Record<
   PermissionDenied: '#ef4444',
 }
 
-const LOCATION_STATE_LABELS: Record<
-  FleetLocationState,
-  string
-> = {
+const LOCATION_STATE_LABELS: Record<FleetLocationState, string> = {
   Fresh: 'Reciente',
   Stale: 'Antigua',
   Offline: 'Sin conexión',
@@ -123,56 +78,75 @@ const EMPTY_FILTERS: FleetLocationFilters = {
   maxSignalAgeMinutes: undefined,
 }
 
-function markerColorFor(
+function hasValidPosition(
   location: FleetLocation,
-): string {
+): location is PositionedFleetLocation {
+  const { latitude, longitude } = location
+
   return (
-    LOCATION_STATE_COLORS[location.locationState] ??
-    '#94a3b8'
+    latitude !== null &&
+    longitude !== null &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
   )
 }
 
-function hasPosition(location: FleetLocation): boolean {
-  return (
-    location.latitude !== null &&
-    location.longitude !== null
-  )
+function markerColorFor(location: FleetLocation): string {
+  return LOCATION_STATE_COLORS[location.locationState]
+}
+
+function formatCapturedAt(value: string | null): string {
+  if (!value) return 'Sin datos'
+
+  const capturedAt = new Date(value)
+
+  return Number.isNaN(capturedAt.getTime())
+    ? 'Sin datos'
+    : capturedAt.toLocaleString()
+}
+
+function MapController({
+  center,
+  bounds,
+}: {
+  center: LatLngExpression | null
+  bounds: LatLngBoundsExpression | null
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (center) {
+      map.setView(center, Math.max(map.getZoom(), 13))
+      return
+    }
+
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: [28, 28],
+        maxZoom: 15,
+      })
+    }
+  }, [bounds, center, map])
+
+  return null
 }
 
 export function FleetMapPage() {
   const navigate = useNavigate()
-  const mapRef = useRef<MapsMap | null>(null)
-  const markersRef = useRef<MapsMarker[]>([])
-  const mapNodeRef = useRef<HTMLDivElement | null>(
-    null,
-  )
-
-  const [mapsConfigured] = useState(
-    isGoogleMapsConfigured,
-  )
-  const [mapsStatus, setMapsStatus] =
-    useState<MapsStatus>(() =>
-      isGoogleMapsConfigured()
-        ? 'loading'
-        : 'unconfigured',
-    )
-
-  const [locations, setLocations] = useState<
-    FleetLocation[]
-  >([])
+  const provider = getActiveProvider()
+  const [locations, setLocations] = useState<FleetLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(
-    null,
-  )
-  const [lastUpdatedAt, setLastUpdatedAt] =
-    useState<Date | null>(null)
-
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
   const [filters, setFilters] =
     useState<FleetLocationFilters>(EMPTY_FILTERS)
-
-  const [selectedDevice, setSelectedDevice] =
-    useState<FleetLocation | null>(null)
+  const [selectedDeviceId, setSelectedDeviceId] =
+    useState<string | null>(null)
 
   const loadFleet = useCallback(
     async (mode: LoadMode) => {
@@ -185,19 +159,17 @@ export function FleetMapPage() {
       }
 
       try {
-        const data = await locationApi.getFleet(
-          filters,
+        const data = await locationApi.getFleet(filters)
+        setLocations(
+          data.filter(
+            location =>
+              location.platform === 'Android',
+          ),
         )
-        setLocations(data)
         setLastUpdatedAt(new Date())
-      } catch (err) {
-        console.error(
-          'Error loading fleet locations:',
-          err,
-        )
-        setError(
-          'No fue posible cargar la ubicación de la flota.',
-        )
+      } catch (failure) {
+        console.error('Error loading Android fleet locations:', failure)
+        setError('No fue posible cargar la ubicación de la flota Android.')
       } finally {
         setLoading(false)
         setRefreshing(false)
@@ -206,18 +178,11 @@ export function FleetMapPage() {
     [filters],
   )
 
-  /*
-   * Carga inicial y recarga por cambio de filtros.
-   * Se difiere al siguiente tick para no ejecutar
-   * setState sincrono dentro del effect.
-   */
   useEffect(() => {
     let cancelled = false
 
     const timer = window.setTimeout(() => {
-      if (!cancelled) {
-        void loadFleet('initial')
-      }
+      if (!cancelled) void loadFleet('initial')
     }, 0)
 
     return () => {
@@ -226,11 +191,6 @@ export function FleetMapPage() {
     }
   }, [loadFleet])
 
-  /*
-   * Monitoreo periodico acotado: solo mientras la
-   * pagina esta visible. No es seguimiento continuo:
-   * refleja lo ultimo reportado por el agente.
-   */
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -241,155 +201,61 @@ export function FleetMapPage() {
     return () => window.clearInterval(interval)
   }, [loadFleet])
 
-  /*
-   * Carga perezosa del SDK de Google Maps.
-   */
-  useEffect(() => {
-    if (!mapsConfigured) {
-      return
-    }
+  const selectedDevice = useMemo(
+    () =>
+      locations.find(location => location.deviceId === selectedDeviceId) ??
+      null,
+    [locations, selectedDeviceId],
+  )
 
-    let cancelled = false
+  const positionedLocations = useMemo(
+    () => locations.filter(hasValidPosition),
+    [locations],
+  )
 
-    void loadGoogleMaps().then((loaded) => {
-      if (cancelled) {
-        return
-      }
+  const fleetBounds = useMemo<LatLngBoundsExpression | null>(() => {
+    if (positionedLocations.length === 0) return null
 
-      setMapsStatus(loaded ? 'ready' : 'error')
-    })
+    return positionedLocations.map(location => [
+      location.latitude,
+      location.longitude,
+    ])
+  }, [positionedLocations])
 
-    return () => {
-      cancelled = true
-    }
-  }, [mapsConfigured])
+  const selectedCenter = useMemo<LatLngExpression | null>(() => {
+    if (!selectedDevice || !hasValidPosition(selectedDevice)) return null
 
-  /*
-   * Inicializacion perezosa del mapa + marcadores
-   * en un unico effect: el mapa se crea la primera
-   * vez que hay un nodo y el SDK esta listo.
-   */
-  useEffect(() => {
-    const maps = window.google?.maps
-
-    if (
-      !maps ||
-      mapsStatus !== 'ready' ||
-      !mapNodeRef.current
-    ) {
-      return
-    }
-
-    if (!mapRef.current) {
-      try {
-        mapRef.current = new maps.Map(
-          mapNodeRef.current,
-          {
-            center: { lat: 18.4861, lng: -69.9312 },
-            zoom: 11,
-            disableDefaultUI: false,
-            zoomControl: true,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-          },
-        )
-      } catch (e) {
-        console.error(
-          'Map initialization failed:',
-          e,
-        )
-        window.setTimeout(() => {
-          setMapsStatus('error')
-        }, 0)
-        return
-      }
-    }
-
-    const map = mapRef.current
-
-    markersRef.current.forEach((m) =>
-      m.setMap(null),
-    )
-    markersRef.current = []
-
-    const bounds = new maps.LatLngBounds()
-    let hasLocations = false
-
-    locations
-      .filter(hasPosition)
-      .forEach((loc) => {
-        const position: MapsLatLng = {
-          lat: loc.latitude as number,
-          lng: loc.longitude as number,
-        }
-
-        const marker = new maps.Marker({
-          position,
-          map,
-          title: loc.deviceName,
-          icon: {
-            path: maps.SymbolPath.CIRCLE,
-            fillColor: markerColorFor(loc),
-            fillOpacity: 0.9,
-            strokeWeight: 2,
-            strokeColor: '#fff',
-            scale: 9,
-          },
-        })
-
-        marker.addListener('click', () => {
-          setSelectedDevice(loc)
-          map.panTo(position)
-        })
-
-        markersRef.current.push(marker)
-        bounds.extend(position)
-        hasLocations = true
-      })
-
-    if (hasLocations) {
-      map.fitBounds(bounds)
-    }
-  }, [locations, mapsStatus])
-
-  const handleFilterChange = (
-    key: keyof FleetLocationFilters,
-    value: string | number | undefined,
-  ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
+    return [selectedDevice.latitude, selectedDevice.longitude]
+  }, [selectedDevice])
 
   const stateCounts = useMemo(
     () =>
-      locations.reduce<Record<string, number>>(
-        (acc, loc) => {
-          acc[loc.locationState] =
-            (acc[loc.locationState] ?? 0) + 1
-          return acc
+      locations.reduce<Record<FleetLocationState, number>>(
+        (counts, location) => {
+          counts[location.locationState] += 1
+          return counts
         },
-        {},
+        {
+          Fresh: 0,
+          Stale: 0,
+          Offline: 0,
+          NoLocation: 0,
+          PermissionDenied: 0,
+        },
       ),
     [locations],
   )
 
-  const withCoordinates = useMemo(
-    () => locations.filter(hasPosition).length,
-    [locations],
-  )
-
   const siteOptions = useMemo(() => {
-    const map = new Map<string, string>()
+    const sites = new Map<string, string>()
 
-    locations.forEach((loc) => {
-      if (loc.siteId && loc.siteName) {
-        map.set(loc.siteId, loc.siteName)
+    locations.forEach(location => {
+      if (location.siteId && location.siteName) {
+        sites.set(location.siteId, location.siteName)
       }
     })
 
-    return Array.from(map.entries()).map(
-      ([id, name]) => ({ id, name }),
-    )
+    return Array.from(sites, ([id, name]) => ({ id, name }))
   }, [locations])
 
   const kpis: Array<{
@@ -401,54 +267,60 @@ export function FleetMapPage() {
   }> = [
     {
       key: 'total',
-      label: 'Dispositivos',
+      label: 'Android enrolados',
       value: locations.length,
       tone: 'neutral',
       icon: Smartphone,
     },
     {
       key: 'position',
-      label: 'Con posición',
-      value: withCoordinates,
+      label: 'Con posición válida',
+      value: positionedLocations.length,
       tone: 'info',
       icon: Navigation,
     },
     {
       key: 'fresh',
       label: 'Recientes',
-      value: stateCounts.Fresh ?? 0,
+      value: stateCounts.Fresh,
       tone: 'ok',
       icon: Activity,
     },
     {
       key: 'stale',
       label: 'Antiguas',
-      value: stateCounts.Stale ?? 0,
+      value: stateCounts.Stale,
       tone: 'warn',
       icon: Clock3,
     },
     {
       key: 'noloc',
       label: 'Sin ubicación',
-      value: stateCounts.NoLocation ?? 0,
+      value: stateCounts.NoLocation,
       tone: 'muted',
       icon: MapPinOff,
     },
     {
       key: 'denied',
       label: 'Permiso denegado',
-      value: stateCounts.PermissionDenied ?? 0,
+      value: stateCounts.PermissionDenied,
       tone: 'danger',
       icon: ShieldAlert,
     },
   ]
 
-  const mapsStatusLabel: Record<MapsStatus, string> = {
-    unconfigured: 'Google Maps: sin configurar',
-    loading: 'Google Maps: cargando',
-    ready: 'Google Maps: listo',
-    error: 'Google Maps: error',
+  function handleFilterChange(
+    key: keyof FleetLocationFilters,
+    value: string | number | undefined,
+  ) {
+    setFilters(current => ({ ...current, [key]: value }))
   }
+
+  const emptyMessage = Object.values(filters).some(
+    value => value !== '' && value !== undefined,
+  )
+    ? 'No hay dispositivos Android que coincidan con los filtros.'
+    : 'Aún no existen teléfonos Android enrolados en esta organización.'
 
   return (
     <div className="fleet-map-page">
@@ -461,20 +333,19 @@ export function FleetMapPage() {
             </div>
             <h1>Mapa de Flota</h1>
             <p>
-              Monitoreo periódico de la flota Android. Las
-              posiciones se muestran solo cuando el
-              dispositivo las reporta mediante el flujo
-              autorizado.
+              Monitoreo periódico de posiciones reportadas por dispositivos
+              Android mediante el flujo empresarial autorizado.
             </p>
           </div>
         </div>
 
         <div className="fleet-map-hero__actions">
           <span
-            className={`fleet-maps-status fleet-maps-status--${mapsStatus}`}
+            className="fleet-maps-status fleet-maps-status--ready"
+            title={provider.productionGuidance}
           >
             <Radio size={13} />
-            {mapsStatusLabel[mapsStatus]}
+            {provider.name}: activo
           </span>
           <button
             type="button"
@@ -484,20 +355,15 @@ export function FleetMapPage() {
           >
             <RefreshCw
               size={16}
-              className={
-                loading || refreshing ? 'spin' : ''
-              }
+              className={loading || refreshing ? 'spin' : ''}
             />
             Actualizar
           </button>
         </div>
       </header>
 
-      <section
-        className="fleet-kpi-grid"
-        aria-label="Indicadores de flota"
-      >
-        {kpis.map((kpi) => {
+      <section className="fleet-kpi-grid" aria-label="Indicadores de flota">
+        {kpis.map(kpi => {
           const Icon = kpi.icon
 
           return (
@@ -508,33 +374,23 @@ export function FleetMapPage() {
               <span className="fleet-kpi__icon">
                 <Icon size={18} />
               </span>
-              <span className="fleet-kpi__value">
-                {kpi.value}
-              </span>
-              <span className="fleet-kpi__label">
-                {kpi.label}
-              </span>
+              <span className="fleet-kpi__value">{kpi.value}</span>
+              <span className="fleet-kpi__label">{kpi.label}</span>
             </article>
           )
         })}
       </section>
 
-      <section
-        className="fleet-map-toolbar"
-        aria-label="Filtros de flota"
-      >
+      <section className="fleet-map-toolbar" aria-label="Filtros de flota">
         <div className="fleet-filter-lead">
           <Search size={16} />
           <input
             type="search"
             aria-label="Buscar dispositivo"
-            placeholder="Buscar por nombre o serie..."
-            value={filters.search || ''}
-            onChange={(e) =>
-              handleFilterChange(
-                'search',
-                e.target.value,
-              )
+            placeholder="Buscar por nombre o fabricante..."
+            value={filters.search ?? ''}
+            onChange={event =>
+              handleFilterChange('search', event.target.value)
             }
           />
         </div>
@@ -544,12 +400,9 @@ export function FleetMapPage() {
           <input
             type="text"
             placeholder="Todos"
-            value={filters.manufacturer || ''}
-            onChange={(e) =>
-              handleFilterChange(
-                'manufacturer',
-                e.target.value,
-              )
+            value={filters.manufacturer ?? ''}
+            onChange={event =>
+              handleFilterChange('manufacturer', event.target.value)
             }
           />
         </label>
@@ -557,16 +410,13 @@ export function FleetMapPage() {
         <label className="fleet-field">
           <span>Localidad / Sitio</span>
           <select
-            value={filters.siteId || ''}
-            onChange={(e) =>
-              handleFilterChange(
-                'siteId',
-                e.target.value,
-              )
+            value={filters.siteId ?? ''}
+            onChange={event =>
+              handleFilterChange('siteId', event.target.value)
             }
           >
             <option value="">Todos</option>
-            {siteOptions.map((site) => (
+            {siteOptions.map(site => (
               <option key={site.id} value={site.id}>
                 {site.name}
               </option>
@@ -579,12 +429,9 @@ export function FleetMapPage() {
           <input
             type="text"
             placeholder="Todos"
-            value={filters.department || ''}
-            onChange={(e) =>
-              handleFilterChange(
-                'department',
-                e.target.value,
-              )
+            value={filters.department ?? ''}
+            onChange={event =>
+              handleFilterChange('department', event.target.value)
             }
           />
         </label>
@@ -593,20 +440,15 @@ export function FleetMapPage() {
           <span>Estado de ubicación</span>
           <select
             aria-label="Estado de ubicación"
-            value={filters.locationState || ''}
-            onChange={(e) =>
-              handleFilterChange(
-                'locationState',
-                e.target.value,
-              )
+            value={filters.locationState ?? ''}
+            onChange={event =>
+              handleFilterChange('locationState', event.target.value)
             }
           >
             <option value="">Todos los estados</option>
             {(
-              Object.keys(
-                LOCATION_STATE_LABELS,
-              ) as FleetLocationState[]
-            ).map((state) => (
+              Object.keys(LOCATION_STATE_LABELS) as FleetLocationState[]
+            ).map(state => (
               <option key={state} value={state}>
                 {LOCATION_STATE_LABELS[state]}
               </option>
@@ -621,11 +463,11 @@ export function FleetMapPage() {
             min={1}
             placeholder="Sin límite"
             value={filters.maxSignalAgeMinutes ?? ''}
-            onChange={(e) =>
+            onChange={event =>
               handleFilterChange(
                 'maxSignalAgeMinutes',
-                e.target.value
-                  ? parseInt(e.target.value, 10)
+                event.target.value
+                  ? Number.parseInt(event.target.value, 10)
                   : undefined,
               )
             }
@@ -635,70 +477,43 @@ export function FleetMapPage() {
 
       <main className="fleet-map-container">
         <div className="fleet-map-split">
-          <aside
-            className="fleet-device-list"
-            aria-label="Dispositivos"
-          >
+          <aside className="fleet-device-list" aria-label="Dispositivos Android">
             <div className="fleet-list-header">
               <List size={16} />
-              <span>
-                {locations.length} dispositivos
-              </span>
+              <span>{locations.length} dispositivos Android</span>
               {refreshing && (
-                <RefreshCw
-                  size={13}
-                  className="spin fleet-list-refresh"
-                />
+                <RefreshCw size={13} className="spin fleet-list-refresh" />
               )}
             </div>
 
             {loading ? (
-              <div className="fleet-list-empty">
-                Cargando dispositivos...
-              </div>
+              <div className="fleet-list-empty">Cargando dispositivos...</div>
             ) : locations.length === 0 ? (
-              <div className="fleet-list-empty">
-                No hay dispositivos que coincidan con los
-                filtros.
-              </div>
+              <div className="fleet-list-empty">{emptyMessage}</div>
             ) : (
               <ul>
-                {locations.map((loc) => (
+                {locations.map(location => (
                   <li
-                    key={loc.deviceId}
+                    key={location.deviceId}
                     className={
-                      selectedDevice?.deviceId ===
-                      loc.deviceId
+                      selectedDeviceId === location.deviceId
                         ? 'selected'
                         : undefined
                     }
                   >
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDevice(loc)
-                        if (hasPosition(loc)) {
-                          mapRef.current?.panTo({
-                            lat: loc.latitude as number,
-                            lng: loc.longitude as number,
-                          })
-                        }
-                      }}
+                      onClick={() => setSelectedDeviceId(location.deviceId)}
                     >
                       <span
                         className="fleet-state-dot"
-                        style={{
-                          backgroundColor:
-                            markerColorFor(loc),
-                        }}
+                        style={{ backgroundColor: markerColorFor(location) }}
                       />
                       <span className="fleet-device-name">
-                        {loc.deviceName}
+                        {location.deviceName}
                       </span>
                       <span className="fleet-device-state">
-                        {LOCATION_STATE_LABELS[
-                          loc.locationState
-                        ] ?? loc.locationState}
+                        {LOCATION_STATE_LABELS[location.locationState]}
                       </span>
                     </button>
                   </li>
@@ -708,71 +523,48 @@ export function FleetMapPage() {
           </aside>
 
           <div className="fleet-map-viewport">
-            {mapsStatus === 'ready' ? (
-              <div
-                id="google-map"
-                ref={mapNodeRef}
-                className="fleet-map-canvas"
+            <MapContainer
+              center={DEFAULT_CENTER}
+              zoom={11}
+              className="fleet-map-canvas"
+              scrollWheelZoom
+            >
+              <TileLayer
+                url={provider.url}
+                attribution={provider.attribution}
+                maxZoom={provider.maxZoom}
               />
-            ) : mapsStatus === 'loading' ? (
-              <div className="fleet-map-state">
-                <RefreshCw size={40} className="spin" />
-                <p>Cargando Google Maps...</p>
-              </div>
-            ) : mapsStatus === 'error' ? (
-              <div className="fleet-map-state fleet-map-state--error">
-                <AlertTriangle size={40} />
-                <h2>Error de Google Maps</h2>
-                <p>
-                  No se pudo cargar el SDK de Google Maps.
-                  Verifique que la clave API sea válida y
-                  esté habilitada para Maps JavaScript API.
-                </p>
-              </div>
-            ) : (
-              <div className="fleet-map-state fleet-map-state--config">
-                <AlertTriangle size={40} />
-                <h2>Configuración Pendiente</h2>
-                <p>Falta la clave de Google Maps API.</p>
-                <div className="fleet-config-hint">
-                  <p>
-                    Configure la variable de entorno{' '}
-                    <code>VITE_GOOGLE_MAPS_API_KEY</code>{' '}
-                    y reinicie el build del frontend.
-                  </p>
-                  <ol>
-                    <li>
-                      Cree el archivo{' '}
-                      <code>.env</code> en{' '}
-                      <code>src/frontend/titanmdm-web</code>.
-                    </li>
-                    <li>
-                      Añada{' '}
-                      <code>
-                        VITE_GOOGLE_MAPS_API_KEY=&lt;su-clave&gt;
-                      </code>
-                      .
-                    </li>
-                    <li>
-                      Habilite <em>Maps JavaScript API</em> en
-                      Google Cloud Console.
-                    </li>
-                    <li>
-                      Reinicie{' '}
-                      <code>npm run dev</code> o vuelva a
-                      construir.
-                    </li>
-                  </ol>
-                  <p className="fleet-config-note">
-                    <Info size={14} />
-                    La lista de dispositivos y los
-                    indicadores siguen disponibles sin la
-                    clave. No se muestran posiciones
-                    estimadas.
-                  </p>
-                </div>
+              <MapController center={selectedCenter} bounds={fleetBounds} />
+              {positionedLocations.map(location => (
+                <CircleMarker
+                  key={location.deviceId}
+                  center={[location.latitude, location.longitude]}
+                  radius={9}
+                  pathOptions={{
+                    color: '#ffffff',
+                    weight: 2,
+                    fillColor: markerColorFor(location),
+                    fillOpacity: 0.92,
+                  }}
+                  eventHandlers={{
+                    click: () => setSelectedDeviceId(location.deviceId),
+                  }}
+                />
+              ))}
+            </MapContainer>
+
+            {positionedLocations.length === 0 && !loading && (
+              <div className="fleet-map-no-positions" role="status">
+                <MapPinOff size={18} />
+                La flota Android aún no ha reportado coordenadas válidas.
               </div>
             )}
+
+            <div className="fleet-tile-guidance">
+              <Info size={13} />
+              OSM público para uso moderado. Configure teselas corporativas o
+              un proveedor con SLA antes de operar una flota en producción.
+            </div>
 
             {error && (
               <div className="fleet-map-toast" role="alert">
@@ -781,22 +573,21 @@ export function FleetMapPage() {
               </div>
             )}
 
-            {mapsStatus === 'ready' && lastUpdatedAt && (
+            {lastUpdatedAt && (
               <div className="fleet-map-updated">
                 <CheckCircle2 size={13} />
-                Actualizado{' '}
-                {lastUpdatedAt.toLocaleTimeString()} ·
-                monitoreo periódico (60 s)
+                Actualizado {lastUpdatedAt.toLocaleTimeString()} · monitoreo
+                periódico (60 s)
               </div>
             )}
 
-            {selectedDevice && mapsStatus === 'ready' && (
+            {selectedDevice && (
               <div className="fleet-device-card">
                 <button
                   type="button"
                   className="fleet-device-card__close"
                   aria-label="Cerrar detalle"
-                  onClick={() => setSelectedDevice(null)}
+                  onClick={() => setSelectedDeviceId(null)}
                 >
                   ×
                 </button>
@@ -811,68 +602,42 @@ export function FleetMapPage() {
 
                 <div className="fleet-device-card__body">
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Estado:
-                    </span>
+                    <span className="fleet-info-label">Ubicación:</span>
                     <span
                       className={`fleet-location-pill ${selectedDevice.locationState.toLowerCase()}`}
                     >
-                      {LOCATION_STATE_LABELS[
-                        selectedDevice.locationState
-                      ] ?? selectedDevice.locationState}
+                      {LOCATION_STATE_LABELS[selectedDevice.locationState]}
                     </span>
                   </div>
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Plataforma:
-                    </span>
+                    <span className="fleet-info-label">Conectividad:</span>
                     <span>{selectedDevice.status}</span>
                   </div>
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Fabricante:
-                    </span>
-                    <span>
-                      {selectedDevice.manufacturer || 'N/A'}
-                    </span>
+                    <span className="fleet-info-label">Fabricante:</span>
+                    <span>{selectedDevice.manufacturer || 'N/A'}</span>
                   </div>
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Sitio:
-                    </span>
-                    <span>
-                      {selectedDevice.siteName || 'N/A'}
-                    </span>
+                    <span className="fleet-info-label">Sitio:</span>
+                    <span>{selectedDevice.siteName || 'N/A'}</span>
                   </div>
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Última señal:
-                    </span>
-                    <span>
-                      {selectedDevice.capturedAtUtc
-                        ? new Date(
-                            selectedDevice.capturedAtUtc,
-                          ).toLocaleString()
-                        : 'Sin datos'}
-                    </span>
+                    <span className="fleet-info-label">Última posición:</span>
+                    <span>{formatCapturedAt(selectedDevice.capturedAtUtc)}</span>
                   </div>
                   <div className="fleet-info-row">
-                    <span className="fleet-info-label">
-                      Edad de señal:
-                    </span>
+                    <span className="fleet-info-label">Edad de señal:</span>
                     <span>
-                      {selectedDevice.signalAgeMinutes !==
-                      null
+                      {selectedDevice.signalAgeMinutes !== null
                         ? `${Math.round(selectedDevice.signalAgeMinutes)} min`
                         : 'N/D'}
                     </span>
                   </div>
 
-                  {!hasPosition(selectedDevice) && (
+                  {!hasValidPosition(selectedDevice) && (
                     <div className="fleet-no-location-note">
-                      Este dispositivo no ha reportado
-                      coordenadas. No se muestra una
-                      posición estimada.
+                      Este dispositivo no ha reportado coordenadas válidas. No
+                      se crea un marcador ni se estima su posición.
                     </div>
                   )}
                 </div>

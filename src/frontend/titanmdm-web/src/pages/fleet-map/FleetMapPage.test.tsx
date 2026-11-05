@@ -1,10 +1,17 @@
+import type {
+  ReactNode,
+} from 'react'
 import {
   fireEvent,
   render,
   screen,
   waitFor,
 } from '@testing-library/react'
-
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+} from 'react-router-dom'
 import {
   beforeEach,
   describe,
@@ -12,24 +19,43 @@ import {
   it,
   vi,
 } from 'vitest'
-
 import {
   locationApi,
   type FleetLocation,
 } from '../../api/locationApi'
-import {
-  FleetMapPage,
-} from './FleetMapPage'
+import { FleetMapPage } from './FleetMapPage'
 
-const mapsConfig = vi.hoisted(() => ({
-  configured: true,
+const map = vi.hoisted(() => ({
+  setView: vi.fn(),
+  fitBounds: vi.fn(),
+  getZoom: vi.fn(() => 11),
 }))
 
-vi.mock('../../config/googleMaps', () => ({
-  isGoogleMapsConfigured: () =>
-    mapsConfig.configured,
-  loadGoogleMaps: () =>
-    Promise.resolve(mapsConfig.configured),
+vi.mock('react-leaflet', () => ({
+  MapContainer: ({ children }: { children: ReactNode }) => (
+    <div data-testid="leaflet-map">{children}</div>
+  ),
+  TileLayer: ({
+    url,
+    attribution,
+  }: {
+    url: string
+    attribution: string
+  }) => (
+    <div
+      data-testid="tile-layer"
+      data-url={url}
+      data-attribution={attribution}
+    />
+  ),
+  CircleMarker: ({
+    center,
+  }: {
+    center: readonly [number, number]
+  }) => (
+    <div data-testid="fleet-marker" data-center={center.join(',')} />
+  ),
+  useMap: () => map,
 }))
 
 vi.mock('../../api/locationApi', () => ({
@@ -40,12 +66,17 @@ vi.mock('../../api/locationApi', () => ({
 
 const navigate = vi.hoisted(() => vi.fn())
 
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => navigate,
-}))
+vi.mock('react-router-dom', async importOriginal => {
+  const actual = await importOriginal<typeof import('react-router-dom')>()
+
+  return {
+    ...actual,
+    useNavigate: () => navigate,
+  }
+})
 
 function fleetRow(
-  overrides: Partial<FleetLocation>,
+  overrides: Partial<FleetLocation> = {},
 ): FleetLocation {
   return {
     deviceId: 'device-1',
@@ -70,150 +101,182 @@ function fleetRow(
   }
 }
 
-describe('FleetMapPage ANDROID-GEO-01', () => {
+function renderMap() {
+  return render(
+    <MemoryRouter>
+      <FleetMapPage />
+    </MemoryRouter>,
+  )
+}
+
+describe('FleetMapPage ANDROID-FIX-02', () => {
   beforeEach(() => {
-    mapsConfig.configured = true
     navigate.mockReset()
+    map.setView.mockReset()
+    map.fitBounds.mockReset()
     vi.clearAllMocks()
-    vi.mocked(locationApi.getFleet).mockResolvedValue(
-      [],
+    vi.mocked(locationApi.getFleet).mockResolvedValue([])
+  })
+
+  it('loads the official fleet route with Leaflet and OpenStreetMap', async () => {
+    render(
+      <MemoryRouter initialEntries={['/fleet-map?workspace=android']}>
+        <Routes>
+          <Route path="/fleet-map" element={<FleetMapPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('leaflet-map')).toBeInTheDocument()
+    expect(screen.getByTestId('tile-layer')).toHaveAttribute(
+      'data-url',
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    )
+    expect(screen.getByTestId('tile-layer')).toHaveAttribute(
+      'data-attribution',
+      expect.stringContaining('OpenStreetMap'),
+    )
+    expect(screen.queryByText(/Google Maps/i)).not.toBeInTheDocument()
+  })
+
+  it('creates markers only for finite coordinates inside valid ranges', async () => {
+    vi.mocked(locationApi.getFleet).mockResolvedValue([
+      fleetRow(),
+      fleetRow({
+        deviceId: 'device-null',
+        deviceName: 'Sin posición',
+        latitude: null,
+        longitude: null,
+        locationState: 'NoLocation',
+      }),
+      fleetRow({
+        deviceId: 'device-invalid',
+        deviceName: 'Coordenada inválida',
+        latitude: 95,
+        longitude: -58,
+      }),
+    ])
+
+    renderMap()
+
+    expect(await screen.findByText('Tablet Alfa')).toBeInTheDocument()
+    expect(screen.getAllByTestId('fleet-marker')).toHaveLength(1)
+    expect(screen.getByTestId('fleet-marker')).toHaveAttribute(
+      'data-center',
+      '-34.6037,-58.3816',
     )
   })
 
-  it('shows the configuration-pending state when the Maps key is missing', async () => {
-    mapsConfig.configured = false
-
-    render(<FleetMapPage />)
+  it('shows the Android enrollment empty state', async () => {
+    renderMap()
 
     expect(
       await screen.findByText(
-        'Configuración Pendiente',
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText(
-        /Configure la variable de entorno/,
+        'Aún no existen teléfonos Android enrolados en esta organización.',
       ),
     ).toBeInTheDocument()
   })
 
-  it('renders the device list with location states', async () => {
-    vi.mocked(locationApi.getFleet).mockResolvedValue(
-      [
-        fleetRow({}),
-        fleetRow({
-          deviceId: 'device-2',
-          deviceName: 'Tablet Beta',
-          latitude: null,
-          longitude: null,
-          capturedAtUtc: null,
-          locationState: 'NoLocation',
-          signalAgeMinutes: null,
-        }),
-        fleetRow({
-          deviceId: 'device-3',
-          deviceName: 'Tablet Gamma',
-          locationState: 'PermissionDenied',
-          latitude: null,
-          longitude: null,
-        }),
-      ],
-    )
+  it('validates nullable and malformed timestamps before displaying them', async () => {
+    vi.mocked(locationApi.getFleet).mockResolvedValue([
+      fleetRow({
+        latitude: null,
+        longitude: null,
+        capturedAtUtc: 'fecha-inválida',
+        locationState: 'NoLocation',
+        signalAgeMinutes: null,
+      }),
+    ])
 
-    render(<FleetMapPage />)
+    renderMap()
+    fireEvent.click(await screen.findByText('Tablet Alfa'))
 
+    expect(screen.getByText('Sin datos')).toBeInTheDocument()
     expect(
-      await screen.findByText('Tablet Alfa'),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText('Tablet Beta'),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getAllByText('Sin ubicación').length,
-    ).toBeGreaterThan(0)
-
-    expect(
-      screen.getAllByText('Permiso denegado').length,
-    ).toBeGreaterThan(0)
-
-    await waitFor(() => {
-      expect(
-        locationApi.getFleet,
-      ).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  it('does not invent coordinates for devices without a reported position', async () => {
-    vi.mocked(locationApi.getFleet).mockResolvedValue(
-      [
-        fleetRow({
-          latitude: null,
-          longitude: null,
-          capturedAtUtc: null,
-          locationState: 'NoLocation',
-          signalAgeMinutes: null,
-        }),
-      ],
-    )
-
-    render(<FleetMapPage />)
-
-    fireEvent.click(
-      await screen.findByText('Tablet Alfa'),
-    )
-
-    expect(
-      screen.getByText(
-        /no ha reportado coordenadas/,
-      ),
-    ).toBeInTheDocument()
-
-    expect(
-      screen.getByText('Sin datos'),
+      screen.getByText(/^Este dispositivo no ha reportado coordenadas válidas/i),
     ).toBeInTheDocument()
   })
 
-  it('shows the signal age for fresh devices', async () => {
-    vi.mocked(locationApi.getFleet).mockResolvedValue(
-      [fleetRow({})],
-    )
+  it('uses signalAgeMinutes from the real fleet contract', async () => {
+    vi.mocked(locationApi.getFleet).mockResolvedValue([fleetRow()])
 
-    render(<FleetMapPage />)
-
-    fireEvent.click(
-      await screen.findByText('Tablet Alfa'),
-    )
+    renderMap()
+    fireEvent.click(await screen.findByText('Tablet Alfa'))
 
     expect(screen.getByText('2 min')).toBeInTheDocument()
   })
 
-  it('sends the locationState filter to the backend', async () => {
-    vi.mocked(locationApi.getFleet).mockResolvedValue(
-      [],
+  it('ignores non-Android rows even if the API returns them', async () => {
+    vi.mocked(locationApi.getFleet).mockResolvedValue([
+      fleetRow(),
+      fleetRow({
+        deviceId: 'device-windows',
+        deviceName: 'Laptop Windows',
+        platform:
+          'Windows' as FleetLocation['platform'],
+      }),
+    ])
+
+    renderMap()
+
+    expect(
+      await screen.findByText('Tablet Alfa'),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.queryByText('Laptop Windows'),
+    ).not.toBeInTheDocument()
+
+    expect(
+      screen.getAllByTestId('fleet-marker'),
+    ).toHaveLength(1)
+  })
+
+  it('shows an API error without inventing device positions', async () => {
+    vi.mocked(locationApi.getFleet).mockRejectedValue(
+      new Error('network down'),
     )
 
-    render(<FleetMapPage />)
+    renderMap()
+
+    expect(
+      await screen.findByRole('alert'),
+    ).toHaveTextContent(
+      'No fue posible cargar la ubicación de la flota Android.',
+    )
+
+    expect(
+      screen.getByText(
+        'Aún no existen teléfonos Android enrolados en esta organización.',
+      ),
+    ).toBeInTheDocument()
+
+    expect(
+      screen.queryByTestId('fleet-marker'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('sends fleet filters to the backend', async () => {
+    renderMap()
 
     await screen.findByText(
-      'No hay dispositivos que coincidan con los filtros.',
+      'Aún no existen teléfonos Android enrolados en esta organización.',
     )
 
-    fireEvent.change(
-      screen.getByLabelText('Estado de ubicación'),
-      { target: { value: 'Stale' } },
-    )
+    fireEvent.change(screen.getByLabelText('Estado de ubicación'), {
+      target: { value: 'Stale' },
+    })
 
     await waitFor(() => {
-      expect(
-        locationApi.getFleet,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          locationState: 'Stale',
-        }),
+      expect(locationApi.getFleet).toHaveBeenCalledWith(
+        expect.objectContaining({ locationState: 'Stale' }),
       )
     })
+
+    expect(
+      await screen.findByText(
+        'No hay dispositivos Android que coincidan con los filtros.',
+      ),
+    ).toBeInTheDocument()
   })
 })

@@ -254,7 +254,8 @@ public sealed class AndroidPoliciesController : ControllerBase
                     policyId,
                     request.DeviceId,
                     accessibleSiteIds,
-                    cancellationToken);
+                    cancellationToken,
+                    GetUserId());
 
             return Ok(result);
         }

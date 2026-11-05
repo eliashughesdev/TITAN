@@ -73,6 +73,11 @@
   transition: background .16s ease, transform .16s ease, border-color .16s ease;
 }
 
+.afcc-device-links {
+  display: grid;
+  gap: 8px;
+}
+
 .afcc button {
   display: inline-flex;
   align-items: center;
@@ -525,6 +530,56 @@
   padding: 32px 12px;
   text-align: center;
   color: #8794aa;
+}
+
+.afcc-empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 14px;
+  padding: 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  text-align: left;
+  color: #475569;
+}
+
+.afcc-empty-state > svg {
+  flex: 0 0 auto;
+  color: var(--afcc-green);
+}
+
+.afcc-empty-state div {
+  display: grid;
+  gap: 6px;
+}
+
+.afcc-empty-state strong {
+  color: #172554;
+  font-size: 14px;
+}
+
+.afcc-empty-state p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.afcc-empty-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--afcc-green-deep);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.afcc-empty-link:hover {
+  text-decoration: underline;
 }
 
 .afcc-device-empty {

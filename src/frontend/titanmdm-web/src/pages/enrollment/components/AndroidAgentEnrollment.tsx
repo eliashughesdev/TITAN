@@ -7,6 +7,7 @@ import {
   getEffectiveTokenStatus,
   getStatusLabel,
 } from '../utils/enrollmentFormatters'
+import { AndroidAgentEnrollmentQr } from './AndroidAgentEnrollmentQr'
 
 interface AndroidAgentEnrollmentProps {
   controller:
@@ -15,6 +16,7 @@ interface AndroidAgentEnrollmentProps {
   canCreate?: boolean
   canRevoke?: boolean
 }
+
 
 export default function AndroidAgentEnrollment({
   controller,
@@ -248,11 +250,11 @@ export default function AndroidAgentEnrollment({
               </strong>
 
               <p>
-                Esta credencial pertenece al
-                TitanMDM Android Agent. No es el
-                token de Android Enterprise ni
-                debe utilizarse para
-                aprovisionamiento mediante QR.
+                Credencial del TitanMDM Android
+                Agent (inscripción interna). Se
+                entrega como QR con servidor y
+                token: no usa Android Enterprise,
+                Google ni DUNS.
               </p>
             </div>
 
@@ -315,6 +317,8 @@ export default function AndroidAgentEnrollment({
                 mostrar el secreto después de
                 abandonar esta vista.
               </div>
+
+              <AndroidAgentEnrollmentQr token={createdToken.token} />
 
               <div className="enrollment-token-value">
                 <code>

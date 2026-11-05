@@ -13,6 +13,9 @@ enum class TitanLauncherPolicyOrigin {
     /** Configuración administrada real (Android Device Policy). */
     AndroidDevicePolicy,
 
+    /** Entregada por el servidor TitanMDM al agente (sin Android Enterprise). */
+    TitanServer,
+
     /** Perfil local de laboratorio (sólo builds debug). */
     LabLocal,
 
@@ -70,9 +73,11 @@ object TitanLabPolicyJson {
  * Reglas (fail-closed):
  *  1. Si existen restricciones administradas reales, SIEMPRE ganan y el
  *     perfil de laboratorio se ignora por completo.
- *  2. El perfil de laboratorio sólo se aplica cuando `labEnabled` es
+ *  2. Sin managed config, se usa la configuración que el servidor
+ *     TitanMDM entregó al agente (equipos sin Android Enterprise).
+ *  3. El perfil de laboratorio sólo se aplica cuando `labEnabled` es
  *     verdadero (build debug) y la app NO es device/profile owner.
- *  3. Sin política administrada ni laboratorio, el resultado es la
+ *  4. Sin política administrada ni laboratorio, el resultado es la
  *     política vacía ([TitanLauncherPolicyState.Absent]).
  *
  * Este resolver es puro (sin framework) y por tanto verificable en JVM.
@@ -85,7 +90,8 @@ object TitanLauncherPolicyResolver {
         officialRestrictions: Map<String, String>,
         labProfileJson: String?,
         labEnabled: Boolean,
-        deviceManaged: Boolean
+        deviceManaged: Boolean,
+        serverRestrictions: Map<String, String> = emptyMap()
     ): TitanLauncherPolicyResolution {
 
         // 1. La configuración administrada siempre tiene prioridad.
@@ -96,7 +102,15 @@ object TitanLauncherPolicyResolver {
             )
         }
 
-        // 2. Modo laboratorio sólo en builds debug y fuera de DPC.
+        // 2. Configuración del servidor TitanMDM (agente sin AMAPI).
+        if (serverRestrictions.isNotEmpty()) {
+            return TitanLauncherPolicyResolution(
+                policy = TitanLauncherPolicyReader.read(serverRestrictions),
+                origin = TitanLauncherPolicyOrigin.TitanServer
+            )
+        }
+
+        // 3. Modo laboratorio sólo en builds debug y fuera de DPC.
         if (labEnabled && !deviceManaged) {
             return TitanLauncherPolicyResolution(
                 policy = resolveLabProfile(labProfileJson),
@@ -104,7 +118,7 @@ object TitanLauncherPolicyResolver {
             )
         }
 
-        // 3. Sin política.
+        // 4. Sin política.
         return TitanLauncherPolicyResolution(
             policy = TitanLauncherPolicyReader.read(officialRestrictions),
             origin = TitanLauncherPolicyOrigin.None

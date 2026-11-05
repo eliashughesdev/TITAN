@@ -283,6 +283,12 @@ public sealed class AndroidDeviceSyncService
             errors);
     }
 
+    /// <summary>
+    /// Modo informado para equipos inscritos por TitanMDM Agent (Kotlin)
+    /// sin Android Enterprise: no tienen fila en AndroidDevices.
+    /// </summary>
+    public const string TitanAgentManagementMode = "TITAN_AGENT";
+
     public async Task<AndroidDeviceInventorySummaryDto>
         GetSummaryAsync(
             Guid organizationId,
@@ -294,25 +300,39 @@ public sealed class AndroidDeviceSyncService
         var allowedSiteIds =
             NormalizeSiteScope(accessibleSiteIds);
 
+        /*
+         * Flota Android = AMAPI (fila en AndroidDevices) + TitanMDM
+         * Agent (solo Devices). LEFT JOIN para no ocultar los equipos
+         * inscritos por el agente Kotlin sin Android Enterprise.
+         */
         var rows =
             await (
-                from android in
-                    _dbContext
-                        .AndroidDevices
-                        .AsNoTracking()
-
-                join device in
+                from device in
                     _dbContext
                         .Devices
                         .AsNoTracking()
-                    on android.DeviceId
-                    equals device.Id
+
+                join androidRow in
+                    _dbContext
+                        .AndroidDevices
+                        .AsNoTracking()
+                        .Where(
+                            x =>
+                                x.OrganizationId ==
+                                organizationId)
+                    on device.Id
+                    equals androidRow.DeviceId
+                    into androidRows
+
+                from android in
+                    androidRows.DefaultIfEmpty()
 
                 where
-                    android.OrganizationId ==
-                    organizationId &&
                     device.OrganizationId ==
                     organizationId &&
+                    device.Platform ==
+                    DevicePlatform.Android &&
+                    !device.IsDeleted &&
                     (allowedSiteIds == null ||
                      (device.SiteId != null &&
                       allowedSiteIds.Contains(
@@ -320,9 +340,17 @@ public sealed class AndroidDeviceSyncService
 
                 select new
                 {
-                    android.IsDeletedInGoogle,
-                    android.ManagementMode,
-                    android.LastSynchronizedAtUtc,
+                    IsDeletedInGoogle =
+                        android != null &&
+                        android.IsDeletedInGoogle,
+                    ManagementMode =
+                        android != null
+                            ? android.ManagementMode
+                            : TitanAgentManagementMode,
+                    LastSynchronizedAtUtc =
+                        android != null
+                            ? (DateTime?)android.LastSynchronizedAtUtc
+                            : null,
                     device.IsManaged,
                     device.ComplianceStatus
                 })
@@ -344,11 +372,9 @@ public sealed class AndroidDeviceSyncService
              cancellationToken);
 
         var deviceLastSync =
-            rows.Count == 0
-                ? (DateTime?)null
-                : rows.Max(
-                    x =>
-                        x.LastSynchronizedAtUtc);
+            rows.Max(
+                x =>
+                    x.LastSynchronizedAtUtc);
 
         var lastSync =
             enterpriseLastSync ??
@@ -436,23 +462,31 @@ public sealed class AndroidDeviceSyncService
             NormalizeSiteScope(accessibleSiteIds);
 
         var query =
-            from android in
-                _dbContext
-                    .AndroidDevices
-                    .AsNoTracking()
-
-            join device in
+            from device in
                 _dbContext
                     .Devices
                     .AsNoTracking()
-                on android.DeviceId
-                equals device.Id
+
+            join androidRow in
+                _dbContext
+                    .AndroidDevices
+                    .AsNoTracking()
+                    .Where(
+                        x =>
+                            x.OrganizationId ==
+                            organizationId)
+                on device.Id
+                equals androidRow.DeviceId
+                into androidRows
+
+            from android in
+                androidRows.DefaultIfEmpty()
 
             where
-                android.OrganizationId ==
-                organizationId &&
                 device.OrganizationId ==
                 organizationId &&
+                device.Platform ==
+                DevicePlatform.Android &&
                 !device.IsDeleted &&
                 (allowedSiteIds == null ||
                  (device.SiteId != null &&
@@ -480,7 +514,8 @@ public sealed class AndroidDeviceSyncService
                         (x.Device.Model != null &&
                          x.Device.Model
                              .Contains(term)) ||
-                        (x.Android.AppliedPolicyName != null &&
+                        (x.Android != null &&
+                         x.Android.AppliedPolicyName != null &&
                          x.Android.AppliedPolicyName
                              .Contains(term)));
         }
@@ -494,8 +529,13 @@ public sealed class AndroidDeviceSyncService
             await query
                 .OrderByDescending(
                     x =>
-                        x.Android
-                            .LastSynchronizedAtUtc)
+                        x.Android != null
+                            ? x.Android.LastSynchronizedAtUtc
+                            : x.Device.LastSeenAtUtc ??
+                              x.Device.CreatedAtUtc)
+                .ThenBy(
+                    x =>
+                        x.Device.DeviceName)
                 .Skip(
                     (normalizedPage - 1) *
                     normalizedPageSize)
@@ -518,18 +558,22 @@ public sealed class AndroidDeviceSyncService
                                 .ToString(),
                             x.Device.IsManaged,
                             x.Device.LastSeenAtUtc,
-                            x.Android.ManagementMode,
-                            x.Android.Ownership,
-                            x.Android.State,
-                            x.Android.AppliedPolicyName,
-                            x.Android.AppliedPolicyVersion,
-                            x.Android.AppliedPolicyState,
-                            x.Android.LastPolicySyncTimeUtc,
-                            x.Android.LastSynchronizedAtUtc,
-                            x.Android.IsDeletedInGoogle,
-                            x.Android.ApiLevel,
+                            x.Android?.ManagementMode ??
+                                TitanAgentManagementMode,
+                            x.Android?.Ownership,
+                            x.Android?.State ??
+                                x.Device.Status.ToString(),
+                            x.Android?.AppliedPolicyName,
+                            x.Android?.AppliedPolicyVersion,
+                            x.Android?.AppliedPolicyState,
+                            x.Android?.LastPolicySyncTimeUtc,
+                            x.Android?.LastSynchronizedAtUtc ??
+                                x.Device.LastSeenAtUtc ??
+                                x.Device.CreatedAtUtc,
+                            x.Android?.IsDeletedInGoogle ?? false,
+                            x.Android?.ApiLevel,
                             x.Device.OperatingSystemVersion,
-                            x.Android.SecurityPatchLevel))
+                            x.Android?.SecurityPatchLevel))
                 .ToList();
 
         return new AndroidDeviceInventoryPageDto(

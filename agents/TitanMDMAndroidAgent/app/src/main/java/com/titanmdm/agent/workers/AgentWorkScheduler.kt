@@ -23,6 +23,9 @@ object AgentWorkScheduler {
     private const val LOCATION_REPORTING_WORK_NAME =
         "titanmdm-location-reporting"
 
+    private const val GEOFENCE_SYNC_WORK_NAME =
+        "titanmdm-geofence-sync"
+
     fun schedule(
         context: Context
     ) {
@@ -40,6 +43,40 @@ object AgentWorkScheduler {
         scheduleLocationReporting(
             appContext
         )
+
+        enqueueGeofenceSync(
+            appContext
+        )
+    }
+
+    /*
+     * P1 Geofencing proactivo: registro inmediato de las
+     * geocercas en el SO (arranque, actualizacion, sync).
+     */
+    fun enqueueGeofenceSync(
+        context: Context
+    ) {
+        val request =
+            OneTimeWorkRequestBuilder<
+                    GeofenceSyncWorker
+                    >()
+                .setConstraints(
+                    networkConstraints()
+                )
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    1,
+                    TimeUnit.MINUTES
+                )
+                .build()
+
+        WorkManager
+            .getInstance(context)
+            .enqueueUniqueWork(
+                GEOFENCE_SYNC_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
     }
 
     fun scheduleAndSyncNow(
@@ -70,6 +107,36 @@ object AgentWorkScheduler {
         enqueueImmediateCommandSync(
             appContext
         )
+
+        reportLocationNow(
+            appContext
+        )
+    }
+
+    /*
+     * Cada sincronización envía también la posición: el servidor evalúa
+     * las geocercas con la ubicación más reciente (la política de
+     * captura del servidor sigue mandando sobre frecuencia y batería).
+     */
+    fun reportLocationNow(
+        context: Context
+    ) {
+        val request =
+            OneTimeWorkRequestBuilder<
+                    LocationReportingWorker
+                    >()
+                .setConstraints(
+                    networkConstraints()
+                )
+                .build()
+
+        WorkManager
+            .getInstance(context)
+            .enqueueUniqueWork(
+                "$LOCATION_REPORTING_WORK_NAME-now",
+                ExistingWorkPolicy.KEEP,
+                request
+            )
     }
 
     private fun networkConstraints():

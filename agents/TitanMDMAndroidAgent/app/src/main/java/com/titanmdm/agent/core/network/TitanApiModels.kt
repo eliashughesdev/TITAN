@@ -236,6 +236,36 @@ data class LocationReportRequest(
 )
 
 
+/*
+ * P1 Geofencing proactivo: geocerca activa asignada
+ * al dispositivo (GET api/device/commands/location/geofences).
+ */
+@Serializable
+data class DeviceGeofenceResponse(
+
+    @SerialName("id")
+    val id: String,
+
+    @SerialName("name")
+    val name: String,
+
+    @SerialName("latitude")
+    val latitude: Double,
+
+    @SerialName("longitude")
+    val longitude: Double,
+
+    @SerialName("radiusMeters")
+    val radiusMeters: Double,
+
+    @SerialName("alertOnEnter")
+    val alertOnEnter: Boolean = true,
+
+    @SerialName("alertOnExit")
+    val alertOnExit: Boolean = true
+)
+
+
 @Serializable
 data class LocationReportingPolicyResponse(
 

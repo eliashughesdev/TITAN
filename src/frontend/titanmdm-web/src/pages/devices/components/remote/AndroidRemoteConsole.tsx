@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Command,
   ExternalLink,
+  MapPin,
   MonitorSmartphone,
   RefreshCw,
   ShieldCheck,
@@ -44,6 +45,7 @@ import type {
 
 import type {
   AndroidDeviceDetails,
+  DeviceDetails,
 } from '../../../../types/device'
 
 import {
@@ -118,6 +120,9 @@ export function AndroidRemoteConsole({
   const [details, setDetails] =
     useState<AndroidDeviceDetails | null>(null)
 
+  const [device, setDevice] =
+    useState<DeviceDetails | null>(null)
+
   const [auditEntries, setAuditEntries] =
     useState<AndroidCommandEntry[]>([])
 
@@ -129,13 +134,23 @@ export function AndroidRemoteConsole({
   const [busyAction, setBusyAction] =
     useState<AndroidRemoteAction | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [diagnosticsError, setDiagnosticsError] =
+    useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [capabilitiesResult, detailsResult, auditResult] =
+    setDiagnosticsError(null)
+
+    const [
+      capabilitiesResult,
+      detailsResult,
+      deviceResult,
+      auditResult,
+    ] =
       await Promise.allSettled([
         androidEnterpriseApi.getDeviceCapabilities(deviceId),
         devicesApi.getAndroidDeviceDetails(deviceId),
+        devicesApi.getDeviceById(deviceId),
         androidEnterpriseApi.getAudit({ page: 1, pageSize: 50 }),
       ])
 
@@ -150,6 +165,16 @@ export function AndroidRemoteConsole({
       setDetails(detailsResult.value)
     } else {
       setDetails(null)
+      setDiagnosticsError(consoleErrorMessage(detailsResult.reason))
+    }
+
+    if (deviceResult.status === 'fulfilled') {
+      setDevice(deviceResult.value)
+    } else {
+      setDevice(null)
+      setDiagnosticsError(current =>
+        current ?? consoleErrorMessage(deviceResult.reason),
+      )
     }
 
     if (auditResult.status === 'fulfilled') {
@@ -178,7 +203,11 @@ export function AndroidRemoteConsole({
   }, [deviceId])
 
   useEffect(() => {
-    void load()
+    const timer = window.setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [load])
 
   const refresh = useCallback(() => {
@@ -414,8 +443,9 @@ export function AndroidRemoteConsole({
           <AndroidDiagnosticsPanel
             capabilities={capabilities}
             details={details}
+            device={device}
             loading={loading}
-            error={null}
+            error={diagnosticsError}
             onRefresh={refresh}
           />
 
@@ -456,6 +486,11 @@ export function AndroidRemoteConsole({
               <Link to="/android/titan-launcher?workspace=android">
                 <Smartphone size={16} />
                 Titan Launcher
+                <ExternalLink size={13} />
+              </Link>
+              <Link to="/fleet-map?workspace=android">
+                <MapPin size={16} />
+                Geolocalización de flota
                 <ExternalLink size={13} />
               </Link>
             </nav>

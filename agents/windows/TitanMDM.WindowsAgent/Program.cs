@@ -150,6 +150,10 @@ builder.Services
 
 builder.Services
     .AddSingleton<
+        WindowsSecureAttentionService>();
+
+builder.Services
+    .AddSingleton<
         ICommandExecutor,
         CommandExecutor>();
 

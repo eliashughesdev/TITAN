@@ -1446,3 +1446,58 @@
     padding: 16px;
   }
 }
+
+/* ---------- QR de inscripcion interna (Android Agent) ---------- */
+.enrollment-agent-qr {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #bae6fd;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
+}
+
+.enrollment-agent-qr__server {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.enrollment-agent-qr__server input {
+  padding: 9px 12px;
+  border: 1px solid #7dd3fc;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 500;
+}
+
+.enrollment-agent-qr__warn {
+  margin: 0;
+  color: #b45309;
+  font-size: 0.85rem;
+}
+
+.enrollment-agent-qr__code {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.enrollment-agent-qr__code img {
+  width: min(300px, 100%);
+  height: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(2, 132, 199, 0.18);
+}
+
+.enrollment-agent-qr__code figcaption {
+  max-width: 340px;
+  text-align: center;
+  color: #475569;
+  font-size: 0.85rem;
+}

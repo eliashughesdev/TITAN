@@ -14,7 +14,9 @@ public sealed class AdministrativeAuditEvent
         string? targetId,
         string result,
         string correlationId,
-        string? ipAddress = null)
+        string? ipAddress = null,
+        string? beforeJson = null,
+        string? afterJson = null)
     {
         if (organizationId == Guid.Empty)
         {
@@ -70,6 +72,16 @@ public sealed class AdministrativeAuditEvent
                 ? null
                 : ipAddress.Trim();
 
+        BeforeJson =
+            string.IsNullOrWhiteSpace(beforeJson)
+                ? null
+                : beforeJson.Trim();
+
+        AfterJson =
+            string.IsNullOrWhiteSpace(afterJson)
+                ? null
+                : afterJson.Trim();
+
         CreatedAtUtc =
             DateTime.UtcNow;
     }
@@ -91,6 +103,10 @@ public sealed class AdministrativeAuditEvent
     public string CorrelationId { get; private set; } = string.Empty;
 
     public string? IpAddress { get; private set; }
+
+    public string? BeforeJson { get; private set; }
+
+    public string? AfterJson { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
 }

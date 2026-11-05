@@ -161,4 +161,23 @@
         android:restrictionType="string"
         android:defaultValue="" />
 
+    <!-- Bloqueos del equipo (aplicados por el agente como Device Owner) -->
+    <restriction
+        android:key="titan_persistent_home"
+        android:title="Fijar Titan Launcher como inicio"
+        android:restrictionType="bool"
+        android:defaultValue="true" />
+
+    <restriction
+        android:key="titan_lock_status_bar"
+        android:title="Bloquear barra de estado y notificaciones"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+
+    <restriction
+        android:key="titan_lock_system_keys"
+        android:title="Bloquear teclas del sistema (lock task)"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+
 </restrictions>

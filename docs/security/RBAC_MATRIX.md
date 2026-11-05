@@ -107,6 +107,14 @@ Administración del módulo Ponches.
 | Tickets | tickets.view | tickets.create / tickets.assign / tickets.comment / tickets.close |
 | Geofencing | geofencing.view | geofencing.manage |
 | Kiosk | kiosk.view | kiosk.manage |
+| Android Enterprise | android.enterprise.view | android.enterprise.manage / android.enterprise.actions |
+| Ponches | workspace.ponches.view | ponches.manage |
+| Inventory (ITAM) | workspace.inventory.view / inventory.view / inventory.dashboard.view | inventory.manage |
+| Inventory assets | inventory.assets.view | inventory.assets.manage |
+| Inventory operations | inventory.deliveries.view / inventory.returns.view / inventory.receptions.view | inventory.manage |
+| Inventory counting | inventory.sessions.view / inventory.counts.view / inventory.history.view | inventory.manage |
+| Inventory employees | inventory.employees.view | inventory.manage |
+| Inventory reports | inventory.reports.view | inventory.reports.export |
 
 ---
 

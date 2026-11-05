@@ -339,13 +339,15 @@ public sealed class AndroidPolicyCompiler
                 true;
         }
 
+        // Enums AMAPI v1: Policy.PrintingPolicy y Policy.MicrophoneAccess.
+        // Google rechaza cualquier otro literal con INVALID_ARGUMENT.
         if (GetBool(
                 restrictions,
                 "blockPrinting"))
         {
             policy[
                 "printingPolicy"] =
-                "BLOCKED";
+                "PRINTING_DISALLOWED";
         }
 
         if (GetBool(
@@ -354,7 +356,7 @@ public sealed class AndroidPolicyCompiler
         {
             policy[
                 "microphoneAccess"] =
-                "DISALLOW";
+                "MICROPHONE_ACCESS_DISABLED";
         }
     }
 
@@ -1128,7 +1130,16 @@ public sealed class AndroidPolicyCompiler
                 ["titan_welcome_message"] = welcomeMessage,
                 ["titan_launcher_enabled"] = true,
                 ["titan_launcher_schema_version"] = schemaVersion,
-                ["titan_allowed_apps"] = allowedApps.ToJsonString()
+                ["titan_allowed_apps"] = allowedApps.ToJsonString(),
+
+                // Bloqueos del equipo configurados en la política web.
+                // El agente los aplica como Device Owner (on-premise).
+                ["titan_persistent_home"] =
+                    GetBool(launcher, "persistentHome", true),
+                ["titan_lock_status_bar"] =
+                    GetBool(launcher, "lockStatusBar"),
+                ["titan_lock_system_keys"] =
+                    GetBool(launcher, "lockSystemKeys")
             };
 
         if (primaryColor is not null)

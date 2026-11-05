@@ -1,5 +1,7 @@
-﻿import type {
-  ReactNode,
+﻿import {
+  lazy,
+  Suspense,
+  type ReactNode,
 } from 'react'
 
 import {
@@ -23,14 +25,13 @@ import {
 import {
   AppLayout,
 } from './components/layout/AppLayout'
+import { RouteFallback } from './components/layout/RouteFallback'
 
 import {
   AccessDeniedPage,
 } from './pages/AccessDeniedPage'
 
-import {
-  DashboardPage,
-} from './pages/DashboardPage'
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
 
 import {
   EntraLoginCallbackPage,
@@ -40,179 +41,96 @@ import {
   LoginPage,
 } from './pages/LoginPage'
 
-import {
-  LaunchpadPage,
-} from './pages/launchpad/LaunchpadPage'
+const LaunchpadPage = lazy(() => import('./pages/launchpad/LaunchpadPage').then(m => ({ default: m.LaunchpadPage })))
 
-import {
-  DevicesPage,
-} from './pages/devices/DevicesPage'
+const DevicesPage = lazy(() => import('./pages/devices/DevicesPage').then(m => ({ default: m.DevicesPage })))
 
-import {
-  DeviceEntryPage,
-} from './pages/devices/DeviceEntryPage'
+const DeviceEntryPage = lazy(() => import('./pages/devices/DeviceEntryPage').then(m => ({ default: m.DeviceEntryPage })))
 
-import {
-  DeviceDetailPage,
-} from './pages/devices/DeviceDetailPage'
+const DeviceDetailPage = lazy(() => import('./pages/devices/DeviceDetailPage').then(m => ({ default: m.DeviceDetailPage })))
 
-import {
-  WindowsControlCenterPage,
-} from './pages/devices/WindowsControlCenterPage'
+const WindowsControlCenterPage = lazy(() => import('./pages/devices/WindowsControlCenterPage').then(m => ({ default: m.WindowsControlCenterPage })))
 
-import EnrollmentPage
-  from './pages/enrollment/EnrollmentPage'
+const EnrollmentPage = lazy(() => import('./pages/enrollment/EnrollmentPage'))
 
-import {
-  PoliciesPage,
-} from './pages/policies/PoliciesPage'
+const PoliciesPage = lazy(() => import('./pages/policies/PoliciesPage').then(m => ({ default: m.PoliciesPage })))
 
-import {
-  PolicyEditorPage,
-} from './pages/policies/PolicyEditorPage'
+const PolicyEditorPage = lazy(() => import('./pages/policies/PolicyEditorPage').then(m => ({ default: m.PolicyEditorPage })))
 
-import {
-  DeviceGroupsPage,
-} from './pages/groups/DeviceGroupsPage'
+const DeviceGroupsPage = lazy(() => import('./pages/groups/DeviceGroupsPage').then(m => ({ default: m.DeviceGroupsPage })))
 
-import {
-  AppsPage,
-} from './pages/apps/AppsPage'
+const AppsPage = lazy(() => import('./pages/apps/AppsPage').then(m => ({ default: m.AppsPage })))
 
-import {
-  SecurityPage,
-} from './pages/security/SecurityPage'
+const SecurityPage = lazy(() => import('./pages/security/SecurityPage').then(m => ({ default: m.SecurityPage })))
 
-import {
-  CompliancePage,
-} from './pages/compliance/CompliancePage'
+const CompliancePage = lazy(() => import('./pages/compliance/CompliancePage').then(m => ({ default: m.CompliancePage })))
 
-import {
-  KioskPage,
-} from './pages/kiosk/KioskPage'
+const KioskPage = lazy(() => import('./pages/kiosk/KioskPage').then(m => ({ default: m.KioskPage })))
 
-import {
-  TitanLauncherPage,
-} from './pages/android-launcher/TitanLauncherPage'
+const TitanLauncherPage = lazy(() => import('./pages/android-launcher/TitanLauncherPage').then(m => ({ default: m.TitanLauncherPage })))
 
-import {
-  AndroidFleetCommandCenter,
-} from './pages/devices/components/AndroidFleetCommandCenter'
+const AndroidFleetCommandCenter = lazy(() => import('./pages/devices/components/AndroidFleetCommandCenter').then(m => ({ default: m.AndroidFleetCommandCenter })))
 
-import {
-  GeofencingPage,
-} from './pages/geofencing/GeofencingPage'
+const GeofencingPage = lazy(() => import('./pages/geofencing/GeofencingPage').then(m => ({ default: m.GeofencingPage })))
 
-import {
-  FleetMapPage,
-} from './pages/fleet-map/FleetMapPage'
+const FleetMapPage = lazy(() => import('./pages/fleet-map/FleetMapPage').then(m => ({ default: m.FleetMapPage })))
 
-import {
-  AutomationPage,
-} from './pages/automation/AutomationPage'
+const AutomationPage = lazy(() => import('./pages/automation/AutomationPage').then(m => ({ default: m.AutomationPage })))
 
-import {
-  RemotePage,
-} from './pages/remote/RemotePage'
+const RemotePage = lazy(() => import('./pages/remote/RemotePage').then(m => ({ default: m.RemotePage })))
 
-import {
-  ReportsPage,
-} from './pages/reports/ReportsPage'
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then(m => ({ default: m.ReportsPage })))
 
-import {
-  AuditPage,
-} from './pages/audit/AuditPage'
+const AuditPage = lazy(() => import('./pages/audit/AuditPage').then(m => ({ default: m.AuditPage })))
 
-import {
-  UsersPage,
-} from './pages/users/UsersPage'
+const UsersPage = lazy(() => import('./pages/users/UsersPage').then(m => ({ default: m.UsersPage })))
 
-import {
-  RolesPage,
-} from './pages/roles/RolesPage'
+const RolesPage = lazy(() => import('./pages/roles/RolesPage').then(m => ({ default: m.RolesPage })))
 
-import {
-  SitesPage,
-} from './pages/sites/SitesPage'
+const SitesPage = lazy(() => import('./pages/sites/SitesPage').then(m => ({ default: m.SitesPage })))
 
-import {
-  SettingsPage,
-} from './pages/settings/SettingsPage'
-import {
-  AssistantProviderSettingsPage,
-} from './pages/settings/AssistantProviderSettingsPage'
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const AssistantProviderSettingsPage = lazy(() => import('./pages/settings/AssistantProviderSettingsPage').then(m => ({ default: m.AssistantProviderSettingsPage })))
 
-import {
-  MyHelpdeskPage,
-} from './pages/helpdesk/MyHelpdeskPage'
+const MyHelpdeskPage = lazy(() => import('./pages/helpdesk/MyHelpdeskPage').then(m => ({ default: m.MyHelpdeskPage })))
 
-import {
-  HelpdeskRequesterCreatePage,
-} from './pages/helpdesk/HelpdeskRequesterCreatePage'
+const HelpdeskRequesterCreatePage = lazy(() => import('./pages/helpdesk/HelpdeskRequesterCreatePage').then(m => ({ default: m.HelpdeskRequesterCreatePage })))
 
-import {
-  HelpdeskInboxPage,
-} from './pages/helpdesk/HelpdeskInboxPage'
+const HelpdeskInboxPage = lazy(() => import('./pages/helpdesk/HelpdeskInboxPage').then(m => ({ default: m.HelpdeskInboxPage })))
 
-import {
-  HelpdeskTicketPage,
-} from './pages/helpdesk/HelpdeskTicketPage'
+const HelpdeskTicketPage = lazy(() => import('./pages/helpdesk/HelpdeskTicketPage').then(m => ({ default: m.HelpdeskTicketPage })))
 
-import {
-  HelpdeskEntraSettingsPage,
-} from './pages/helpdesk/HelpdeskEntraSettingsPage'
+const HelpdeskEntraSettingsPage = lazy(() => import('./pages/helpdesk/HelpdeskEntraSettingsPage').then(m => ({ default: m.HelpdeskEntraSettingsPage })))
 
-import {
-  HelpdeskOperationsPage,
-} from './pages/helpdesk/HelpdeskOperationsPage'
+const HelpdeskOperationsPage = lazy(() => import('./pages/helpdesk/HelpdeskOperationsPage').then(m => ({ default: m.HelpdeskOperationsPage })))
 
-import {
-  HelpdeskSpecialtiesPage,
-} from './pages/helpdesk/HelpdeskSpecialtiesPage'
+const HelpdeskSpecialtiesPage = lazy(() => import('./pages/helpdesk/HelpdeskSpecialtiesPage').then(m => ({ default: m.HelpdeskSpecialtiesPage })))
 
-import {
-  HelpdeskReportsPage,
-} from './pages/helpdesk/HelpdeskReportsPage'
+const HelpdeskReportsPage = lazy(() => import('./pages/helpdesk/HelpdeskReportsPage').then(m => ({ default: m.HelpdeskReportsPage })))
 
-import {
-  HelpdeskCoveragePage,
-} from './pages/helpdesk/HelpdeskCoveragePage'
+const HelpdeskCoveragePage = lazy(() => import('./pages/helpdesk/HelpdeskCoveragePage').then(m => ({ default: m.HelpdeskCoveragePage })))
 
-import {
-  HelpdeskFollowupPage,
-} from './pages/helpdesk/HelpdeskFollowupPage'
+const HelpdeskFollowupPage = lazy(() => import('./pages/helpdesk/HelpdeskFollowupPage').then(m => ({ default: m.HelpdeskFollowupPage })))
 
-import {
-  HelpdeskCenterPage,
-} from './pages/helpdesk/HelpdeskCenterPage'
+const HelpdeskCenterPage = lazy(() => import('./pages/helpdesk/HelpdeskCenterPage').then(m => ({ default: m.HelpdeskCenterPage })))
 
-import {
-  MyHelpdeskActionsPanel,
-} from './pages/helpdesk/MyHelpdeskActionsPanel'
+const MyHelpdeskActionsPanel = lazy(() => import('./pages/helpdesk/MyHelpdeskActionsPanel').then(m => ({ default: m.MyHelpdeskActionsPanel })))
 
-import {
-  PonchesPage,
-} from './pages/ponches/PonchesPage'
+const PonchesPage = lazy(() => import('./pages/ponches/PonchesPage').then(m => ({ default: m.PonchesPage })))
 
-import {
-  HelpdeskAnalyticsHome,
-} from './pages/helpdesk/HelpdeskAnalyticsHome'
+const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then(m => ({ default: m.InventoryPage })))
+import { INVENTORY_ACCESS_PERMISSIONS } from './auth/permissions'
+const InventoryEmbedPage = lazy(() => import('./pages/inventory/InventoryEmbed').then(m => ({ default: m.InventoryEmbedPage })))
 
-import {
-  HelpdeskAdminHome,
-} from './pages/helpdesk/HelpdeskAdminHome'
+const HelpdeskAnalyticsHome = lazy(() => import('./pages/helpdesk/HelpdeskAnalyticsHome').then(m => ({ default: m.HelpdeskAnalyticsHome })))
 
-import {
-  HelpdeskMailSettingsPage,
-} from './pages/helpdesk/HelpdeskMailSettingsPage'
-import {
-  HelpdeskTemplatesAdminPage,
-} from './pages/helpdesk/HelpdeskTemplatesAdminPage'
+const HelpdeskAdminHome = lazy(() => import('./pages/helpdesk/HelpdeskAdminHome').then(m => ({ default: m.HelpdeskAdminHome })))
 
-import { RemoteSupportDirectoryPage } from './pages/remote/RemoteSupportDirectoryPage'
-import {
-  HelpdeskExperience,
-} from './pages/helpdesk/HelpdeskExperience'
+const HelpdeskMailSettingsPage = lazy(() => import('./pages/helpdesk/HelpdeskMailSettingsPage').then(m => ({ default: m.HelpdeskMailSettingsPage })))
+const HelpdeskTemplatesAdminPage = lazy(() => import('./pages/helpdesk/HelpdeskTemplatesAdminPage').then(m => ({ default: m.HelpdeskTemplatesAdminPage })))
+
+const RemoteSupportDirectoryPage = lazy(() => import('./pages/remote/RemoteSupportDirectoryPage').then(m => ({ default: m.RemoteSupportDirectoryPage })))
+const HelpdeskExperience = lazy(() => import('./pages/helpdesk/HelpdeskExperience').then(m => ({ default: m.HelpdeskExperience })))
 
 
 interface ApplicationRoute {
@@ -592,6 +510,19 @@ const applicationRoutes:
 
     {
       path:
+        'inventory',
+
+      page:
+        <InventoryPage />,
+
+      // Solo permisos de inventario (configurables en Roles).
+      permissions: [
+        ...INVENTORY_ACCESS_PERMISSIONS,
+      ],
+    },
+
+    {
+      path:
         'devices',
 
       page:
@@ -771,11 +702,7 @@ const applicationRoutes:
         <AndroidFleetCommandCenter />,
 
       permissions: [
-        'android.enterprise.actions',
-      ],
-
-      allPermissions: [
-        'android.enterprise.manage',
+        'android.enterprise.view',
       ],
     },
 
@@ -914,8 +841,14 @@ const applicationRoutes:
     },
   ]
 
+/*
+ * Las paginas se cargan bajo demanda: el bundle inicial solo trae
+ * login, layout y autenticacion. AppLayout tiene su propio Suspense
+ * para que el menu no desaparezca al navegar.
+ */
 function App() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route
         path="/login"
@@ -928,6 +861,20 @@ function App() {
         path="/login/entra"
         element={
           <EntraLoginCallbackPage />
+        }
+      />
+
+      <Route
+        path="/inventory/embed"
+        element={
+          <PermissionRoute
+            anyOf={[
+              'inventory.manage',
+              'inventory.assets.manage',
+            ]}
+          >
+            <InventoryEmbedPage />
+          </PermissionRoute>
         }
       />
 
@@ -1052,6 +999,7 @@ function App() {
         }
       />
     </Routes>
+    </Suspense>
   )
 }
 

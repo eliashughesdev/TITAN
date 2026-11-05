@@ -21,6 +21,10 @@ import {
   AuthProvider,
 } from './auth/AuthContext'
 
+import {
+  NotificationProvider,
+} from './notifications/NotificationContext'
+
 import './index.css'
 
 import './styles/titan-modules-a.css'
@@ -94,7 +98,9 @@ createRoot(
     >
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

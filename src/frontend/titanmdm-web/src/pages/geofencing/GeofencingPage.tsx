@@ -1,4 +1,6 @@
 import {
+  ChevronLeft,
+  ChevronRight,
   Crosshair,
   MapPin,
   MapPinned,
@@ -15,9 +17,21 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
+
+import {
+  Circle,
+  MapContainer,
+  Marker,
+  TileLayer,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
+
+import L from 'leaflet'
 
 import {
   locationApi,
@@ -32,14 +46,174 @@ import type {
   DeviceListItem,
 } from '../../types/device'
 
+import { useAuth } from '../../auth/AuthContext'
+import { Permissions } from '../../auth/permissions'
+import { getActiveProvider } from '../../config/mapConfig'
+import 'leaflet/dist/leaflet.css'
 import './GeofencingPage.css'
 
+const DEVICES_PAGE_SIZE = 50
+const SANTO_DOMINGO_CENTER: [number, number] = [
+  18.4861,
+  -69.9312,
+]
+const MIN_RADIUS_METERS = 25
+const MAX_RADIUS_METERS = 100000
+
+const CENTER_ICON = L.divIcon({
+  className: 'geo-editor-marker',
+  html: '<span class="geo-editor-marker__dot geo-editor-marker__dot--center"></span>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+})
+
+const RADIUS_ICON = L.divIcon({
+  className: 'geo-editor-marker',
+  html: '<span class="geo-editor-marker__dot geo-editor-marker__dot--radius"></span>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+})
+
+function parseCoordinate(
+  value: string,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (value.trim() === '') return null
+
+  const parsed = Number(value)
+
+  return Number.isFinite(parsed) &&
+    parsed >= minimum &&
+    parsed <= maximum
+    ? parsed
+    : null
+}
+
+function parseRadius(value: string): number | null {
+  const parsed = Number(value)
+
+  return Number.isFinite(parsed) &&
+    parsed >= MIN_RADIUS_METERS &&
+    parsed <= MAX_RADIUS_METERS
+    ? parsed
+    : null
+}
+
+function clampRadius(value: number): number {
+  return Math.min(
+    MAX_RADIUS_METERS,
+    Math.max(
+      MIN_RADIUS_METERS,
+      Math.round(value),
+    ),
+  )
+}
+
+function distanceMeters(
+  from: [number, number],
+  to: [number, number],
+): number {
+  const earthRadiusMeters = 6371000
+  const toRadians = (value: number) =>
+    (value * Math.PI) / 180
+
+  const latitudeDelta = toRadians(to[0] - from[0])
+  const longitudeDelta = toRadians(to[1] - from[1])
+  const fromLatitude = toRadians(from[0])
+  const toLatitude = toRadians(to[0])
+
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2
+
+  return (
+    2 *
+    earthRadiusMeters *
+    Math.asin(Math.min(1, Math.sqrt(haversine)))
+  )
+}
+
+function radiusHandlePosition(
+  center: [number, number],
+  radiusMeters: number,
+): [number, number] {
+  const metersPerDegreeLongitude =
+    111320 *
+    Math.max(
+      Math.cos((center[0] * Math.PI) / 180),
+      0.01,
+    )
+
+  return [
+    center[0],
+    center[1] + radiusMeters / metersPerDegreeLongitude,
+  ]
+}
+
+function MapEventsHandler({
+  onMapClick,
+}: {
+  onMapClick: (lat: number, lng: number) => void
+}) {
+  useMapEvents({
+    click: (event) => {
+      onMapClick(event.latlng.lat, event.latlng.lng)
+    },
+  })
+
+  return null
+}
+
+function MapController({
+  center,
+}: {
+  center: [number, number] | null
+}) {
+  const map = useMap()
+  const latitude = center?.[0]
+  const longitude = center?.[1]
+
+  useEffect(() => {
+    if (
+      latitude === undefined ||
+      longitude === undefined
+    ) {
+      return
+    }
+
+    map.setView(
+      [latitude, longitude],
+      Math.max(map.getZoom(), 13),
+    )
+  }, [latitude, longitude, map])
+
+  return null
+}
+
 export function GeofencingPage() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(
+    Permissions.geofencing.manage,
+  )
+  const provider = useMemo(
+    () => getActiveProvider(),
+    [],
+  )
+
   const [geofences, setGeofences] =
     useState<Geofence[]>([])
 
   const [devices, setDevices] =
     useState<DeviceListItem[]>([])
+
+  const [devicePage, setDevicePage] =
+    useState(1)
+
+  const [totalDevices, setTotalDevices] =
+    useState(0)
 
   const [selectedGeofenceId,
     setSelectedGeofenceId] =
@@ -58,10 +232,10 @@ export function GeofencingPage() {
     useState('')
 
   const [latitude, setLatitude] =
-    useState('')
+    useState('18.4861')
 
   const [longitude, setLongitude] =
-    useState('')
+    useState('-69.9312')
 
   const [radius, setRadius] =
     useState('250')
@@ -78,6 +252,9 @@ export function GeofencingPage() {
   const [loading, setLoading] =
     useState(true)
 
+  const [devicesLoading, setDevicesLoading] =
+    useState(false)
+
   const [working, setWorking] =
     useState(false)
 
@@ -87,52 +264,130 @@ export function GeofencingPage() {
   const [error, setError] =
     useState<string | null>(null)
 
-  const loadData =
-    useCallback(async () => {
+  const deviceRequestId = useRef(0)
+
+  const loadDevices = useCallback(
+    async (
+      page: number,
+      searchValue: string,
+    ) => {
+      const requestId = ++deviceRequestId.current
+
+      setDevicesLoading(true)
+
+      try {
+        const data = await devicesApi.getDevices({
+          page,
+          pageSize: DEVICES_PAGE_SIZE,
+          platform: 'Android',
+          search:
+            searchValue.trim() || undefined,
+        })
+
+        /*
+         * Defensa adicional: aunque el backend filtra por
+         * Android, nunca mostramos un dispositivo de otra
+         * plataforma en Geofencing.
+         */
+        const androidDevices = data.items.filter(
+          (device) => device.platform === 'Android',
+        )
+
+        if (requestId !== deviceRequestId.current) {
+          return
+        }
+
+        setDevices(androidDevices)
+        setTotalDevices(data.totalCount)
+        setDevicePage(data.page ?? page)
+      } catch (loadError) {
+        console.error(
+          'Error loading Android devices:',
+          loadError,
+        )
+
+        if (requestId === deviceRequestId.current) {
+          setError(
+            'No fue posible cargar la lista de dispositivos Android.',
+          )
+        }
+      } finally {
+        if (requestId === deviceRequestId.current) {
+          setDevicesLoading(false)
+        }
+      }
+    },
+    [],
+  )
+
+  const reloadGeofences = useCallback(
+    async () => {
+      const data = await locationApi.getGeofences()
+      setGeofences(data)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    let active = true
+
+    async function loadGeofences() {
       try {
         setLoading(true)
         setError(null)
 
-        const [
-          geofenceData,
-          deviceData,
-        ] = await Promise.all([
-          locationApi.getGeofences(),
+        const data =
+          await locationApi.getGeofences()
 
-          devicesApi.getDevices({
-            page: 1,
-            pageSize: 100,
-          }),
-        ])
-
-        setGeofences(
-          geofenceData,
-        )
-
-        setDevices(
-          deviceData.items,
-        )
+        if (active) {
+          setGeofences(data)
+        }
       } catch (loadError) {
-        console.error(
-          loadError,
-        )
+        console.error(loadError)
 
-        setError(
-          'No fue posible cargar Geofencing.',
-        )
+        if (active) {
+          setError(
+            'No fue posible cargar Geofencing.',
+          )
+        }
       } finally {
-        setLoading(false)
+        if (active) {
+          setLoading(false)
+        }
       }
-    }, [])
+    }
 
-  useEffect(() => {
-    void loadData()
-  }, [loadData])
+    void loadGeofences()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     document.title =
       'Geofencing | TitanMDM'
   }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => {
+        void loadDevices(
+          devicePage,
+          search,
+        )
+      },
+      search.trim() ? 250 : 0,
+    )
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [
+    devicePage,
+    search,
+    loadDevices,
+  ])
 
   const selectedGeofence =
     useMemo(
@@ -150,10 +405,9 @@ export function GeofencingPage() {
 
   const filteredDevices =
     useMemo(() => {
-      const value =
-        search
-          .trim()
-          .toLowerCase()
+      const value = search
+        .trim()
+        .toLowerCase()
 
       if (!value) {
         return devices
@@ -188,9 +442,37 @@ export function GeofencingPage() {
       [geofences],
     )
 
+  const parsedLatitude =
+    parseCoordinate(latitude, -90, 90)
+
+  const parsedLongitude =
+    parseCoordinate(longitude, -180, 180)
+
+  const parsedRadius =
+    parseRadius(radius)
+
+  const mapCenter =
+    parsedLatitude !== null &&
+    parsedLongitude !== null
+      ? ([parsedLatitude, parsedLongitude] as [
+          number,
+          number,
+        ])
+      : null
+
+  const radiusHandle =
+    mapCenter && parsedRadius !== null
+      ? radiusHandlePosition(
+          mapCenter,
+          parsedRadius,
+        )
+      : null
+
   function toggleDevice(
     deviceId: string,
   ) {
+    if (!canManage) return
+
     setSelectedDeviceIds(
       (current) => {
         const next =
@@ -207,15 +489,73 @@ export function GeofencingPage() {
     )
   }
 
+  const handleMapClick = useCallback(
+    (lat: number, lng: number) => {
+      if (!canManage) return
+
+      setLatitude(lat.toFixed(6))
+      setLongitude(lng.toFixed(6))
+      setSelectedGeofenceId(null)
+    },
+    [canManage],
+  )
+
+  const handleSelectGeofence =
+    useCallback(
+      (geofence: Geofence) => {
+        setSelectedGeofenceId(
+          geofence.id,
+        )
+        setLatitude(
+          geofence.latitude.toFixed(6),
+        )
+        setLongitude(
+          geofence.longitude.toFixed(6),
+        )
+        setRadius(
+          String(
+            geofence.radiusMeters,
+          ),
+        )
+      },
+      [],
+    )
+
+  function handleSearchChange(
+    value: string,
+  ) {
+    setSearch(value)
+    setDevicePage(1)
+  }
+
+  async function refreshAll() {
+    setError(null)
+    setLoading(true)
+
+    try {
+      await reloadGeofences()
+    } catch (refreshError) {
+      console.error(refreshError)
+      setError(
+        'No fue posible actualizar las geocercas.',
+      )
+    } finally {
+      setLoading(false)
+    }
+
+    await loadDevices(
+      devicePage,
+      search,
+    )
+  }
+
   async function createGeofence() {
-    const parsedLatitude =
-      latitude.trim() === '' ? NaN : Number(latitude)
-
-    const parsedLongitude =
-      longitude.trim() === '' ? NaN : Number(longitude)
-
-    const parsedRadius =
-      Number(radius)
+    if (!canManage) {
+      setError(
+        'Tu rol no tiene permiso para administrar geocercas.',
+      )
+      return
+    }
 
     if (!name.trim()) {
       setError(
@@ -224,39 +564,21 @@ export function GeofencingPage() {
       return
     }
 
-    if (
-      !Number.isFinite(
-        parsedLatitude,
-      ) ||
-      parsedLatitude < -90 ||
-      parsedLatitude > 90
-    ) {
+    if (parsedLatitude === null) {
       setError(
         'La latitud debe estar entre -90 y 90.',
       )
       return
     }
 
-    if (
-      !Number.isFinite(
-        parsedLongitude,
-      ) ||
-      parsedLongitude < -180 ||
-      parsedLongitude > 180
-    ) {
+    if (parsedLongitude === null) {
       setError(
         'La longitud debe estar entre -180 y 180.',
       )
       return
     }
 
-    if (
-      !Number.isFinite(
-        parsedRadius,
-      ) ||
-      parsedRadius < 25 ||
-      parsedRadius > 100000
-    ) {
+    if (parsedRadius === null) {
       setError(
         'El radio debe estar entre 25 y 100000 metros.',
       )
@@ -292,9 +614,6 @@ export function GeofencingPage() {
 
       setName('')
       setDescription('')
-      setLatitude('')
-      setLongitude('')
-      setRadius('250')
 
       setSelectedGeofenceId(
         created.id,
@@ -304,7 +623,7 @@ export function GeofencingPage() {
         `Geocerca "${created.name}" creada correctamente.`,
       )
 
-      await loadData()
+      await reloadGeofences()
     } catch (createError) {
       console.error(
         createError,
@@ -319,6 +638,13 @@ export function GeofencingPage() {
   }
 
   async function assignDevices() {
+    if (!canManage) {
+      setError(
+        'Tu rol no tiene permiso para asignar dispositivos.',
+      )
+      return
+    }
+
     if (!selectedGeofence) {
       setError(
         'Selecciona una geocerca.',
@@ -356,14 +682,14 @@ export function GeofencingPage() {
         new Set(),
       )
 
-      await loadData()
+      await reloadGeofences()
     } catch (assignError) {
       console.error(
         assignError,
       )
 
       setError(
-        'No fue posible asignar los dispositivos.',
+        'No fue posible asignar los dispositivos. Verifica que sean Android de tu organización.',
       )
     } finally {
       setWorking(false)
@@ -373,6 +699,13 @@ export function GeofencingPage() {
   async function deleteGeofence(
     geofence: Geofence,
   ) {
+    if (!canManage) {
+      setError(
+        'Tu rol no tiene permiso para eliminar geocercas.',
+      )
+      return
+    }
+
     const confirmed =
       window.confirm(
         `¿Eliminar la geocerca "${geofence.name}"?`,
@@ -404,7 +737,7 @@ export function GeofencingPage() {
         'Geocerca eliminada.',
       )
 
-      await loadData()
+      await reloadGeofences()
     } catch (deleteError) {
       console.error(
         deleteError,
@@ -417,6 +750,14 @@ export function GeofencingPage() {
       setWorking(false)
     }
   }
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      totalDevices /
+        DEVICES_PAGE_SIZE,
+    ),
+  )
 
   return (
     <div className="geo-page">
@@ -433,7 +774,8 @@ export function GeofencingPage() {
           <p>
             Ubicación, zonas
             geográficas y asignación
-            centralizada de dispositivos.
+            centralizada de dispositivos
+            Android.
           </p>
         </div>
 
@@ -442,13 +784,21 @@ export function GeofencingPage() {
           className="geo-secondary"
           disabled={loading}
           onClick={() =>
-            void loadData()
+            void refreshAll()
           }
         >
           <RefreshCw size={16} />
           Actualizar
         </button>
       </header>
+
+      {!canManage && (
+        <div className="geo-notice warning">
+          <ShieldAlert size={15} />
+          Tu rol tiene acceso de solo lectura a Geofencing. La creación,
+          asignación y eliminación requieren el permiso geofencing.manage.
+        </div>
+      )}
 
       {message && (
         <div className="geo-notice success">
@@ -471,8 +821,8 @@ export function GeofencingPage() {
 
         <GeoKpi
           icon={<Smartphone />}
-          label="Dispositivos"
-          value={devices.length}
+          label="Dispositivos Android"
+          value={totalDevices}
         />
 
         <GeoKpi
@@ -515,6 +865,10 @@ export function GeofencingPage() {
               Nombre
               <input
                 value={name}
+                disabled={
+                  !canManage ||
+                  working
+                }
                 onChange={(event) =>
                   setName(
                     event.target.value,
@@ -528,6 +882,10 @@ export function GeofencingPage() {
               Descripción
               <input
                 value={description}
+                disabled={
+                  !canManage ||
+                  working
+                }
                 onChange={(event) =>
                   setDescription(
                     event.target.value,
@@ -537,6 +895,181 @@ export function GeofencingPage() {
               />
             </label>
 
+            <div className="geo-map-editor">
+              <MapContainer
+                center={
+                  mapCenter ??
+                  SANTO_DOMINGO_CENTER
+                }
+                zoom={13}
+                className="geo-map-canvas"
+              >
+                <TileLayer
+                  url={provider.url}
+                  attribution={provider.attribution}
+                  maxZoom={provider.maxZoom}
+                />
+
+                <MapEventsHandler
+                  onMapClick={handleMapClick}
+                />
+
+                <MapController
+                  center={mapCenter}
+                />
+
+                {geofences.map(
+                  (geofence) => (
+                    <Circle
+                      key={geofence.id}
+                      center={[
+                        geofence.latitude,
+                        geofence.longitude,
+                      ]}
+                      radius={
+                        geofence.radiusMeters
+                      }
+                      eventHandlers={{
+                        click: () =>
+                          handleSelectGeofence(
+                            geofence,
+                          ),
+                      }}
+                      pathOptions={{
+                        color:
+                          geofence.id ===
+                          selectedGeofenceId
+                            ? '#15803d'
+                            : geofence.isEnabled
+                              ? '#4f63d8'
+                              : '#94a3b8',
+                        weight:
+                          geofence.id ===
+                          selectedGeofenceId
+                            ? 3
+                            : 1.5,
+                        fillColor:
+                          geofence.isEnabled
+                            ? '#4f63d8'
+                            : '#94a3b8',
+                        fillOpacity:
+                          geofence.id ===
+                          selectedGeofenceId
+                            ? 0.2
+                            : 0.08,
+                        dashArray:
+                          geofence.isEnabled
+                            ? undefined
+                            : '6 6',
+                        bubblingMouseEvents: false,
+                      }}
+                    />
+                  ),
+                )}
+
+                {mapCenter && (
+                  <>
+                    <Circle
+                      center={mapCenter}
+                      radius={
+                        parsedRadius ?? 0
+                      }
+                      pathOptions={{
+                        color: '#16a34a',
+                        fillColor: '#16a34a',
+                        fillOpacity: 0.22,
+                        weight: 2,
+                      }}
+                    />
+
+                    <Marker
+                      position={mapCenter}
+                      icon={CENTER_ICON}
+                      draggable={canManage}
+                      eventHandlers={{
+                        dragend: (event) => {
+                          if (!canManage) return
+
+                          const marker =
+                            event.target as L.Marker
+                          const point =
+                            marker.getLatLng()
+
+                          setLatitude(
+                            point.lat.toFixed(
+                              6,
+                            ),
+                          )
+                          setLongitude(
+                            point.lng.toFixed(
+                              6,
+                            ),
+                          )
+                          setSelectedGeofenceId(
+                            null,
+                          )
+                        },
+                      }}
+                    />
+
+                    {radiusHandle &&
+                      parsedRadius !==
+                        null && (
+                        <Marker
+                          position={
+                            radiusHandle
+                          }
+                          icon={RADIUS_ICON}
+                          draggable={canManage}
+                          eventHandlers={{
+                            dragend: (
+                              event,
+                            ) => {
+                              if (
+                                !canManage
+                              ) {
+                                return
+                              }
+
+                              const marker =
+                                event.target as L.Marker
+                              const point =
+                                marker.getLatLng()
+
+                              const nextRadius =
+                                distanceMeters(
+                                  mapCenter,
+                                  [
+                                    point.lat,
+                                    point.lng,
+                                  ],
+                                )
+
+                              setRadius(
+                                String(
+                                  clampRadius(
+                                    nextRadius,
+                                  ),
+                                ),
+                              )
+                              setSelectedGeofenceId(
+                                null,
+                              )
+                            },
+                          }}
+                        />
+                      )}
+                  </>
+                )}
+              </MapContainer>
+            </div>
+
+            <p className="geo-map-hint">
+              Haz clic en el mapa para fijar el centro. Arrastra el
+              marcador verde para mover el centro y el marcador ámbar
+              para ajustar el radio en metros.
+            </p>
+
             <div className="geo-two-columns">
               <label>
                 Latitud
@@ -544,6 +1077,10 @@ export function GeofencingPage() {
                   type="number"
                   step="any"
                   value={latitude}
+                  disabled={
+                    !canManage ||
+                    working
+                  }
                   onChange={(event) =>
                     setLatitude(
                       event.target.value,
@@ -559,6 +1096,10 @@ export function GeofencingPage() {
                   type="number"
                   step="any"
                   value={longitude}
+                  disabled={
+                    !canManage ||
+                    working
+                  }
                   onChange={(event) =>
                     setLongitude(
                       event.target.value,
@@ -573,9 +1114,13 @@ export function GeofencingPage() {
               Radio en metros
               <input
                 type="number"
-                min="25"
-                max="100000"
+                min={MIN_RADIUS_METERS}
+                max={MAX_RADIUS_METERS}
                 value={radius}
+                disabled={
+                  !canManage ||
+                  working
+                }
                 onChange={(event) =>
                   setRadius(
                     event.target.value,
@@ -589,6 +1134,10 @@ export function GeofencingPage() {
                 <input
                   type="checkbox"
                   checked={alertOnEnter}
+                  disabled={
+                    !canManage ||
+                    working
+                  }
                   onChange={(event) =>
                     setAlertOnEnter(
                       event.target.checked,
@@ -602,6 +1151,10 @@ export function GeofencingPage() {
                 <input
                   type="checkbox"
                   checked={alertOnExit}
+                  disabled={
+                    !canManage ||
+                    working
+                  }
                   onChange={(event) =>
                     setAlertOnExit(
                       event.target.checked,
@@ -615,7 +1168,10 @@ export function GeofencingPage() {
             <button
               type="button"
               className="geo-primary"
-              disabled={working}
+              disabled={
+                !canManage ||
+                working
+              }
               onClick={() =>
                 void createGeofence()
               }
@@ -643,7 +1199,11 @@ export function GeofencingPage() {
           </header>
 
           <div className="geo-zone-list">
-            {geofences.length === 0 ? (
+            {loading ? (
+              <div className="geo-empty">
+                Cargando geocercas...
+              </div>
+            ) : geofences.length === 0 ? (
               <div className="geo-empty">
                 No existen geocercas.
               </div>
@@ -663,8 +1223,8 @@ export function GeofencingPage() {
                       type="button"
                       className="geo-zone-main"
                       onClick={() =>
-                        setSelectedGeofenceId(
-                          geofence.id,
+                        handleSelectGeofence(
+                          geofence,
                         )
                       }
                     >
@@ -673,9 +1233,23 @@ export function GeofencingPage() {
                       />
 
                       <div>
-                        <strong>
-                          {geofence.name}
-                        </strong>
+                        <span className="geo-zone-title">
+                          <strong>
+                            {geofence.name}
+                          </strong>
+
+                          <span
+                            className={
+                              geofence.isEnabled
+                                ? 'geo-status geo-status--active'
+                                : 'geo-status geo-status--inactive'
+                            }
+                          >
+                            {geofence.isEnabled
+                              ? 'Activa'
+                              : 'Desactivada'}
+                          </span>
+                        </span>
 
                         <span>
                           {
@@ -703,7 +1277,11 @@ export function GeofencingPage() {
                     <button
                       type="button"
                       className="geo-delete"
-                      disabled={working}
+                      disabled={
+                        !canManage ||
+                        working
+                      }
+                      aria-label={`Eliminar ${geofence.name}`}
                       onClick={() =>
                         void deleteGeofence(
                           geofence,
@@ -746,12 +1324,54 @@ export function GeofencingPage() {
             <input
               value={search}
               onChange={(event) =>
-                setSearch(
+                handleSearchChange(
                   event.target.value,
                 )
               }
-              placeholder="Buscar dispositivo..."
+              placeholder="Buscar dispositivo Android..."
+              aria-label="Buscar dispositivo Android"
             />
+          </div>
+
+          <div className="geo-pagination">
+            <button
+              type="button"
+              className="geo-pagination-btn"
+              aria-label="Página anterior"
+              disabled={
+                devicePage <= 1 ||
+                devicesLoading
+              }
+              onClick={() =>
+                setDevicePage(
+                  (page) => page - 1,
+                )
+              }
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <span className="geo-pagination-info">
+              Página {devicePage} de {totalPages}
+            </span>
+
+            <button
+              type="button"
+              className="geo-pagination-btn"
+              aria-label="Página siguiente"
+              disabled={
+                devicePage >=
+                  totalPages ||
+                devicesLoading
+              }
+              onClick={() =>
+                setDevicePage(
+                  (page) => page + 1,
+                )
+              }
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
 
           <span>
@@ -764,6 +1384,7 @@ export function GeofencingPage() {
             type="button"
             className="geo-primary"
             disabled={
+              !canManage ||
               working ||
               !selectedGeofence ||
               selectedDeviceIds.size ===
@@ -778,47 +1399,61 @@ export function GeofencingPage() {
         </div>
 
         <div className="geo-device-grid">
-          {filteredDevices.map(
-            (device) => (
-              <label
-                key={device.id}
-                className="geo-device-item"
-              >
-                <input
-                  type="checkbox"
-                  checked={
-                    selectedDeviceIds.has(
-                      device.id,
-                    )
-                  }
-                  onChange={() =>
-                    toggleDevice(
-                      device.id,
-                    )
-                  }
-                />
+          {devicesLoading ? (
+            <div className="geo-empty">
+              Cargando dispositivos Android...
+            </div>
+          ) : filteredDevices.length ===
+            0 ? (
+            <div className="geo-empty">
+              {search.trim()
+                ? 'No hay dispositivos Android que coincidan con la búsqueda.'
+                : 'No hay dispositivos Android disponibles en esta organización.'}
+            </div>
+          ) : (
+            filteredDevices.map(
+              (device) => (
+                <label
+                  key={device.id}
+                  className="geo-device-item"
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!canManage}
+                    checked={
+                      selectedDeviceIds.has(
+                        device.id,
+                      )
+                    }
+                    onChange={() =>
+                      toggleDevice(
+                        device.id,
+                      )
+                    }
+                  />
 
-                <Smartphone
-                  size={17}
-                />
+                  <Smartphone
+                    size={17}
+                  />
 
-                <div>
-                  <strong>
-                    {device.deviceName}
-                  </strong>
+                  <div>
+                    <strong>
+                      {device.deviceName}
+                    </strong>
 
-                  <span>
-                    {device.platform}
-                    {' · '}
-                    {device.status}
-                  </span>
+                    <span>
+                      {device.platform}
+                      {' · '}
+                      {device.status}
+                    </span>
 
-                  <small>
-                    {device.serialNumber}
-                  </small>
-                </div>
-              </label>
-            ),
+                    <small>
+                      {device.serialNumber}
+                    </small>
+                  </div>
+                </label>
+              ),
+            )
           )}
         </div>
       </section>

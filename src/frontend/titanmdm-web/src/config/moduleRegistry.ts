@@ -5,7 +5,10 @@ import {
   Settings,
   Smartphone,
   type LucideIcon,
+  Globe,
 } from 'lucide-react'
+
+import { INVENTORY_ACCESS_PERMISSIONS } from '../auth/permissions'
 
 export type TitanModuleId =
   | 'windows'
@@ -13,6 +16,7 @@ export type TitanModuleId =
   | 'helpdesk'
   | 'ponches'
   | 'administration'
+  | 'inventory'
 
 export interface TitanModuleTheme {
   primary: string
@@ -274,7 +278,6 @@ const ponchesModule:
  * ADMINISTRATION
  * ================================================================
  */
-
 const administrationModule:
   TitanModuleDefinition = {
     id:
@@ -288,6 +291,7 @@ const administrationModule:
 
     description:
       'Usuarios, roles, permisos, localidades, auditoría y configuración global de TitanMDM.',
+
 
     path:
       '/settings?workspace=administration',
@@ -323,10 +327,60 @@ const administrationModule:
     },
   }
 
+const inventoryModule:
+  TitanModuleDefinition = {
+    id:
+      'inventory',
+
+    title:
+      'Inventario',
+
+    shortTitle:
+      'Inventario',
+
+    description:
+      'Gestión de activos, activos fijos, entregas, devoluciones, recepciones y conteos físicos.',
+
+    path:
+      '/inventory',
+
+    icon:
+      Globe,
+
+    // Solo permisos de inventario (configurables en Roles).
+    permissions: [
+      ...INVENTORY_ACCESS_PERMISSIONS,
+    ],
+
+    enabled:
+      true,
+
+    badge:
+      'Inventario',
+
+    theme: {
+      primary:
+        '#0ea5e9',
+
+      primaryDark:
+        '#0891b2',
+
+      soft:
+        '#eff6ff',
+
+      border:
+        '#bfdbfe',
+
+      gradient:
+        'linear-gradient(135deg, #0ea5e9 0%, #0891b2 100%)',
+    },
+  }
+
 export const titanModules:
   TitanModuleDefinition[] = [
     windowsModule,
     androidModule,
+    inventoryModule,
     helpDeskModule,
     ponchesModule,
     administrationModule,

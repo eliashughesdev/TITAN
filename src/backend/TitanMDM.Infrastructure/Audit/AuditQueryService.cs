@@ -702,7 +702,9 @@ public sealed class AuditQueryService
             row.ErrorCode,
             row.ErrorMessage,
             row.PayloadJson,
-            row.ResultJson);
+            row.ResultJson,
+            null,
+            null);
     }
 
     private static string GetModule(

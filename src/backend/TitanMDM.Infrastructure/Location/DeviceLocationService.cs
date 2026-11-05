@@ -111,7 +111,14 @@ public sealed class DeviceLocationService
          * organizacion. Las solicitudes on-demand del
          * tecnico se procesan siempre.
          */
-        if (IsProactiveSource(result.Source))
+        /*
+         * Las transiciones de geocerca son eventos que el
+         * administrador configuro explicitamente: se
+         * procesan aunque el muestreo periodico este
+         * deshabilitado.
+         */
+        if (IsProactiveSource(result.Source) &&
+            !IsGeofenceTransitionSource(result.Source))
         {
             var policy =
                 await _db.LocationReportingPolicies
@@ -191,8 +198,11 @@ public sealed class DeviceLocationService
                     geofence.Longitude);
 
             var isInside =
-                distanceMeters <=
-                geofence.RadiusMeters;
+                ResolveTransitionHint(
+                    result,
+                    geofence.Id)
+                ?? distanceMeters <=
+                    geofence.RadiusMeters;
 
             var state =
                 await _db.GeofenceDeviceStates
@@ -731,6 +741,52 @@ public sealed class DeviceLocationService
                 cancellationToken);
     }
 
+    public async Task<
+        IReadOnlyCollection<DeviceGeofenceDto>>
+        GetDeviceGeofencesAsync(
+            Guid deviceId,
+            CancellationToken cancellationToken = default)
+    {
+        return await (
+                from assignment in
+                    _db.GeofenceDeviceAssignments
+                        .AsNoTracking()
+
+                join geofence in
+                    _db.Geofences.AsNoTracking()
+
+                on assignment.GeofenceId
+                    equals geofence.Id
+
+                join device in
+                    _db.Devices.AsNoTracking()
+
+                on assignment.DeviceId
+                    equals device.Id
+
+                where
+                    assignment.DeviceId == deviceId &&
+                    !device.IsDeleted &&
+                    geofence.IsEnabled &&
+                    geofence.OrganizationId ==
+                        device.OrganizationId &&
+                    assignment.OrganizationId ==
+                        device.OrganizationId
+
+                orderby geofence.Name
+
+                select new DeviceGeofenceDto(
+                    geofence.Id,
+                    geofence.Name,
+                    geofence.Latitude,
+                    geofence.Longitude,
+                    geofence.RadiusMeters,
+                    geofence.AlertOnEnter,
+                    geofence.AlertOnExit))
+            .ToListAsync(
+                cancellationToken);
+    }
+
     public async Task<GeofenceDto>
         CreateGeofenceAsync(
             Guid organizationId,
@@ -809,17 +865,48 @@ public sealed class DeviceLocationService
             throw new InvalidOperationException(
                 "Geofence not found.");
 
+        var requested =
+            (deviceIds ?? Array.Empty<Guid>())
+                .Distinct()
+                .ToList();
+
+        if (requested.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Se requiere al menos un dispositivo Android.");
+        }
+
+        /*
+         * Solo se asignan dispositivos Android de la
+         * organizacion autorizada. Si la solicitud contiene
+         * un dispositivo Windows o de otra organizacion se
+         * rechaza completa para no reportar una asignacion
+         * parcial como exitosa.
+         */
         var valid =
             await _db.Devices
                 .AsNoTracking()
                 .Where(x =>
-                    deviceIds.Contains(x.Id) &&
+                    requested.Contains(x.Id) &&
                     x.OrganizationId ==
                         organizationId &&
+                    x.Platform ==
+                        DevicePlatform.Android &&
                     !x.IsDeleted)
                 .Select(x => x.Id)
                 .ToListAsync(
                     cancellationToken);
+
+        var rejected =
+            requested
+                .Except(valid)
+                .ToList();
+
+        if (rejected.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Todos los dispositivos deben ser Android y pertenecer a la organización autorizada.");
+        }
 
         var existing =
             await _db
@@ -1156,5 +1243,64 @@ public sealed class DeviceLocationService
         double? SpeedMetersPerSecond,
         string? Source,
         string? CapturedAtUtc,
-        string? Status);
+        string? Status,
+        Guid? GeofenceId = null,
+        string? Transition = null);
+
+    /*
+     * Fuente usada por el agente cuando el sistema
+     * operativo (GeofencingClient) detecta un cruce de
+     * zona. Es un evento, no un muestreo periodico.
+     */
+    public const string GeofenceTransitionSource =
+        "AndroidAgent-GeofenceTransition";
+
+    private static bool IsGeofenceTransitionSource(
+        string? source)
+    {
+        return string.Equals(
+            source,
+            GeofenceTransitionSource,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /*
+     * El SO dispara la transicion con su propia
+     * precision; en el borde de la zona el calculo
+     * haversine del servidor puede discrepar. Para la
+     * geocerca indicada por el dispositivo se respeta
+     * la transicion reportada.
+     */
+    private static bool? ResolveTransitionHint(
+        LocationResult result,
+        Guid geofenceId)
+    {
+        if (!IsGeofenceTransitionSource(result.Source) ||
+            result.GeofenceId != geofenceId)
+        {
+            return null;
+        }
+
+        if (string.Equals(
+                result.Transition,
+                "Enter",
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                result.Transition,
+                "Dwell",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(
+                result.Transition,
+                "Exit",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return null;
+    }
 }

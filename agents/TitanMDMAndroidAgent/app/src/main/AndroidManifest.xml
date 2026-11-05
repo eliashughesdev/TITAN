@@ -17,13 +17,18 @@
 
     <!-- Estado del dispositivo -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.BATTERY_STATS" />
 
     <!-- Recuperación después de reinicio -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- WorkManager / foreground operations -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Servicio en primer plano: sincronización continua y ubicación -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Android 13+ notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -33,6 +38,11 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+    </queries>
+
+    <!-- Lector Honeywell (Data Collection Service): visibilidad de paquete en Android 11+. -->
+    <queries>
+        <package android:name="com.intermec.datacollectionservice" />
     </queries>
 
     <application
@@ -45,7 +55,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.TitanMDMAndroidAgent"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="${allowCleartext}">
 
         <meta-data
             android:name="android.content.APP_RESTRICTIONS"
@@ -99,6 +109,36 @@
             </intent-filter>
 
         </receiver>
+
+        <service
+            android:name=".service.AgentForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|location" />
+
+        <!-- Administrador de dispositivo: LOCK_DEVICE y kiosco (Device Owner) -->
+        <receiver
+            android:name=".admin.TitanDeviceAdminReceiver"
+            android:description="@string/device_admin_description"
+            android:exported="true"
+            android:label="TitanMDM Agent"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            </intent-filter>
+
+        </receiver>
+
+        <!-- P1 Geofencing proactivo: transiciones de zona del SO -->
+        <receiver
+            android:name=".receivers.GeofenceBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
     </application>
 

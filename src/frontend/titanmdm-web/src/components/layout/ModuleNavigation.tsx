@@ -2,6 +2,7 @@ import {
   BarChart3,
   Building2,
   ClipboardList,
+  Command,
   Cog,
   FileBarChart,
   Headphones,
@@ -191,6 +192,13 @@ const androidLinks:
       'Titan Launcher',
       '/android/titan-launcher',
       LayoutGrid,
+      'android.enterprise.view',
+    ),
+
+    link(
+      'Centro de Control',
+      '/android/control-center?workspace=android',
+      Command,
       'android.enterprise.view',
     ),
 

@@ -1,9 +1,12 @@
 import {
   AlertTriangle,
   BatteryCharging,
+  Clock3,
   Cpu,
+  HardDrive,
   RefreshCw,
   ShieldCheck,
+  Wifi,
 } from 'lucide-react'
 
 import type {
@@ -12,6 +15,7 @@ import type {
 
 import type {
   AndroidDeviceDetails,
+  DeviceDetails,
 } from '../../../../types/device'
 
 import {
@@ -21,6 +25,7 @@ import {
 interface Props {
   capabilities: AndroidDeviceCapabilities | null
   details: AndroidDeviceDetails | null
+  device: DeviceDetails | null
   loading: boolean
   error: string | null
   onRefresh: () => void
@@ -29,6 +34,7 @@ interface Props {
 export function AndroidDiagnosticsPanel({
   capabilities,
   details,
+  device,
   loading,
   error,
   onRefresh,
@@ -115,6 +121,65 @@ export function AndroidDiagnosticsPanel({
                   details.lastPolicySyncTimeUtc,
                 )}`
               : 'Sin sincronización de política reportada'}
+          </small>
+        </article>
+
+        <article className="arc-diagnostic-item">
+          <Clock3 size={16} />
+          <span>Última sincronización</span>
+          <strong>
+            {formatConsoleDate(
+              details?.lastSynchronizedAtUtc,
+            )}
+          </strong>
+          <small>
+            Inventario TitanMDM actualizado desde Android Management API.
+          </small>
+        </article>
+
+        <article className="arc-diagnostic-item">
+          <Clock3 size={16} />
+          <span>Último reporte de estado</span>
+          <strong>
+            {formatConsoleDate(
+              details?.lastStatusReportTimeUtc,
+            )}
+          </strong>
+          <small>
+            Fecha reportada por Google para el último estado del dispositivo.
+          </small>
+        </article>
+
+        <article className="arc-diagnostic-item">
+          <BatteryCharging size={16} />
+          <span>Batería</span>
+          <strong>
+            {device?.batteryLevel !== null &&
+            device?.batteryLevel !== undefined
+              ? `${device.batteryLevel}%`
+              : 'No reportada'}
+          </strong>
+          <small>Último valor recibido por el inventario TitanMDM.</small>
+        </article>
+
+        <article className="arc-diagnostic-item">
+          <Wifi size={16} />
+          <span>Conectividad</span>
+          <strong>{device?.status ?? 'Sin información'}</strong>
+          <small>
+            {device?.ipAddress
+              ? `IP reportada: ${device.ipAddress}`
+              : 'Dirección de red no reportada'}
+          </small>
+        </article>
+
+        <article className="arc-diagnostic-item">
+          <HardDrive size={16} />
+          <span>Almacenamiento</span>
+          <strong>No reportado</strong>
+          <small>
+            El contrato actual del agente y Android Management API no expone
+            una medición autorizada.
           </small>
         </article>
       </div>

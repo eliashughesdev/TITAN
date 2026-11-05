@@ -19,6 +19,9 @@ public sealed class SecurityPostureService
     private readonly IAutomationEventDispatcher
         _automation;
 
+    private readonly IWindowsRemediationEngine?
+        _remediation;
+
     private static readonly JsonSerializerOptions
         JsonOptions =
             new()
@@ -28,13 +31,65 @@ public sealed class SecurityPostureService
 
     public SecurityPostureService(
         TitanMdmDbContext dbContext,
-        IAutomationEventDispatcher automation)
+        IAutomationEventDispatcher automation,
+        IWindowsRemediationEngine? remediation = null)
     {
         _dbContext =
             dbContext;
 
         _automation =
             automation;
+
+        _remediation =
+            remediation;
+    }
+
+    /*
+     * P1 Motor de Remediacion Activa: dispara comandos
+     * correctivos tras persistir el estado. Un fallo del
+     * motor nunca invalida el reporte del agente.
+     */
+    private async Task<WindowsRemediationResult?> RemediateWindowsAsync(
+        Device device,
+        IReadOnlyCollection<string> failedCodes,
+        CancellationToken cancellationToken)
+    {
+        if (_remediation is null ||
+            failedCodes.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _remediation.RemediateAsync(
+                device.OrganizationId,
+                device.Id,
+                failedCodes,
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private static object? DescribeRemediation(
+        WindowsRemediationResult? result)
+    {
+        if (result is null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            enabled = result.Enabled,
+            queued = result.Queued,
+            suppressed = result.Suppressed,
+            manual = result.Manual,
+            skippedReason = result.SkippedReason
+        };
     }
 
     public async Task ProcessSecurityStatusAsync(
@@ -434,6 +489,27 @@ public sealed class SecurityPostureService
 
         if (securityRisk)
         {
+            var failedCodes =
+                new List<string>();
+
+            if (!payload.Defender.Available)
+                failedCodes.Add("DEFENDER_AVAILABLE");
+
+            if (!payload.Firewall.Available)
+                failedCodes.Add("FIREWALL_AVAILABLE");
+
+            if (!payload.UacEnabled)
+                failedCodes.Add("UAC_ENABLED");
+
+            if (payload.SecureBootEnabled == false)
+                failedCodes.Add("SECURE_BOOT");
+
+            var remediation =
+                await RemediateWindowsAsync(
+                    device,
+                    failedCodes,
+                    cancellationToken);
+
             await _automation
                 .DispatchAsync(
                     device.OrganizationId,
@@ -443,6 +519,10 @@ public sealed class SecurityPostureService
                     {
                         platform =
                             "Windows",
+
+                        remediation =
+                            DescribeRemediation(
+                                remediation),
 
                         deviceName =
                             device.DeviceName,
@@ -548,6 +628,15 @@ public sealed class SecurityPostureService
 
         if (!compliant)
         {
+            var remediation =
+                await RemediateWindowsAsync(
+                    device,
+                    payload.Checks
+                        .Where(check => !check.Passed)
+                        .Select(check => check.Code)
+                        .ToArray(),
+                    cancellationToken);
+
             await _automation
                 .DispatchAsync(
                     device.OrganizationId,
@@ -557,6 +646,10 @@ public sealed class SecurityPostureService
                     {
                         platform =
                             "Windows",
+
+                        remediation =
+                            DescribeRemediation(
+                                remediation),
 
                         deviceName =
                             device.DeviceName,

@@ -373,4 +373,62 @@ public static class PermissionCodes
         public const string Actions =
             "android.enterprise.actions";
     }
+
+    // ============================================================
+    // INVENTORY
+    // ============================================================
+
+    public static class Inventory
+    {
+        public const string WorkspaceView =
+            "workspace.inventory.view";
+
+        public const string View =
+            "inventory.view";
+
+        public const string Manage =
+            "inventory.manage";
+
+        public const string DashboardView =
+            "inventory.dashboard.view";
+
+        public const string ReportsView =
+            "inventory.reports.view";
+
+        public const string ReportsExport =
+            "inventory.reports.export";
+
+        public const string AssetsView =
+            "inventory.assets.view";
+
+        public const string AssetsManage =
+            "inventory.assets.manage";
+
+        public const string DeliveriesView =
+            "inventory.deliveries.view";
+
+        public const string ReturnsView =
+            "inventory.returns.view";
+
+        public const string ReceptionsView =
+            "inventory.receptions.view";
+
+        public const string EmployeesView =
+            "inventory.employees.view";
+
+        public const string SessionsView =
+            "inventory.sessions.view";
+
+        public const string CountsView =
+            "inventory.counts.view";
+
+        public const string HistoryView =
+            "inventory.history.view";
+
+        public const string CatalogsView =
+            "inventory.catalogs.view";
+
+        public const string CatalogsManage =
+            "inventory.catalogs.manage";
+    }
 }

@@ -45,6 +45,8 @@ import type {
 } from '../../api/remoteSupportSignalR'
 
 import RemoteDesktopViewer from './RemoteDesktopViewer'
+import { RemoteEnterpriseToolbar } from './RemoteEnterpriseToolbar'
+import { useNotifications } from '../../notifications/NotificationContext'
 
 import type {
   DeviceListItem,
@@ -269,6 +271,8 @@ export function RemotePage() {
 
   const [error, setError] =
     useState<string | null>(null)
+
+  const { notify } = useNotifications()
 
   // ==========================================================
   // DERIVED STATE
@@ -1935,9 +1939,28 @@ useEffect(() => {
                 frame && !desktopProtected
                   ? 'wr-viewer-live'
                   : ''
+              } ${
+                activeSession && canManage
+                  ? 'wr-viewer--with-tools'
+                  : ''
               }`
             }
           >
+            {/* HERRAMIENTAS EMPRESARIALES (visibles tambien en pantalla completa) */}
+
+            {activeSession && canManage && (
+              <RemoteEnterpriseToolbar
+                client={signalRRef.current}
+                sessionId={activeSession.id}
+                connected={connected && channelConnected}
+                ownsControl={ownsControl && !desktopProtected}
+                allowKeyboard={activeSession.allowKeyboard ?? false}
+                allowFileTransfer={activeSession.allowFileTransfer ?? false}
+                onError={message => setError(message)}
+                onNotice={message => notify({ kind: 'success', title: 'Soporte remoto', message })}
+              />
+            )}
+
             {/* PROTECTED DESKTOP */}
 
             {desktopProtected && desktopState ? (
@@ -2076,7 +2099,6 @@ useEffect(() => {
                 : streamMetrics
                   ? (
                       `${streamMetrics.fps} FPS · ` +
-                      `${streamMetrics.latencyMs} ms · ` +
                       `${streamMetrics.kilobitsPerSecond} kbps`
                     )
                   : 'Sin métricas de video'}

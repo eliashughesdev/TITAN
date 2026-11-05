@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Domain.Automation;
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Entities.Inventory;
 
 namespace TitanMDM.Infrastructure.Persistence;
 
@@ -23,9 +24,9 @@ public sealed class TitanMdmDbContext
         Organizations =>
             Set<Organization>();
 
-    public DbSet<Department>
+    public DbSet<TitanMDM.Domain.Entities.Department>
         Departments =>
-            Set<Department>();
+            Set<TitanMDM.Domain.Entities.Department>();
 
     public DbSet<User>
         Users =>

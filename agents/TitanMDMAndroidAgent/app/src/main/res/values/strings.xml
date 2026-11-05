@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">TitanMDM Android Agent</string>
+    <string name="device_admin_description">Permite a TitanMDM bloquear la pantalla y aplicar el modo kiosco del Titan Launcher.</string>
 </resources>

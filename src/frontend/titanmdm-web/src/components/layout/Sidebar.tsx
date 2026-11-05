@@ -2,6 +2,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Globe,
   Headphones,
   Home,
   MonitorCog,
@@ -23,6 +24,10 @@ import {
   canUseHelpdeskPortal,
   resolveHelpdeskLandingPath,
 } from '../../auth/helpdeskAccess'
+
+import {
+  INVENTORY_ACCESS_PERMISSIONS,
+} from '../../auth/permissions'
 
 import {
   useWorkspace,
@@ -136,6 +141,12 @@ export function Sidebar({
       'ponches.manage',
     )
 
+  const canInventory =
+    INVENTORY_ACCESS_PERMISSIONS.some(
+      permission =>
+        hasPermission(permission),
+    )
+
   /*
    * ============================================================
    * MODULES
@@ -224,6 +235,29 @@ export function Sidebar({
         location.pathname
           .startsWith(
             '/helpdesk',
+          ),
+    },
+
+    {
+      label:
+        'Inventario',
+
+      path:
+        '/inventory',
+
+      icon:
+        Globe,
+
+      enabled:
+        canInventory,
+
+      active:
+        activeWorkspaceId ===
+          'inventory'
+        ||
+        location.pathname
+          .startsWith(
+            '/inventory',
           ),
     },
 

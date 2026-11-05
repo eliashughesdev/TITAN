@@ -128,3 +128,24 @@ describe('Titan Launcher configuration', () => {
     expect(parseLauncherConfiguration(tampered)?.gridColumns).toBe(4)
   })
 })
+
+describe('bloqueos del equipo en la politica del launcher', () => {
+  it('viajan en la configuracion y se recuperan al editar', () => {
+    const draft = { ...createLauncherDraft(), lockStatusBar: true, lockSystemKeys: true, persistentHome: false }
+    const configuration = buildLauncherConfiguration(draft)
+
+    expect(configuration.android.launcher).toMatchObject({
+      lockStatusBar: true,
+      lockSystemKeys: true,
+      persistentHome: false,
+    })
+
+    const parsed = parseLauncherConfiguration(JSON.stringify(configuration))
+    expect(parsed).toMatchObject({ lockStatusBar: true, lockSystemKeys: true, persistentHome: false })
+  })
+
+  it('perfiles anteriores fijan el inicio sin bloquear barra ni teclas', () => {
+    const parsed = parseLauncherConfiguration(JSON.stringify({ android: { launcher: { enabled: true } } }))
+    expect(parsed).toMatchObject({ persistentHome: true, lockStatusBar: false, lockSystemKeys: false })
+  })
+})

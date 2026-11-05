@@ -45,3 +45,8 @@
   --titan-workspace-accent: #168c9d;
   --titan-workspace-accent-soft: #e9f9fb;
 }
+
+[data-titan-workspace="inventory"] {
+  --titan-workspace-accent: #0ea5e9;
+  --titan-workspace-accent-soft: #e0f2fe;
+}

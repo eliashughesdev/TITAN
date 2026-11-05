@@ -25,6 +25,20 @@ import {
   useWorkspace,
 } from '../../workspace/WorkspaceContext'
 
+import {
+  useNotifications,
+} from '../../notifications/NotificationContext'
+
+function relativeTime(iso: string): string {
+  const diffMinutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (!Number.isFinite(diffMinutes)) return ''
+  if (diffMinutes < 1) return 'ahora'
+  if (diffMinutes < 60) return `hace ${diffMinutes} min`
+  const hours = Math.round(diffMinutes / 60)
+  if (hours < 24) return `hace ${hours} h`
+  return `hace ${Math.round(hours / 24)} d`
+}
+
 export function Header() {
   const {
     user,
@@ -40,6 +54,17 @@ export function Header() {
 
   const navigate =
     useNavigate()
+
+  const {
+    items: notifications,
+    unreadCount,
+    unavailableSources,
+    error: notificationsError,
+    isRead,
+    markRead,
+    markAllRead,
+  } =
+    useNotifications()
 
   const [
     menuOpen,
@@ -298,10 +323,12 @@ export function Header() {
               size={19}
             />
 
-            <span
-              className="header-notification-dot"
-              aria-hidden="true"
-            />
+            {unreadCount > 0 && (
+              <span
+                className="header-notification-dot"
+                aria-hidden="true"
+              />
+            )}
           </button>
 
           {notificationsOpen && (
@@ -318,24 +345,71 @@ export function Header() {
                 </div>
 
                 <span className="notification-count">
-                  0
+                  {unreadCount}
                 </span>
               </div>
 
-              <div className="notification-empty">
-                <div className="notification-empty__icon">
-                  <ShieldCheck
-                    size={22}
-                  />
+              {notifications.length === 0 ? (
+                <div className="notification-empty">
+                  <div className="notification-empty__icon">
+                    <ShieldCheck
+                      size={22}
+                    />
+                  </div>
+
+                  <strong>
+                    {notificationsError ? 'Sin conexión con alertas' : 'Todo está bajo control'}
+                  </strong>
+
+                  <span>
+                    {notificationsError || 'No existen alertas pendientes.'}
+                  </span>
                 </div>
+              ) : (
+                <ul className="notification-list">
+                  {notifications.map(item => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className={
+                          isRead(item.id)
+                            ? 'notification-item notification-item--read'
+                            : 'notification-item'
+                        }
+                        onClick={() => {
+                          markRead(item.id)
+                          setNotificationsOpen(false)
+                          if (item.link) navigate(item.link)
+                        }}
+                      >
+                        <span
+                          className={`notification-item__dot notification-item__dot--${item.severity}`}
+                          aria-hidden="true"
+                        />
+                        <span className="notification-item__text">
+                          <strong>{item.title}</strong>
+                          <span>{item.message}</span>
+                          <time dateTime={item.occurredAtUtc}>{relativeTime(item.occurredAtUtc)}</time>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-                <strong>
-                  Todo está bajo control
-                </strong>
-
+              <div className="notification-dropdown__footer">
                 <span>
-                  No existen alertas pendientes.
+                  {unavailableSources.length > 0
+                    ? `Sin datos de: ${unavailableSources.join(', ')}`
+                    : 'Actualizado cada 30 s'}
                 </span>
+                <button
+                  type="button"
+                  disabled={unreadCount === 0}
+                  onClick={markAllRead}
+                >
+                  Marcar todo como leído
+                </button>
               </div>
             </div>
           )}

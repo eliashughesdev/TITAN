@@ -20,6 +20,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import com.titanmdm.agent.scanner.HoneywellScanner
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -59,7 +66,7 @@ fun TitanAgentScreen(
             )
 
             Text(
-                text = "Android Enterprise Agent",
+                text = "Agente de inscripción interna",
                 style =
                     MaterialTheme.typography.titleMedium
             )
@@ -90,7 +97,9 @@ fun TitanAgentScreen(
                     onTokenChanged =
                         viewModel::updateEnrollmentToken,
                     onRegister =
-                        viewModel::register
+                        viewModel::register,
+                    onScanned =
+                        viewModel::applyScannedPayload
                 )
 
             } else {
@@ -113,6 +122,8 @@ fun TitanAgentScreen(
                     }
                 }
             }
+
+            DeviceSetupCard(enrolled = state.enrolled)
 
             DeviceInformationCard(state)
 
@@ -213,7 +224,9 @@ private fun StatusCard(
 
             InformationRow(
                 label = "Servidor",
-                value = "TitanMDM"
+                value =
+                    state.activeServer
+                        ?: "Sin configurar (escanee el QR)"
             )
 
             InformationRow(
@@ -229,8 +242,24 @@ private fun StatusCard(
 private fun EnrollmentCard(
     state: AgentUiState,
     onTokenChanged: (String) -> Unit,
-    onRegister: () -> Unit
+    onRegister: () -> Unit,
+    onScanned: (String, Boolean) -> Boolean
 ) {
+
+    val context = LocalContext.current
+    val honeywell = remember { HoneywellScanner.info(context) }
+
+    // Camara del agente: origen confiable, inscribe al leer.
+    val cameraScanner =
+        rememberLauncherForActivityResult(ScanContract()) { result ->
+            result.contents?.let { onScanned(it, true) }
+        }
+
+    // Lector Honeywell reclamado solo mientras esta pantalla esta visible.
+    DisposableEffect(honeywell.available) {
+        val stop = HoneywellScanner.listen(context) { data -> onScanned(data, false) }
+        onDispose { stop() }
+    }
 
     Card(
         modifier =
@@ -253,8 +282,34 @@ private fun EnrollmentCard(
 
             Text(
                 text =
-                    "Introduce el token generado desde el centro de inscripción de TitanMDM."
+                    if (honeywell.available)
+                        "Escanea el QR de inscripción con el lector (gatillo) o la cámara, o escribe el token."
+                    else
+                        "Escanea el QR generado en Inscripción → Android Agent, o escribe el token."
             )
+
+            Button(
+                onClick = {
+                    cameraScanner.launch(
+                        ScanOptions()
+                            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                            .setPrompt("Apunta al QR de inscripción TitanMDM")
+                            .setBeepEnabled(true)
+                            .setOrientationLocked(false)
+                    )
+                },
+                enabled = !state.registering,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Escanear QR con la cámara")
+            }
+
+            state.enrollmentServer?.let { server ->
+                InformationRow(
+                    label = "Servidor del QR",
+                    value = server
+                )
+            }
 
             OutlinedTextField(
                 value =

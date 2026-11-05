@@ -64,23 +64,37 @@ object TitanApiClient {
             .retryOnConnectionFailure(true)
             .build()
 
-    private val retrofit: Retrofit by lazy {
+    /*
+     * El servidor puede cambiar al inscribir por QR: el cliente se
+     * reconstruye cuando la URL activa difiere de la cacheada.
+     */
+    @Volatile
+    private var cached: Pair<String, TitanApiService>? = null
+
+    val service: TitanApiService
+        get() {
+            val baseUrl = AgentConfig.normalizedBaseUrl()
+            cached?.let { (url, api) -> if (url == baseUrl) return api }
+            return synchronized(this) {
+                cached?.takeIf { it.first == baseUrl }?.second
+                    ?: build(baseUrl).also { cached = baseUrl to it }
+            }
+        }
+
+    private fun build(baseUrl: String): TitanApiService {
 
         val contentType =
             "application/json".toMediaType()
 
-        Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl(
-                AgentConfig.normalizedBaseUrl()
+                baseUrl
             )
             .client(httpClient)
             .addConverterFactory(
                 json.asConverterFactory(contentType)
             )
             .build()
-    }
-
-    val service: TitanApiService by lazy {
-        retrofit.create(TitanApiService::class.java)
+            .create(TitanApiService::class.java)
     }
 }

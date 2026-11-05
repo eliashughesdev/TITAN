@@ -242,6 +242,11 @@ function Inspector(props: Props & { secure: boolean }) {
         <Field label="Paquete"><input disabled={!props.canManage} value={props.draft.packageName} onChange={(event) => props.onDraft({ packageName: event.target.value })} /></Field>
         <Field label="Actividad HOME"><input disabled={!props.canManage} value={props.draft.activityName} onChange={(event) => props.onDraft({ activityName: event.target.value })} /></Field>
         <label className="lx3-field"><input type="checkbox" disabled={!props.canManage} checked={props.draft.requiredForSetup} onChange={(event) => props.onDraft({ requiredForSetup: event.target.checked })} /> Requerida en el aprovisionamiento</label>
+        <p className="lx3-note">Bloqueos del equipo (TitanMDM Agent como Device Owner)</p>
+        <label className="lx3-field"><input type="checkbox" disabled={!props.canManage} checked={props.draft.persistentHome} onChange={(event) => props.onDraft({ persistentHome: event.target.checked })} /> Fijar Titan Launcher como inicio</label>
+        <label className="lx3-field"><input type="checkbox" disabled={!props.canManage} checked={props.draft.lockStatusBar} onChange={(event) => props.onDraft({ lockStatusBar: event.target.checked })} /> Bloquear barra de estado y notificaciones</label>
+        <label className="lx3-field"><input type="checkbox" disabled={!props.canManage} checked={props.draft.lockSystemKeys} onChange={(event) => props.onDraft({ lockSystemKeys: event.target.checked })} /> Bloquear teclas del sistema (Recientes y salida al escritorio)</label>
+        <p className="lx3-note">Sin Device Owner el equipo solo recibe el launcher. Un técnico puede liberar el equipo con el comando KIOSK_MODE.</p>
       </>
     )
   }

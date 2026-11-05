@@ -64,6 +64,36 @@ function getErrorMessage(
   return 'Ocurrió un error inesperado.'
 }
 
+/* Nombre visible de cada modulo de permisos (el codigo sigue siendo la clave). */
+const MODULE_LABELS: Record<string, string> = {
+  AndroidEnterprise: 'Android Enterprise',
+  Applications: 'Aplicaciones',
+  Audit: 'Auditoría',
+  Automation: 'Automatización',
+  Compliance: 'Cumplimiento',
+  Dashboard: 'Dashboard',
+  Devices: 'Dispositivos',
+  Enrollment: 'Enrolamiento',
+  Geofencing: 'Geocercas',
+  Helpdesk: 'Mesa de Ayuda',
+  Inventory: 'Inventario (ITAM)',
+  Kiosk: 'Kiosco',
+  Policies: 'Políticas',
+  Ponches: 'Ponches',
+  RemoteSupport: 'Soporte remoto',
+  Reports: 'Reportes',
+  Roles: 'Roles',
+  Security: 'Seguridad',
+  Settings: 'Configuración',
+  Sites: 'Localidades',
+  Users: 'Usuarios',
+  Workspaces: 'Espacios de trabajo',
+}
+
+function moduleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? module
+}
+
 export function RolesPage() {
   const {
     hasPermission,
@@ -87,6 +117,12 @@ export function RolesPage() {
     useState<PermissionModule[]>(
       [],
     )
+
+  const [
+    permissionTotal,
+    setPermissionTotal,
+  ] =
+    useState(0)
 
   const [
     selectedRole,
@@ -168,6 +204,10 @@ export function RolesPage() {
 
         setPermissionModules(
           response.modules,
+        )
+
+        setPermissionTotal(
+          response.total,
         )
       } catch (
         permissionError
@@ -397,6 +437,19 @@ export function RolesPage() {
         </article>
 
         <article>
+          <ShieldCheck
+            size={21}
+          />
+
+          <div>
+            <span>Permisos disponibles</span>
+            <strong>
+              {permissionTotal}
+            </strong>
+          </div>
+        </article>
+
+        <article>
           <KeyRound
             size={21}
           />
@@ -573,8 +626,10 @@ export function RolesPage() {
                         className="admin-permission-module"
                       >
                         <header>
-                          <strong>
-                            {module.module}
+                          <strong title={module.module}>
+                            {moduleLabel(
+                              module.module,
+                            )}
                           </strong>
 
                           <span>

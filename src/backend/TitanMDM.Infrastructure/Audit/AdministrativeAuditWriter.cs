@@ -39,7 +39,9 @@ public sealed class AdministrativeAuditWriter
                     entry.TargetId,
                     entry.Result,
                     entry.CorrelationId,
-                    entry.IpAddress));
+                    entry.IpAddress,
+                    entry.BeforeJson,
+                    entry.AfterJson));
 
         await _dbContext
             .SaveChangesAsync(
