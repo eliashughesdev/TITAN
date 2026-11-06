@@ -70,7 +70,9 @@ object KioskController {
         val app = context.applicationContext
         val dpm = app.getSystemService(DevicePolicyManager::class.java) ?: return false
         val owner = runCatching { dpm.isDeviceOwnerApp(app.packageName) }.getOrDefault(false)
-        return effective(app, owner).lockTask && dpm.isLockTaskPermitted(app.packageName)
+        return owner &&
+            isKioskEnabled(app) &&
+            dpm.isLockTaskPermitted(app.packageName)
     }
 
     fun isKioskEnabled(context: Context): Boolean =
@@ -102,8 +104,15 @@ object KioskController {
                 .onFailure { Log.w(TAG, "No fue posible fijar el HOME.", it) }
             runCatching { dpm.setStatusBarDisabled(admin, wanted.statusBar) }
                 .onFailure { Log.w(TAG, "No fue posible cambiar la barra de estado.", it) }
-            runCatching { applyLockTask(dpm, admin, app.packageName, wanted) }
-                .onFailure { Log.w(TAG, "No fue posible configurar lock task.", it) }
+            runCatching {
+                applyLockTask(
+                    dpm = dpm,
+                    admin = admin,
+                    packageName = app.packageName,
+                    wanted = wanted,
+                    kioskEnabled = isKioskEnabled(app)
+                )
+            }.onFailure { Log.w(TAG, "No fue posible configurar lock task.", it) }
         }
 
         return status(app)
@@ -197,16 +206,19 @@ object KioskController {
         dpm: DevicePolicyManager,
         admin: ComponentName,
         packageName: String,
-        wanted: Effective
+        wanted: Effective,
+        kioskEnabled: Boolean
     ) {
-        if (!wanted.lockTask) {
-            dpm.setLockTaskPackages(admin, emptyArray())
-            return
-        }
+        val allowedPackages =
+            if (kioskEnabled) {
+                (listOf(packageName) + wanted.packages).distinct().toTypedArray()
+            } else {
+                emptyArray<String>()
+            }
 
-        dpm.setLockTaskPackages(admin, (listOf(packageName) + wanted.packages).distinct().toTypedArray())
+        dpm.setLockTaskPackages(admin, allowedPackages)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (wanted.lockTask && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             dpm.setLockTaskFeatures(
                 admin,
                 DevicePolicyManager.LOCK_TASK_FEATURE_HOME or
@@ -226,6 +238,9 @@ object KioskController {
             add(Manifest.permission.ACCESS_COARSE_LOCATION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
         for (permission in permissions) {

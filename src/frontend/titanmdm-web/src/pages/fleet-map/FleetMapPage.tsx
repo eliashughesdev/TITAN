@@ -7,6 +7,7 @@ import {
 import {
   Activity,
   AlertTriangle,
+  BellRing,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -33,6 +34,8 @@ import type {
   LatLngExpression,
 } from 'leaflet'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthContext'
+import { deviceCommandsApi } from '../../api/deviceCommandsApi'
 import {
   locationApi,
   type FleetLocation,
@@ -137,7 +140,16 @@ function MapController({
 
 export function FleetMapPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
   const provider = getActiveProvider()
+  const canRing =
+    hasPermission('devices.commands') ||
+    hasPermission('android.enterprise.actions')
+  const [ringing, setRinging] = useState(false)
+  const [ringNotice, setRingNotice] = useState<{
+    deviceId: string
+    message: string
+  } | null>(null)
   const [locations, setLocations] = useState<FleetLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -227,6 +239,26 @@ export function FleetMapPage() {
 
     return [selectedDevice.latitude, selectedDevice.longitude]
   }, [selectedDevice])
+
+  async function ringSelectedDevice(): Promise<void> {
+    if (!selectedDevice || ringing) return
+
+    setRinging(true)
+    setRingNotice(null)
+
+    try {
+      await deviceCommandsApi.ring(selectedDevice.deviceId, 30)
+      setRingNotice({
+        deviceId: selectedDevice.deviceId,
+        message:
+          'Alarma enviada. Sonará 30 segundos o hasta tocar la pantalla.',
+      })
+    } catch {
+      setError('No fue posible enviar la alarma remota.')
+    } finally {
+      setRinging(false)
+    }
+  }
 
   const stateCounts = useMemo(
     () =>
@@ -643,6 +675,27 @@ export function FleetMapPage() {
                 </div>
 
                 <div className="fleet-device-card__footer">
+                  {ringNotice?.deviceId ===
+                    selectedDevice.deviceId && (
+                    <div className="fleet-ring-note">
+                      {ringNotice.message}
+                    </div>
+                  )}
+
+                  {canRing && (
+                    <button
+                      type="button"
+                      className="fleet-btn fleet-btn--danger"
+                      disabled={ringing}
+                      onClick={() => void ringSelectedDevice()}
+                    >
+                      <BellRing size={14} />
+                      {ringing
+                        ? 'Enviando alarma...'
+                        : 'Hacer sonar dispositivo'}
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     className="fleet-btn fleet-btn--primary"

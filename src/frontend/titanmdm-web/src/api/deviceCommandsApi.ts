@@ -69,6 +69,24 @@ export const deviceCommandsApi = {
     return response.data
   },
 
+  async ring(
+    deviceId: string,
+    durationSeconds = 30,
+  ): Promise<DeviceCommand> {
+    const response =
+      await apiClient.post<DeviceCommand>(
+        `/device-commands/${deviceId}/ring`,
+        undefined,
+        {
+          params: {
+            durationSeconds,
+          },
+        },
+      )
+
+    return response.data
+  },
+
   async getForDevice(
     deviceId: string,
   ): Promise<DeviceCommandListResult> {

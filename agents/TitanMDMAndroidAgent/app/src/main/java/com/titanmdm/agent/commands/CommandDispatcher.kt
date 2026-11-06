@@ -1,6 +1,7 @@
 package com.titanmdm.agent.commands
 
 import android.content.Context
+import com.titanmdm.agent.commands.handlers.AlarmCommandHandler
 import com.titanmdm.agent.commands.handlers.AppInventoryCommandHandler
 import com.titanmdm.agent.commands.handlers.ApplyLauncherPolicyCommandHandler
 import com.titanmdm.agent.commands.handlers.CommandHandler
@@ -46,6 +47,10 @@ class CommandDispatcher(
             ),
 
             LostModeCommandHandler(
+                applicationContext
+            ),
+
+            AlarmCommandHandler(
                 applicationContext
             ),
 

@@ -873,6 +873,51 @@ button:disabled {
   font-size: 9px;
 }
 
+.device-op-alarm {
+  border-color: rgba(220,38,38,.22);
+}
+
+.device-op-alarm > header > svg {
+  color: #dc2626;
+}
+
+.device-op-alarm-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 15px;
+}
+
+.device-op-alarm-body p {
+  margin: 0;
+  color: var(--titan-text-3);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.device-op-alarm-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: #dc2626 !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+}
+
+.device-op-alarm-button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+@media (max-width: 720px) {
+  .device-op-alarm-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (max-width: 1100px) {
   .device-op-health-layout,
   .op-two-columns {

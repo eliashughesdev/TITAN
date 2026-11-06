@@ -7,6 +7,8 @@ import com.titanmdm.agent.core.network.TitanApiClient
 import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
 import com.titanmdm.agent.launcher.TitanLauncherAcknowledgementStore
+import com.titanmdm.agent.location.HybridLocationProvider
+import java.time.Instant
 
 sealed interface HeartbeatResult {
 
@@ -48,6 +50,11 @@ class HeartbeatRepository(
                 TitanLauncherAcknowledgementStore.read(appContext.filesDir)
                     ?.toHeartbeatFields()
 
+            val hybridLocation =
+                HybridLocationProvider.capture(appContext)
+            val location =
+                hybridLocation.location
+
             val request =
                 HeartbeatRequest(
                     deviceId = identity.deviceId,
@@ -57,6 +64,22 @@ class HeartbeatRepository(
                     agentVersion = AgentConfig.AGENT_VERSION,
                     operatingSystemVersion =
                         inventory.operatingSystemVersion,
+                    latitude = location?.latitude,
+                    longitude = location?.longitude,
+                    locationAccuracyMeters =
+                        location?.let {
+                            if (it.hasAccuracy()) it.accuracy.toDouble() else null
+                        },
+                    locationProvider =
+                        location?.provider,
+                    bssid =
+                        hybridLocation.wifi.bssid,
+                    rssi =
+                        hybridLocation.wifi.rssi,
+                    locationCapturedAtUtc =
+                        location?.let {
+                            Instant.ofEpochMilli(it.time).toString()
+                        },
                     launcherProfileId = acknowledgement?.get("profileId"),
                     launcherPublicationId = acknowledgement?.get("publicationId"),
                     launcherConfigVersion = acknowledgement?.get("configVersion")?.toIntOrNull(),

@@ -119,6 +119,27 @@ data class HeartbeatRequest(
     @SerialName("operatingSystemVersion")
     val operatingSystemVersion: String? = null,
 
+    @SerialName("latitude")
+    val latitude: Double? = null,
+
+    @SerialName("longitude")
+    val longitude: Double? = null,
+
+    @SerialName("locationAccuracyMeters")
+    val locationAccuracyMeters: Double? = null,
+
+    @SerialName("locationProvider")
+    val locationProvider: String? = null,
+
+    @SerialName("bssid")
+    val bssid: String? = null,
+
+    @SerialName("rssi")
+    val rssi: Int? = null,
+
+    @SerialName("locationCapturedAtUtc")
+    val locationCapturedAtUtc: String? = null,
+
     @SerialName("launcherProfileId")
     val launcherProfileId: String? = null,
 

@@ -56,6 +56,33 @@ object NativeLocationProvider {
             .maxByOrNull { it.time }
 
     @SuppressLint("MissingPermission")
+    fun bestLastKnown(
+        manager: LocationManager,
+        maxAgeMs: Long
+    ): Location? =
+        lastKnown(manager)
+            ?.takeIf {
+                System.currentTimeMillis() - it.time <= maxAgeMs
+            }
+
+    @SuppressLint("MissingPermission")
+    suspend fun currentFromProvider(
+        manager: LocationManager,
+        provider: String,
+        timeoutMs: Long
+    ): Location? {
+        if (!runCatching { manager.isProviderEnabled(provider) }
+                .getOrDefault(false)
+        ) {
+            return null
+        }
+
+        return withTimeoutOrNull(timeoutMs) {
+            requestCurrent(manager, provider)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
     private suspend fun requestCurrent(manager: LocationManager, provider: String): Location? =
         suspendCancellableCoroutine { cont ->
             val signal = CancellationSignal()

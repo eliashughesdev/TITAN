@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -76,6 +77,95 @@ public sealed class DeviceCommandsController
                         context.Value.OrganizationId,
                         context.Value.UserId,
                         request,
+                        cancellationToken);
+
+            return CreatedAtAction(
+                nameof(
+                    GetById),
+                new
+                {
+                    commandId =
+                        command.Id
+                },
+                command);
+        }
+        catch (
+            DeviceCommandException exception)
+        {
+            return MapException(
+                exception);
+        }
+    }
+
+    [HttpPost("{deviceId:guid}/ring")]
+    [RequireAnyPermission(
+        PermissionCodes.Devices.Commands,
+        PermissionCodes.AndroidEnterprise.Actions)]
+    public async Task<IActionResult>
+        Ring(
+            Guid deviceId,
+            [FromQuery] int durationSeconds = 30,
+            CancellationToken cancellationToken = default)
+    {
+        var context =
+            GetSecurityContext();
+
+        if (context is null)
+        {
+            return Unauthorized(
+                new
+                {
+                    code =
+                        "INVALID_IDENTITY",
+
+                    message =
+                        "El token no contiene una identidad válida."
+                });
+        }
+
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    deviceId,
+                    cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var duration =
+            Math.Clamp(
+                durationSeconds,
+                5,
+                120);
+
+        var payload =
+            JsonSerializer.Serialize(
+                new
+                {
+                    durationSeconds =
+                        duration,
+
+                    volume =
+                        "max",
+
+                    vibrate =
+                        true
+                });
+
+        try
+        {
+            var command =
+                await _deviceCommandService
+                    .CreateAsync(
+                        context.Value.OrganizationId,
+                        context.Value.UserId,
+                        new CreateDeviceCommandRequest(
+                            deviceId,
+                            "PLAY_ALARM",
+                            payload,
+                            30),
                         cancellationToken);
 
             return CreatedAtAction(

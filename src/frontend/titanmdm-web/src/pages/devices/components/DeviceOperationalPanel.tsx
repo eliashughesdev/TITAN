@@ -1,5 +1,6 @@
 import {
   Activity,
+  BellRing,
   CheckCircle2,
   Layers3,
   RefreshCw,
@@ -19,6 +20,10 @@ import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../../api/deviceCommandsApi'
+
+import {
+  useAuth,
+} from '../../../auth/AuthContext'
 
 import {
   devicesApi,
@@ -335,6 +340,13 @@ function calculateHealth(
 export function DeviceOperationalPanel({
   deviceId,
 }: Props) {
+  const { hasPermission } =
+    useAuth()
+
+  const canRing =
+    hasPermission('devices.commands') ||
+    hasPermission('android.enterprise.actions')
+
   const [
     snapshot,
     setSnapshot,
@@ -383,8 +395,6 @@ export function DeviceOperationalPanel({
     useCallback(
       async (): Promise<void> => {
         try {
-          setLoading(true)
-
           const data =
             await devicesApi
               .getOperationalSnapshot(
@@ -408,6 +418,7 @@ export function DeviceOperationalPanel({
 
   useEffect(
     () => {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void load()
     },
     [
@@ -483,6 +494,43 @@ export function DeviceOperationalPanel({
     } catch {
       setError(
         `No fue posible ejecutar ${commandType}.`,
+      )
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function ringDevice():
+    Promise<void> {
+    if (working) {
+      return
+    }
+
+    try {
+      setWorking(
+        'RING_DEVICE',
+      )
+
+      setError(null)
+      setMessage(null)
+
+      await deviceCommandsApi
+        .ring(
+          deviceId,
+          30,
+        )
+
+      setMessage(
+        'Alarma enviada. El dispositivo sonará durante 30 segundos o hasta que se toque la pantalla.',
+      )
+
+      setHistoryRefreshKey(
+        current =>
+          current + 1,
+      )
+    } catch {
+      setError(
+        'No fue posible enviar la alarma remota.',
       )
     } finally {
       setWorking(null)
@@ -802,6 +850,54 @@ export function DeviceOperationalPanel({
           </strong>
         </article>
       </div>
+
+      {!windows && canRing && (
+        <article className="op-panel device-op-alarm">
+          <header>
+            <BellRing
+              size={18}
+            />
+
+            <div>
+              <strong>
+                Alarma remota
+              </strong>
+
+              <span>
+                Reproduce una alarma audible en el dispositivo.
+              </span>
+            </div>
+          </header>
+
+          <div className="device-op-alarm-body">
+            <p>
+              El volumen se eleva al máximo, vibra y se
+              detiene a los 30 segundos o al tocar la
+              pantalla.
+            </p>
+
+            <button
+              type="button"
+              className="device-op-alarm-button"
+              disabled={
+                Boolean(working)
+              }
+              onClick={() =>
+                void ringDevice()
+              }
+            >
+              <BellRing
+                size={16}
+              />
+
+              {working ===
+              'RING_DEVICE'
+                ? 'Enviando alarma...'
+                : 'Hacer sonar dispositivo'}
+            </button>
+          </div>
+        </article>
+      )}
 
       <article className="op-panel">
         <header>

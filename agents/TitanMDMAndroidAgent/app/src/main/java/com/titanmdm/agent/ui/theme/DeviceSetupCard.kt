@@ -70,9 +70,16 @@ fun DeviceSetupCard(enrolled: Boolean) {
         ActivityResultContracts.StartActivityForResult()
     ) { reload() }
 
-    fun requestForeground() = foreground.launch(
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-    )
+    fun requestForeground() {
+        val permissions = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions += Manifest.permission.POST_NOTIFICATIONS
+        }
+        foreground.launch(permissions.toTypedArray())
+    }
 
     // Al inscribirse se solicita la ubicación una vez, sin esperar al operador.
     LaunchedEffect(enrolled) {

@@ -526,6 +526,9 @@ public static class InfrastructureServiceExtensions
         // LOCATION / LOST MODE
         // ============================================================
 
+        services.AddSingleton<
+            WifiAccessPointDirectory>();
+
         services.AddScoped<
             IDeviceLocationService,
             DeviceLocationService>();

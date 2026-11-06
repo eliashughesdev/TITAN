@@ -9,22 +9,18 @@ import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import com.titanmdm.agent.core.network.LocationReportRequest
 import com.titanmdm.agent.core.network.TitanApiClient
 import com.titanmdm.agent.core.storage.AgentIdentityStore
+import com.titanmdm.agent.location.HybridLocationProvider
 import com.titanmdm.agent.location.LocationCaptureDecision
 import com.titanmdm.agent.location.LocationCapturePayload
 import com.titanmdm.agent.location.LocationCapturePolicy
-import com.titanmdm.agent.location.NativeLocationProvider
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
+import com.titanmdm.agent.location.WifiAccessPointSnapshot
+import com.titanmdm.agent.location.WifiTelemetryProvider
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Instant
-import kotlin.coroutines.resume
 
 /*
  * ANDROID-GEO-01
@@ -96,19 +92,64 @@ class LocationReportingWorker(
             val lastReportAt =
                 readLastReportAtEpochMillis()
 
-            val fix =
+            val hybrid =
                 if (permissionGranted) {
-                    captureFix()
+                    HybridLocationProvider.capture(
+                        applicationContext,
+                        LOCATION_FIX_TIMEOUT_MS
+                    )
                 } else {
                     null
                 }
+
+            val wifi = hybrid?.wifi
+                ?: WifiTelemetryProvider.read(applicationContext)
+
+            val fix = hybrid?.location?.let { location ->
+                LocationCapturePayload(
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    accuracyMeters =
+                        if (location.hasAccuracy())
+                            location.accuracy.toDouble()
+                        else null,
+                    altitudeMeters =
+                        if (location.hasAltitude())
+                            location.altitude
+                        else null,
+                    speedMetersPerSecond =
+                        if (location.hasSpeed())
+                            location.speed.toDouble()
+                        else null,
+                    source =
+                        location.provider
+                            ?: LocationCapturePolicy.PROACTIVE_SOURCE,
+                    capturedAtUtc =
+                        Instant.ofEpochMilli(location.time).toString()
+                )
+            }
+
+            /*
+             * El permiso denegado no se reporta como estado terminal:
+             * el heartbeat y la ubicación por Wi-Fi siguen siendo
+             * válidos y el backend puede resolver el punto de acceso.
+             */
+            if (!permissionGranted) {
+                return uploadStatus(
+                    identity.deviceId,
+                    identity.deviceSecret,
+                    source = WIFI_SOURCE,
+                    status = statusForWifiOnly(wifi),
+                    wifi = wifi
+                )
+            }
 
             val decision =
                 LocationCapturePolicy.decide(
                     reportingEnabled =
                         policy.isEnabled,
                     permissionGranted =
-                        permissionGranted,
+                        true,
                     batteryPercent =
                         batteryPercent,
                     batterySaverActive =
@@ -129,20 +170,12 @@ class LocationReportingWorker(
                 }
 
                 is LocationCaptureDecision.ReportStatusOnly -> {
-                    val payloadJson =
-                        json.encodeToString(
-                            StatusOnlyPayload(
-                                source =
-                                    decision.source,
-                                status =
-                                    decision.status
-                            )
-                        )
-
-                    upload(
+                    uploadStatus(
                         identity.deviceId,
                         identity.deviceSecret,
-                        payloadJson
+                        source = WIFI_SOURCE,
+                        status = statusForWifiOnly(wifi),
+                        wifi = wifi
                     )
                 }
 
@@ -170,7 +203,9 @@ class LocationReportingWorker(
                                         .source,
                                 capturedAtUtc =
                                     decision.payload
-                                        .capturedAtUtc
+                                        .capturedAtUtc,
+                                bssid = wifi.bssid,
+                                rssi = wifi.rssi
                             )
                         )
 
@@ -217,95 +252,38 @@ class LocationReportingWorker(
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private suspend fun captureFix():
-            LocationCapturePayload? {
-        return try {
-            val fusedLocationClient =
-                LocationServices
-                    .getFusedLocationProviderClient(
-                        applicationContext
-                    )
-
-            val fused =
-                runCatching {
-                    withTimeoutOrNull(
-                        LOCATION_FIX_TIMEOUT_MS
-                    ) {
-                        awaitCurrentLocation(
-                            fusedLocationClient
-                        )
-                    }
-                }.getOrNull()
-
-            // Sin Play Services (o sin fix): LocationManager nativo.
-            val location =
-                fused
-                    ?: NativeLocationProvider.current(
-                        applicationContext,
-                        LOCATION_FIX_TIMEOUT_MS
-                    )
-
-            location?.let {
-                LocationCapturePayload(
-                    latitude = it.latitude,
-                    longitude = it.longitude,
-                    accuracyMeters =
-                        if (it.hasAccuracy())
-                            it.accuracy.toDouble()
-                        else null,
-                    altitudeMeters =
-                        if (it.hasAltitude())
-                            it.altitude
-                        else null,
-                    speedMetersPerSecond =
-                        if (it.hasSpeed())
-                            it.speed.toDouble()
-                        else null,
-                    source =
-                        LocationCapturePolicy
-                            .PROACTIVE_SOURCE,
-                    capturedAtUtc =
-                        Instant
-                            .ofEpochMilli(it.time)
-                            .toString()
+    private suspend fun uploadStatus(
+        deviceId: String,
+        deviceSecret: String,
+        source: String,
+        status: String,
+        wifi: WifiAccessPointSnapshot
+    ): Result {
+        val payloadJson =
+            json.encodeToString(
+                StatusOnlyPayload(
+                    source = source,
+                    status = status,
+                    bssid = wifi.bssid,
+                    rssi = wifi.rssi
                 )
-            }
-        } catch (e: Exception) {
-            null
-        }
+            )
+
+        return upload(
+            deviceId,
+            deviceSecret,
+            payloadJson
+        )
     }
 
-    /*
-     * Play Services Task -> suspend sin depender del
-     * artefacto kotlinx-coroutines-play-services (no
-     * esta en el classpath del proyecto).
-     */
-    @SuppressLint("MissingPermission")
-    private suspend fun awaitCurrentLocation(
-        fusedLocationClient:
-        com.google.android.gms.location.FusedLocationProviderClient
-    ): android.location.Location? {
-        return suspendCancellableCoroutine { cont ->
-            fusedLocationClient
-                .getCurrentLocation(
-                    Priority
-                        .PRIORITY_BALANCED_POWER_ACCURACY,
-                    CancellationTokenSource()
-                        .token
-                )
-                .addOnSuccessListener { fix ->
-                    if (cont.isActive) {
-                        cont.resume(fix)
-                    }
-                }
-                .addOnFailureListener {
-                    if (cont.isActive) {
-                        cont.resume(null)
-                    }
-                }
+    private fun statusForWifiOnly(
+        wifi: WifiAccessPointSnapshot
+    ): String =
+        if (wifi.bssid != null) {
+            STATUS_WIFI_ONLY
+        } else {
+            LocationCapturePolicy.STATUS_UNAVAILABLE
         }
-    }
 
     private fun hasLocationPermission(): Boolean {
         val fineGranted =
@@ -401,13 +379,17 @@ class LocationReportingWorker(
         val altitudeMeters: Double? = null,
         val speedMetersPerSecond: Double? = null,
         val source: String,
-        val capturedAtUtc: String
+        val capturedAtUtc: String,
+        val bssid: String? = null,
+        val rssi: Int? = null
     )
 
     @kotlinx.serialization.Serializable
     private data class StatusOnlyPayload(
         val source: String,
-        val status: String
+        val status: String,
+        val bssid: String? = null,
+        val rssi: Int? = null
     )
 
     companion object {
@@ -416,6 +398,12 @@ class LocationReportingWorker(
 
         private const val KEY_LAST_REPORT_AT =
             "last_proactive_report_at"
+
+        private const val WIFI_SOURCE =
+            "AndroidAgent-Proactive-WifiBssid"
+
+        private const val STATUS_WIFI_ONLY =
+            "WIFI_ONLY"
 
         private const val
         LOCATION_FIX_TIMEOUT_MS = 10_000L

@@ -1,10 +1,16 @@
 package com.titanmdm.agent.admin
 
 import android.app.admin.DeviceAdminReceiver
+import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.PersistableBundle
+import com.titanmdm.agent.core.config.AgentConfig
+import com.titanmdm.agent.core.config.ServerEndpointStore
 import com.titanmdm.agent.kiosk.KioskController
+import com.titanmdm.agent.service.AgentForegroundService
 
 /**
  * Administrador de dispositivo de TitanMDM Agent.
@@ -22,8 +28,36 @@ class TitanDeviceAdminReceiver : DeviceAdminReceiver() {
     }
 
     override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
+        applyProvisioningExtras(context, intent)
         KioskController.apply(context)
+        AgentForegroundService.start(context)
     }
+
+    private fun applyProvisioningExtras(context: Context, intent: Intent) {
+        val extras = provisioningExtras(intent) ?: return
+
+        val serverUrl = extras.getString("server_url")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return
+
+        val normalized = AgentConfig.validateServerUrl(serverUrl).getOrNull() ?: return
+        ServerEndpointStore.init(context)
+        ServerEndpointStore.save(normalized)
+    }
+
+    private fun provisioningExtras(intent: Intent): PersistableBundle? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE,
+                PersistableBundle::class.java
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE
+            )
+        }
 
     companion object {
         fun component(context: Context): ComponentName =

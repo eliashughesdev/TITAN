@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Application.Location;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Devices;
@@ -30,10 +32,14 @@ public sealed class DeviceAgentService
     private readonly DeviceNamingResolver
         _deviceNamingResolver;
 
+    private readonly IDeviceLocationService?
+        _locationService;
+
     public DeviceAgentService(
         TitanMdmDbContext dbContext,
         IAutomationEventDispatcher automation,
-        DeviceNamingResolver deviceNamingResolver)
+        DeviceNamingResolver deviceNamingResolver,
+        IDeviceLocationService? locationService = null)
     {
         _dbContext =
             dbContext;
@@ -43,6 +49,9 @@ public sealed class DeviceAgentService
 
         _deviceNamingResolver =
             deviceNamingResolver;
+
+        _locationService =
+            locationService;
     }
 
     public async Task<DeviceHeartbeatResultDto>
@@ -248,6 +257,11 @@ public sealed class DeviceAgentService
         await _dbContext
             .SaveChangesAsync(
                 cancellationToken);
+
+        await ProcessHeartbeatLocationAsync(
+            device,
+            request,
+            cancellationToken);
 
         // ============================================================
         // DEVICE AUTO CLASSIFICATION EVENT
@@ -648,5 +662,61 @@ public sealed class DeviceAgentService
         }
 
         return normalized;
+    }
+
+    // ================================================================
+    // HEARTBEAT LOCATION
+    // ================================================================
+
+    private async Task ProcessHeartbeatLocationAsync(
+        Device device,
+        DeviceHeartbeatRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_locationService is null)
+        {
+            return;
+        }
+
+        var hasCoordinates =
+            request.Latitude.HasValue &&
+            request.Longitude.HasValue;
+
+        var hasBssid =
+            !string.IsNullOrWhiteSpace(request.Bssid);
+
+        if (!hasCoordinates && !hasBssid)
+        {
+            return;
+        }
+
+        var payload = JsonSerializer.Serialize(
+            new
+            {
+                latitude = hasCoordinates ? request.Latitude : null,
+                longitude = hasCoordinates ? request.Longitude : null,
+                accuracyMeters = request.LocationAccuracyMeters,
+                source = "AndroidAgent-Heartbeat",
+                capturedAtUtc = request.LocationCapturedAtUtc?.ToUniversalTime().ToString("O"),
+                status = hasCoordinates ? "OK" : "WIFI_ONLY",
+                bssid = request.Bssid,
+                rssi = request.Rssi
+            });
+
+        try
+        {
+            await _locationService.ProcessLocationAsync(
+                device.Id,
+                payload,
+                cancellationToken);
+        }
+        catch
+        {
+            /*
+             * La ubicacion es complementaria al heartbeat:
+             * un fallo de captura no debe rechazar la
+             * autenticacion ni el estado del dispositivo.
+             */
+        }
     }
 }

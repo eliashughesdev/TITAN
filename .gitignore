@@ -84,6 +84,9 @@ appsettings.Production.local.json
 **/*service-account*.json
 application_default_credentials.json
 
+# Android Enterprise QR provisioning payload (contains Wi-Fi credentials)
+/provisioning-qr.json
+
 *.pem
 *.pfx
 *.p12

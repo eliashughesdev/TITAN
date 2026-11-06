@@ -25,14 +25,19 @@ public sealed class DeviceLocationService
     private readonly ILocationUpdateNotifier?
         _notifier;
 
+    private readonly WifiAccessPointDirectory?
+        _wifiAccessPoints;
+
     public DeviceLocationService(
         TitanMdmDbContext db,
         IAutomationEventDispatcher automation,
-        ILocationUpdateNotifier? notifier = null)
+        ILocationUpdateNotifier? notifier = null,
+        WifiAccessPointDirectory? wifiAccessPoints = null)
     {
         _db = db;
         _automation = automation;
         _notifier = notifier;
+        _wifiAccessPoints = wifiAccessPoints;
     }
 
     public async Task ProcessLocationAsync(
@@ -58,13 +63,33 @@ public sealed class DeviceLocationService
                 "Invalid location result.");
 
         /*
+         * Respaldo por punto de acceso Wi-Fi: si el
+         * agente no obtuvo coordenadas pero reporto el
+         * BSSID, se resuelve contra el directorio
+         * configurado por el administrador.
+         */
+        var latitude = result.Latitude;
+        var longitude = result.Longitude;
+
+        WifiAccessPointFix? wifiFix = null;
+
+        if ((latitude is null || longitude is null) &&
+            _wifiAccessPoints is not null &&
+            _wifiAccessPoints.TryResolve(result.Bssid, out var resolved))
+        {
+            wifiFix = resolved;
+            latitude = resolved.Latitude;
+            longitude = resolved.Longitude;
+        }
+
+        /*
          * Reporte de estado sin coordenadas
-         * (permiso denegado / sin fix).
+         * (sin fix y sin BSSID conocido).
          * No inventamos posiciones: solo registramos
          * el estado de captura.
          */
-        if (result.Latitude is null ||
-            result.Longitude is null)
+        if (latitude is null ||
+            longitude is null)
         {
             var captureState =
                 ParseCaptureState(
@@ -89,15 +114,20 @@ public sealed class DeviceLocationService
             return;
         }
 
-        var latitude =
-            result.Latitude.Value;
+        var latitudeValue =
+            latitude.Value;
 
-        var longitude =
-            result.Longitude.Value;
+        var longitudeValue =
+            longitude.Value;
+
+        var source =
+            wifiFix is null
+                ? result.Source
+                : $"{result.Source ?? "AndroidAgent"}-WifiBssid";
 
         ValidateCoordinates(
-            latitude,
-            longitude);
+            latitudeValue,
+            longitudeValue);
 
         var capturedAt =
             DateTime.TryParse(
@@ -117,8 +147,8 @@ public sealed class DeviceLocationService
          * procesan aunque el muestreo periodico este
          * deshabilitado.
          */
-        if (IsProactiveSource(result.Source) &&
-            !IsGeofenceTransitionSource(result.Source))
+        if (IsProactiveSource(source) &&
+            !IsGeofenceTransitionSource(source))
         {
             var policy =
                 await _db.LocationReportingPolicies
@@ -139,12 +169,13 @@ public sealed class DeviceLocationService
             new DeviceLocation(
                 device.OrganizationId,
                 device.Id,
-                latitude,
-                longitude,
-                result.AccuracyMeters,
+                latitudeValue,
+                longitudeValue,
+                result.AccuracyMeters ??
+                    (wifiFix is null ? null : 250d),
                 result.AltitudeMeters,
                 result.SpeedMetersPerSecond,
-                result.Source ??
+                source ??
                     "AndroidAgent",
                 capturedAt);
 
@@ -155,7 +186,7 @@ public sealed class DeviceLocationService
             device,
             DeviceCaptureState.Reported,
             DateTime.UtcNow,
-            result.Source,
+            source,
             cancellationToken);
 
         var geofences =
@@ -192,8 +223,8 @@ public sealed class DeviceLocationService
         {
             var distanceMeters =
                 CalculateDistanceMeters(
-                    latitude,
-                    longitude,
+                    latitudeValue,
+                    longitudeValue,
                     geofence.Latitude,
                     geofence.Longitude);
 
@@ -238,8 +269,8 @@ public sealed class DeviceLocationService
                             geofence.Id,
                             device.Id,
                             "Enter",
-                            latitude,
-                            longitude,
+                            latitudeValue,
+                            longitudeValue,
                             distanceMeters,
                             capturedAt);
 
@@ -299,8 +330,8 @@ public sealed class DeviceLocationService
                     geofence.Id,
                     device.Id,
                     eventType,
-                    latitude,
-                    longitude,
+                    latitudeValue,
+                    longitudeValue,
                     distanceMeters,
                     capturedAt);
 
@@ -1112,6 +1143,11 @@ public sealed class DeviceLocationService
                 status,
                 "UNAVAILABLE",
                 StringComparison
+                    .OrdinalIgnoreCase) ||
+            string.Equals(
+                status,
+                "WIFI_ONLY",
+                StringComparison
                     .OrdinalIgnoreCase))
         {
             return DeviceCaptureState
@@ -1244,6 +1280,8 @@ public sealed class DeviceLocationService
         string? Source,
         string? CapturedAtUtc,
         string? Status,
+        string? Bssid = null,
+        int? Rssi = null,
         Guid? GeofenceId = null,
         string? Transition = null);
 
