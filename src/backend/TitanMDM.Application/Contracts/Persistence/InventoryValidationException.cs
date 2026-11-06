@@ -13,3 +13,8 @@ public sealed class InventoryValidationException : Exception
 
     public string Code { get; }
 }
+
+public static class InventoryValidationCodes
+{
+    public const string AssetTagDuplicate = "INVENTORY_ASSET_TAG_DUPLICATE";
+}

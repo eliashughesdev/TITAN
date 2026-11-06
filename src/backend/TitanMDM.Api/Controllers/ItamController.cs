@@ -220,10 +220,21 @@ public sealed class ItamController : ControllerBase
         [FromBody] Asset asset,
         CancellationToken cancellationToken)
     {
-        var created = await _inventory.CreateAssetAsync(
-            asset,
-            UserName(),
-            cancellationToken);
+        Asset created;
+        try
+        {
+            created = await _inventory.CreateAssetAsync(
+                asset,
+                UserName(),
+                cancellationToken);
+        }
+        catch (InventoryValidationException ex)
+        {
+            var body = new { code = ex.Code, message = ex.Message };
+            return ex.Code == InventoryValidationCodes.AssetTagDuplicate
+                ? Conflict(body)
+                : BadRequest(body);
+        }
 
         return CreatedAtAction(
             nameof(GetAsset),

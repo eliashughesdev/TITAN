@@ -128,12 +128,27 @@ public sealed partial class InventoryService : IInventoryService
         if (string.IsNullOrWhiteSpace(asset.Id))
             asset.Id = Guid.NewGuid().ToString();
 
+        if (string.IsNullOrWhiteSpace(asset.Name))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_ASSET_NAME_REQUIRED",
+                "El nombre del activo es obligatorio.");
+        }
+
         if (string.IsNullOrWhiteSpace(asset.AssetTag))
             asset.AssetTag = await GenerateAssetTagAsync(cancellationToken);
 
         var now = Now();
         asset.AssetTag = asset.AssetTag.Trim().ToUpperInvariant();
-        asset.Name = (asset.Name ?? string.Empty).Trim();
+        asset.Name = asset.Name.Trim();
+
+        var tag = asset.AssetTag;
+        if (await _db.Assets.AsNoTracking().AnyAsync(x => x.AssetTag == tag, cancellationToken))
+        {
+            throw new InventoryValidationException(
+                InventoryValidationCodes.AssetTagDuplicate,
+                $"Ya existe un activo con la etiqueta {tag}.");
+        }
         asset.Status = string.IsNullOrWhiteSpace(asset.Status) ? "disponible" : asset.Status.Trim().ToLowerInvariant();
         asset.Condition = string.IsNullOrWhiteSpace(asset.Condition) ? "nuevo" : asset.Condition.Trim().ToLowerInvariant();
         asset.CreatedAt = string.IsNullOrWhiteSpace(asset.CreatedAt) ? now : asset.CreatedAt;

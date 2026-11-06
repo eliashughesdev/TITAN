@@ -64,5 +64,32 @@ public sealed class ItamDbContext : DbContext
 
         modelBuilder.Entity<AssetHistory>()
             .HasIndex(x => x.AssetId);
+
+        /*
+         * FK reales de cisa_ti_itam (FK_hist_asset, FK_deliv_asset,
+         * FK_deliv_printer). Sin declararlas, EF no ordena los INSERT y puede
+         * grabar el historial antes que el activo nuevo: SQL Server rechaza la
+         * fila y el alta de activo respondía 500.
+         */
+        modelBuilder.Entity<AssetHistory>()
+            .HasOne<Asset>()
+            .WithMany()
+            .HasForeignKey(x => x.AssetId)
+            .HasConstraintName("FK_hist_asset")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Delivery>()
+            .HasOne<Asset>()
+            .WithMany()
+            .HasForeignKey(x => x.AssetId)
+            .HasConstraintName("FK_deliv_asset")
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<Delivery>()
+            .HasOne<Asset>()
+            .WithMany()
+            .HasForeignKey(x => x.PrinterId)
+            .HasConstraintName("FK_deliv_printer")
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }
