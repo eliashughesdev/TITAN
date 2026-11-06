@@ -18,7 +18,7 @@
     "dompurify": "^3.4.17",
     "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
+    "jspdf-autotable": "^5.0.9",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.46.0",
     "motion": "^14.1.0",
