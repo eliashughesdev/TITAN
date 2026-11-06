@@ -76,4 +76,14 @@ public class Delivery
 
     [Column("mac_address", TypeName = "nvarchar(40)")]
     public string? MacAddress { get; set; }
+
+    // Impresora portátil Honeywell RP4 entregada junto con la Handheld (opcional).
+    [Column("include_printer", TypeName = "bit")]
+    public bool IncludePrinter { get; set; }
+
+    [Column("printer_id", TypeName = "nvarchar(36)")]
+    public string? PrinterId { get; set; }
+
+    [Column("printer_serial_number", TypeName = "nvarchar(120)")]
+    public string? PrinterSerialNumber { get; set; }
 }

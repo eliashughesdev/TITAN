@@ -469,6 +469,11 @@ public sealed partial class InventoryService : IInventoryService
             delivery.AssetTag,
             cancellationToken);
 
+        var printer = await ResolveDeliveryPrinterAsync(
+            delivery,
+            asset,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(delivery.Id))
             delivery.Id = Guid.NewGuid().ToString();
 
@@ -513,8 +518,120 @@ public sealed partial class InventoryService : IInventoryService
                 cancellationToken);
         }
 
+        if (printer is not null)
+        {
+            printer.Status = "asignado";
+            printer.AssignedTo = delivery.EmployeeCode;
+            printer.AssignedToName = delivery.AssignedToName;
+            printer.UpdatedAt = Now();
+            printer.UpdatedBy = userName;
+
+            await AddHistoryAsync(
+                printer.Id,
+                "delivery",
+                $"Impresora RP4 entregada con {delivery.AssetTag} a {delivery.AssignedToName} ({delivery.EmployeeCode}).",
+                userName,
+                null,
+                delivery,
+                cancellationToken);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
         return delivery;
+    }
+
+    /// <summary>
+    /// Impresora Honeywell RP4 opcional de la entrega. Sin el switch activo
+    /// se limpian los campos; con el switch activo la impresora es obligatoria,
+    /// debe existir en inventario, estar libre y ser un equipo RP4.
+    /// </summary>
+    private async Task<Asset?> ResolveDeliveryPrinterAsync(
+        Delivery delivery,
+        Asset? handheld,
+        CancellationToken cancellationToken)
+    {
+        if (!delivery.IncludePrinter)
+        {
+            delivery.PrinterId = null;
+            delivery.PrinterSerialNumber = null;
+            return null;
+        }
+
+        var printerId = delivery.PrinterId?.Trim();
+        var printerSerial = delivery.PrinterSerialNumber?.Trim();
+
+        if (string.IsNullOrWhiteSpace(printerId) && string.IsNullOrWhiteSpace(printerSerial))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_PRINTER_REQUIRED",
+                "Seleccione la impresora RP4 o desactive \"Incluir impresora RP4\".");
+        }
+
+        Asset? printer = null;
+        if (!string.IsNullOrWhiteSpace(printerId))
+        {
+            printer = await _db.Assets.FirstOrDefaultAsync(x => x.Id == printerId, cancellationToken);
+        }
+
+        if (printer is null && !string.IsNullOrWhiteSpace(printerSerial))
+        {
+            printer = await _db.Assets.FirstOrDefaultAsync(
+                x => x.SerialNumber == printerSerial && x.Deleted != true,
+                cancellationToken);
+        }
+
+        if (printer is null || printer.Deleted == true)
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_PRINTER_NOT_FOUND",
+                "La impresora indicada no existe en el inventario.");
+        }
+
+        if (handheld is not null && printer.Id == handheld.Id)
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_PRINTER_SAME_AS_ASSET",
+                "La impresora no puede ser el mismo activo que la Handheld.");
+        }
+
+        var categoryName = printer.CategoryId is null
+            ? null
+            : await _db.Categories
+                .AsNoTracking()
+                .Where(x => x.Id == printer.CategoryId)
+                .Select(x => x.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+
+        if (!IsRp4Printer(printer, categoryName))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_PRINTER_NOT_RP4",
+                $"El activo {printer.AssetTag} no es una impresora Honeywell RP4.");
+        }
+
+        if (EqualsState(printer.Status, "asignado"))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_PRINTER_UNAVAILABLE",
+                $"La impresora {printer.AssetTag} ya está asignada a {printer.AssignedToName ?? "otro colaborador"}.");
+        }
+
+        delivery.PrinterId = printer.Id;
+        delivery.PrinterSerialNumber = string.IsNullOrWhiteSpace(printer.SerialNumber)
+            ? printerSerial
+            : printer.SerialNumber;
+
+        return printer;
+    }
+
+    /// <summary>Impresora portátil Honeywell RP4 (RP4, RP4D...) por categoría, nombre o modelo.</summary>
+    public static bool IsRp4Printer(Asset asset, string? categoryName)
+    {
+        ArgumentNullException.ThrowIfNull(asset);
+
+        return Contains(categoryName, "RP4") ||
+               Contains(asset.Name, "RP4") ||
+               Contains(asset.HardwareModel, "RP4");
     }
 
     // ============================================================
@@ -593,6 +710,8 @@ public sealed partial class InventoryService : IInventoryService
 
             delivery.Returned = true;
             delivery.ReturnDate = item.ReturnDate;
+
+            await ReleaseDeliveryPrinterAsync(delivery, item, userName, cancellationToken);
         }
 
         if (asset is not null)
@@ -623,6 +742,38 @@ public sealed partial class InventoryService : IInventoryService
         _db.Returns.Add(item);
         await _db.SaveChangesAsync(cancellationToken);
         return item;
+    }
+
+    /// <summary>La impresora RP4 entregada con la Handheld vuelve a estar disponible.</summary>
+    private async Task ReleaseDeliveryPrinterAsync(
+        Delivery delivery,
+        Return item,
+        string? userName,
+        CancellationToken cancellationToken)
+    {
+        if (!delivery.IncludePrinter || string.IsNullOrWhiteSpace(delivery.PrinterId))
+            return;
+
+        var printer = await _db.Assets
+            .FirstOrDefaultAsync(x => x.Id == delivery.PrinterId, cancellationToken);
+
+        if (printer is null || !EqualsState(printer.Status, "asignado"))
+            return;
+
+        printer.Status = "disponible";
+        printer.AssignedTo = null;
+        printer.AssignedToName = null;
+        printer.UpdatedAt = Now();
+        printer.UpdatedBy = userName;
+
+        await AddHistoryAsync(
+            printer.Id,
+            "return",
+            $"Impresora RP4 devuelta con {delivery.AssetTag} por {item.ReturnedBy ?? delivery.AssignedToName} ({delivery.EmployeeCode}).",
+            userName,
+            null,
+            item,
+            cancellationToken);
     }
 
     // ============================================================

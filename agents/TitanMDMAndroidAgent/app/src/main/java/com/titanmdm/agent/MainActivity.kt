@@ -19,6 +19,8 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onCreate(savedInstanceState)
 
+        // Kiosco: retroceso bloqueado. El dispatcher cubre también el gesto
+        // de Android 16+, que ya no llama a onBackPressed().
         onBackPressedDispatcher.addCallback(this) { }
 
         enableEdgeToEdge()
@@ -38,11 +40,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
 
         syncKioskLock()
-    }
-
-    @Deprecated("Kiosk mode blocks back navigation.")
-    @Suppress("DEPRECATION")
-    override fun onBackPressed() {
     }
 
     private fun syncKioskLock() {

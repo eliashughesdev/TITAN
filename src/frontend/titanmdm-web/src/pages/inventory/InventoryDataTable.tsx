@@ -112,6 +112,8 @@ export function InventoryDataTable({
   emptyText = 'No hay registros para mostrar.',
   tableKey = 'inventory-table',
   toolbar,
+  query: controlledQuery,
+  onQueryChange,
 }: {
   rows: InventoryRow[]
   columns: InventoryColumn[]
@@ -120,9 +122,17 @@ export function InventoryDataTable({
   tableKey?: string
   /** Acciones extra (filtros rapidos, exportaciones) junto al buscador. */
   toolbar?: ReactNode
+  /** Busqueda controlada por la pantalla (p. ej. para exportar con el mismo texto). */
+  query?: string
+  onQueryChange?: (value: string) => void
 }) {
   const storageKey = `${tableKey}.hiddenColumns`
-  const [query, setQuery] = useState('')
+  const [localQuery, setLocalQuery] = useState('')
+  const query = controlledQuery ?? localQuery
+  const setQuery = (value: string) => {
+    if (onQueryChange) onQueryChange(value)
+    if (controlledQuery === undefined) setLocalQuery(value)
+  }
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])

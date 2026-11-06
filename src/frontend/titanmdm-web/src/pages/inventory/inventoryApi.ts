@@ -87,6 +87,10 @@ export type Delivery = {
   returnDate?: string | null
   deleted: boolean
   createdAt: string
+  /** Impresora Honeywell RP4 entregada junto con la Handheld (opcional). */
+  includePrinter?: boolean
+  printerId?: string | null
+  printerSerialNumber?: string | null
 }
 
 export type ReturnRecord = {
@@ -247,6 +251,41 @@ export type AssetQuery = {
   departmentId?: string
   warranty?: string
   includeDeleted?: boolean
+}
+
+export type AssetExportFormat = 'excel' | 'pdf'
+
+/** Filtros visibles en la pantalla de Activos: el archivo exportado los respeta todos. */
+export type AssetExportQuery = Omit<AssetQuery, 'includeDeleted'>
+
+const fileNameFrom = (disposition: unknown, fallback: string) => {
+  if (typeof disposition !== 'string') return fallback
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  if (utf8) return decodeURIComponent(utf8[1])
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)
+  return plain ? plain[1] : fallback
+}
+
+/** Descarga el archivo binario generado por /api/inventory/assets/export/{excel|pdf}. */
+export const downloadAssetExport = async (format: AssetExportFormat, query: AssetExportQuery) => {
+  const params = Object.fromEntries(
+    Object.entries(query).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
+  )
+  const response = await apiClient.get<Blob>(`/inventory/assets/export/${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  const extension = format === 'excel' ? 'xlsx' : 'pdf'
+  const fileName = fileNameFrom(response.headers['content-disposition'], `activos-inventario.${extension}`)
+
+  const url = URL.createObjectURL(response.data)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export const itamApi = {

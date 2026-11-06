@@ -394,11 +394,20 @@ public sealed class ItamController : ControllerBase
     public async Task<IActionResult> CreateDelivery(
         [FromBody] Delivery delivery,
         CancellationToken cancellationToken)
-        => Ok(await _inventory.CreateDeliveryAsync(
-            delivery,
-            UserName(),
-            UserEmail(),
-            cancellationToken));
+    {
+        try
+        {
+            return Ok(await _inventory.CreateDeliveryAsync(
+                delivery,
+                UserName(),
+                UserEmail(),
+                cancellationToken));
+        }
+        catch (InventoryValidationException ex)
+        {
+            return BadRequest(new { code = ex.Code, message = ex.Message });
+        }
+    }
 
     // ============================================================
     // RETURNS

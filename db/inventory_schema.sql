@@ -559,3 +559,16 @@ IF COL_LENGTH('returns', 'employee_id') IS NULL ALTER TABLE returns ADD employee
 IF COL_LENGTH('returns', 'serial_number') IS NULL ALTER TABLE returns ADD serial_number NVARCHAR(120) NULL;
 IF COL_LENGTH('returns', 'branch_id') IS NULL ALTER TABLE returns ADD branch_id NVARCHAR(36) NULL;
 IF COL_LENGTH('returns', 'department_id') IS NULL ALTER TABLE returns ADD department_id NVARCHAR(36) NULL;
+
+-- ============================================================
+-- 2026-11-06 · Entregas con impresora portátil Honeywell RP4
+-- La Handheld puede entregarse sola o junto con una RP4 del
+-- inventario (printer_id -> assets.id). Idempotente.
+-- ============================================================
+IF COL_LENGTH('deliveries', 'include_printer') IS NULL ALTER TABLE deliveries ADD include_printer BIT NOT NULL CONSTRAINT DF_deliv_include_printer DEFAULT 0;
+IF COL_LENGTH('deliveries', 'printer_id') IS NULL ALTER TABLE deliveries ADD printer_id NVARCHAR(36) NULL;
+IF COL_LENGTH('deliveries', 'printer_serial_number') IS NULL ALTER TABLE deliveries ADD printer_serial_number NVARCHAR(120) NULL;
+GO
+IF OBJECT_ID('FK_deliv_printer', 'F') IS NULL ALTER TABLE deliveries ADD CONSTRAINT FK_deliv_printer FOREIGN KEY (printer_id) REFERENCES assets(id);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_deliv_printer' AND object_id = OBJECT_ID('deliveries')) CREATE INDEX IX_deliv_printer ON deliveries(printer_id);
+GO

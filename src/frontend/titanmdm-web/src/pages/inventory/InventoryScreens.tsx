@@ -44,9 +44,12 @@ import {
 } from './inventoryOperational'
 import type { OperationalReport } from './inventoryReportExport'
 import { useInventoryAccess } from './inventoryAccess'
+import { availableRp4Printers, printerLabel } from './deliveryPrinter'
 import {
+  downloadAssetExport,
   itamApi,
   type Asset,
+  type AssetExportFormat,
   type CatalogItemInput,
   type CatalogKind,
   type Catalogs,
@@ -288,12 +291,19 @@ function AssetsScreen({ action }: { action?: string }) {
   const { canManageAssets } = useInventoryAccess()
   const [statusFilter, setStatusFilter] = useState('')
   const [warrantyFilter, setWarrantyFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [branchFilter, setBranchFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [exporting, setExporting] = useState<AssetExportFormat | null>(null)
+  const [exportError, setExportError] = useState('')
   const assets = useAsync(
     () => itamApi.assets({
       status: statusFilter || undefined,
       warranty: warrantyFilter || undefined,
+      categoryId: categoryFilter || undefined,
+      branchId: branchFilter || undefined,
     }),
-    [statusFilter, warrantyFilter],
+    [statusFilter, warrantyFilter, categoryFilter, branchFilter],
   )
   const catalogs = useAsync(() => itamApi.catalogs(), [])
   const [editing, setEditing] = useState<Asset | null>(null)
@@ -323,6 +333,25 @@ function AssetsScreen({ action }: { action?: string }) {
       branchName: asset.branchId ? branchNames.get(asset.branchId) ?? '—' : '—',
     }))
   }, [assets.data, branchNames, categoryNames])
+
+  // El archivo usa exactamente los filtros visibles, incluido el texto del buscador.
+  const exportAssets = async (format: AssetExportFormat) => {
+    setExporting(format)
+    setExportError('')
+    try {
+      await downloadAssetExport(format, {
+        q: search.trim() || undefined,
+        status: statusFilter || undefined,
+        warranty: warrantyFilter || undefined,
+        categoryId: categoryFilter || undefined,
+        branchId: branchFilter || undefined,
+      })
+    } catch (err) {
+      setExportError(`No se pudo exportar a ${format === 'excel' ? 'Excel' : 'PDF'}: ${errorMessage(err)}`)
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const remove = async (asset: Asset) => {
     if (!window.confirm(`¿Dar de baja el activo ${asset.assetTag}?`)) return
@@ -390,6 +419,14 @@ function AssetsScreen({ action }: { action?: string }) {
               <option value="expiring">Por vencer (90 días)</option>
               <option value="expired">Vencida</option>
             </select>
+            <select className="inventory-input" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} aria-label="Tipo de equipo">
+              <option value="">Todos los tipos de equipo</option>
+              {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+            </select>
+            <select className="inventory-input" value={branchFilter} onChange={event => setBranchFilter(event.target.value)} aria-label="Sucursal">
+              <option value="">Todas las sucursales</option>
+              {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
             {canManageAssets && (
               <button type="button" className="inventory-btn inventory-btn--primary" onClick={() => { setEditing(null); setShowForm(true) }}>
                 Nuevo activo
@@ -398,9 +435,37 @@ function AssetsScreen({ action }: { action?: string }) {
           </div>
         </header>
 
-        <StatusLine loading={assets.loading || catalogs.loading} error={assets.error || catalogs.error} />
+        <StatusLine loading={assets.loading || catalogs.loading} error={assets.error || catalogs.error || exportError} />
 
-        <InventoryDataTable rows={rows as unknown as InventoryRow[]} columns={columns} />
+        <InventoryDataTable
+          tableKey="itam-assets"
+          rows={rows as unknown as InventoryRow[]}
+          columns={columns}
+          query={search}
+          onQueryChange={setSearch}
+          toolbar={
+            <>
+              <button
+                type="button"
+                className="inventory-btn inventory-btn--small"
+                disabled={exporting !== null || assets.loading}
+                onClick={() => void exportAssets('excel')}
+                title="Exportar a Excel con los filtros actuales"
+              >
+                {exporting === 'excel' ? 'Exportando...' : 'Excel (.xlsx)'}
+              </button>
+              <button
+                type="button"
+                className="inventory-btn inventory-btn--small"
+                disabled={exporting !== null || assets.loading}
+                onClick={() => void exportAssets('pdf')}
+                title="Exportar a PDF con los filtros actuales"
+              >
+                {exporting === 'pdf' ? 'Exportando...' : 'PDF'}
+              </button>
+            </>
+          }
+        />
       </article>
 
       {showForm && (
@@ -788,6 +853,16 @@ function DeliveriesScreen() {
           columns={[
             ['assetTag', 'Activo'],
             ['assetName', 'Equipo'],
+            {
+              key: 'printerSerialNumber',
+              label: 'Impresora RP4',
+              render: row => {
+                const delivery = row as unknown as Delivery
+                return delivery.includePrinter
+                  ? <span className="inventory-badge inventory-badge--info">{delivery.printerSerialNumber || 'Incluida'}</span>
+                  : <span className="inventory-muted">—</span>
+              },
+            },
             ['assignedToName', 'Empleado'],
             ['employeeCode', 'Código'],
             ['deliveryDate', 'Fecha'],
@@ -854,11 +929,32 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
   const [signature, setSignature] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [includePrinter, setIncludePrinter] = useState(false)
+  const [printerId, setPrinterId] = useState('')
+
+  // Las impresoras se cargan solo al activar el switch.
+  const printerAssets = useAsync(
+    () => (includePrinter ? itamApi.assets({ status: 'disponible' }) : Promise.resolve<Asset[]>([])),
+    [includePrinter],
+  )
+  const printerCatalogs = useAsync(
+    () => (includePrinter ? itamApi.catalogs() : Promise.resolve<Catalogs | null>(null)),
+    [includePrinter],
+  )
+  const printers = useMemo(
+    () => availableRp4Printers(printerAssets.data ?? [], printerCatalogs.data?.categories ?? [], asset?.id),
+    [printerAssets.data, printerCatalogs.data, asset?.id],
+  )
+  const printer = printers.find(item => item.id === printerId) ?? null
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!asset || !employee) {
       setError('Seleccione un activo y un empleado.')
+      return
+    }
+    if (includePrinter && !printer) {
+      setError('Seleccione la impresora RP4 o desactive "Incluir impresora RP4".')
       return
     }
     setSaving(true)
@@ -878,6 +974,9 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
         accessories: accessories || null,
         notes: notes || null,
         signature: signature || null,
+        includePrinter,
+        printerId: includePrinter ? printer?.id ?? null : null,
+        printerSerialNumber: includePrinter ? printer?.serialNumber ?? null : null,
       })
       onSaved()
     } catch (err) {
@@ -908,6 +1007,51 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
           />
           {employee && <small className="inventory-muted">Seleccionado: {employee.name} {employee.code ? `· ${employee.code}` : ''}</small>}
         </Field>
+
+        <div className="inventory-field">
+          <label className="inventory-switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={includePrinter}
+              aria-checked={includePrinter}
+              onChange={event => {
+                setIncludePrinter(event.target.checked)
+                if (!event.target.checked) setPrinterId('')
+              }}
+            />
+            <span className="inventory-switch__track" aria-hidden="true" />
+            <span>¿Incluir impresora RP4 en la entrega?</span>
+          </label>
+          {includePrinter && (
+            <>
+              <select
+                className="inventory-input"
+                value={printerId}
+                onChange={event => setPrinterId(event.target.value)}
+                aria-label="Impresora Honeywell RP4"
+                disabled={printerAssets.loading || printerCatalogs.loading}
+              >
+                <option value="">
+                  {printerAssets.loading || printerCatalogs.loading
+                    ? 'Cargando impresoras...'
+                    : printers.length === 0
+                      ? 'No hay impresoras RP4 disponibles'
+                      : 'Seleccione la impresora RP4...'}
+                </option>
+                {printers.map(item => <option key={item.id} value={item.id}>{printerLabel(item)}</option>)}
+              </select>
+              {(printerAssets.error || printerCatalogs.error) && (
+                <small className="inventory-error">{printerAssets.error || printerCatalogs.error}</small>
+              )}
+              {!printerAssets.loading && !printerCatalogs.loading && printers.length === 0 && (
+                <small className="inventory-muted">
+                  Registre la RP4 en Activos (categoría RP4D, estado disponible) para poder entregarla.
+                </small>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Retorno esperado"><TextInput type="date" value={expectedReturn} onChange={event => setExpectedReturn(event.target.value)} /></Field>
         <Field label="Condición de entrega">

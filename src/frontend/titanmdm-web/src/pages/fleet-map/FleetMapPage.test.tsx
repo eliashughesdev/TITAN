@@ -58,6 +58,14 @@ vi.mock('react-leaflet', () => ({
   useMap: () => map,
 }))
 
+vi.mock('../../auth/AuthContext', () => ({
+  useAuth: () => ({ hasPermission: () => true }),
+}))
+
+vi.mock('../../api/deviceCommandsApi', () => ({
+  deviceCommandsApi: {},
+}))
+
 vi.mock('../../api/locationApi', () => ({
   locationApi: {
     getFleet: vi.fn(),
