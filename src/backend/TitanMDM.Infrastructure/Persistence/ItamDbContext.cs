@@ -56,6 +56,9 @@ public sealed class ItamDbContext : DbContext
         modelBuilder.Entity<Delivery>()
             .HasIndex(x => x.AssetId);
 
+        modelBuilder.Entity<Delivery>()
+            .HasIndex(x => x.Rp4dId);
+
         modelBuilder.Entity<Return>()
             .HasIndex(x => x.AssetId);
 
@@ -88,8 +91,8 @@ public sealed class ItamDbContext : DbContext
         modelBuilder.Entity<Delivery>()
             .HasOne<Asset>()
             .WithMany()
-            .HasForeignKey(x => x.PrinterId)
-            .HasConstraintName("FK_deliv_printer")
+            .HasForeignKey(x => x.Rp4dId)
+            .HasConstraintName("FK_deliv_rp4d")
             .OnDelete(DeleteBehavior.NoAction);
     }
 }

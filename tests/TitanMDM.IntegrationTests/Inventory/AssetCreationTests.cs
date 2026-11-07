@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 using Microsoft.AspNetCore.Http;
@@ -33,7 +34,7 @@ public sealed class AssetCreationTests
     [Theory]
     [InlineData(typeof(AssetHistory), nameof(AssetHistory.AssetId), "FK_hist_asset")]
     [InlineData(typeof(Delivery), nameof(Delivery.AssetId), "FK_deliv_asset")]
-    [InlineData(typeof(Delivery), nameof(Delivery.PrinterId), "FK_deliv_printer")]
+    [InlineData(typeof(Delivery), nameof(Delivery.Rp4dId), "FK_deliv_rp4d")]
     public void Modelo_declara_las_fk_reales_hacia_assets(Type entity, string property, string constraint)
     {
         using var db = NewDb();
@@ -74,6 +75,17 @@ public sealed class AssetCreationTests
         Assert.Equal("CK65 nuevo", asset.Name);
         Assert.Equal("disponible", asset.Status);
         Assert.Contains(db.AssetHistory, x => x.AssetId == asset.Id && x.Action == "created");
+    }
+
+    [Fact]
+    public void Etiqueta_vacia_pasa_validacion_del_modelo()
+    {
+        var asset = new Asset { Name = "Laptop" };
+        var results = new List<ValidationResult>();
+
+        Assert.True(
+            Validator.TryValidateObject(asset, new ValidationContext(asset), results, validateAllProperties: true),
+            string.Join("; ", results.Select(result => result.ErrorMessage)));
     }
 
     [Fact]

@@ -64,6 +64,18 @@ public class Delivery
     [Column("return_date", TypeName = "nvarchar(40)")]
     public string? ReturnDate { get; set; }
 
+    [Column("returned_handheld", TypeName = "bit")]
+    public bool ReturnedHandheld { get; set; }
+
+    [Column("handheld_return_date", TypeName = "datetime2")]
+    public DateTime? HandheldReturnDate { get; set; }
+
+    [Column("returned_rp4d", TypeName = "bit")]
+    public bool ReturnedRp4d { get; set; }
+
+    [Column("rp4d_return_date", TypeName = "datetime2")]
+    public DateTime? Rp4dReturnDate { get; set; }
+
     [Column("deleted", TypeName = "bit")]
     public bool? Deleted { get; set; }
 
@@ -78,12 +90,12 @@ public class Delivery
     public string? MacAddress { get; set; }
 
     // Impresora portátil Honeywell RP4 entregada junto con la Handheld (opcional).
-    [Column("include_printer", TypeName = "bit")]
-    public bool IncludePrinter { get; set; }
+    [Column("include_rp4d", TypeName = "bit")]
+    public bool IncludeRp4d { get; set; }
 
-    [Column("printer_id", TypeName = "nvarchar(36)")]
-    public string? PrinterId { get; set; }
+    [Column("rp4d_id", TypeName = "nvarchar(36)")]
+    public string? Rp4dId { get; set; }
 
-    [Column("printer_serial_number", TypeName = "nvarchar(120)")]
-    public string? PrinterSerialNumber { get; set; }
+    [Column("rp4d_serial_number", TypeName = "nvarchar(120)")]
+    public string? Rp4dSerialNumber { get; set; }
 }

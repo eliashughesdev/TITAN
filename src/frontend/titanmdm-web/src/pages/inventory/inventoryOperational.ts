@@ -82,7 +82,22 @@ export function toLocalDateKey(
 export const isToday = (value: string | null | undefined, now: Date = new Date()) =>
   toLocalDateKey(value) === localDateKey(now)
 
-export const isPendingReturn = (delivery: Delivery) => !delivery.returned && !delivery.deleted
+/**
+ * Las entregas anteriores a las devoluciones individuales solo tienen
+ * `returned`: si es true, la entrega se cerró completa (misma regla que
+ * DeliveryReturnState en el API).
+ */
+export const isHandheldReturned = (delivery: Delivery) =>
+  Boolean(delivery.returnedHandheld || delivery.returned)
+
+export const isRp4dReturned = (delivery: Delivery) =>
+  !delivery.includeRp4d || Boolean(delivery.returnedRp4d || delivery.returned)
+
+export const isDeliveryComplete = (delivery: Delivery) =>
+  isHandheldReturned(delivery) && isRp4dReturned(delivery)
+
+export const isPendingReturn = (delivery: Delivery) =>
+  !isDeliveryComplete(delivery) && !delivery.deleted
 
 export function overdueDays(delivery: Delivery, now: Date = new Date()): number {
   if (!isPendingReturn(delivery)) return 0
@@ -110,6 +125,14 @@ export function filterDeliveries(rows: Delivery[], filter: DeliveryFilter, now: 
 
 export function filterReturns(rows: ReturnRecord[], filter: ReturnFilter, now: Date = new Date()): ReturnRecord[] {
   return filter === 'today' ? rows.filter(row => isToday(row.returnDate, now)) : rows
+}
+
+/** Valor del parámetro `period` que entiende GET /api/itam/deliveries. */
+export const deliveryFilterParams: Record<DeliveryFilter, string> = {
+  all: 'all',
+  today: 'today',
+  pending: 'pending-returns',
+  overdue: 'expired',
 }
 
 export const deliveryFilterLabels: Record<DeliveryFilter, string> = {
@@ -142,7 +165,7 @@ export function deliveryReport(rows: Delivery[], filter: DeliveryFilter, now: Da
       toLocalDateKey(row.expectedReturn) ?? '',
       overdueDays(row, now) || '',
       row.deliveredBy ?? '',
-      row.returned ? 'Devuelto' : 'Pendiente',
+      isDeliveryComplete(row) ? 'Completada' : 'Pendiente',
     ]),
   }
 }

@@ -10,7 +10,6 @@ public class Asset
     [Column("id", TypeName = "nvarchar(36)")]
     public string Id { get; set; } = Guid.NewGuid().ToString();
 
-    [Required]
     [Column("asset_tag", TypeName = "nvarchar(60)")]
     public string AssetTag { get; set; } = string.Empty;
 

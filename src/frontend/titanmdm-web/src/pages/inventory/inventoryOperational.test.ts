@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { Delivery, ReturnRecord } from './inventoryApi'
 import {
+  deliveryFilterParams,
   deliveryReport,
   filterDeliveries,
   filterReturns,
+  isDeliveryComplete,
   isToday,
   localDateKey,
   monthKeyLabel,
@@ -22,6 +24,9 @@ const delivery = (overrides: Partial<Delivery>): Delivery => ({
   assignedToName: 'Ana',
   deliveryDate: '2026-11-01T15:00:00.000000+00:00',
   returned: false,
+  returnedHandheld: false,
+  returnedRp4d: false,
+  includeRp4d: false,
   deleted: false,
   createdAt: '2026-11-01',
   ...overrides,
@@ -58,7 +63,7 @@ describe('inventoryOperational', () => {
       delivery({ deliveryDate: '2026-11-04T12:10:00.000000+00:00' }),
       delivery({ deliveryDate: '2026-11-05T02:00:00.000000+00:00' }), // 22:00 RD del 4
       delivery({ deliveryDate: '2026-10-01T15:00:00+00:00', expectedReturn: '2026-11-01' }),
-      delivery({ deliveryDate: '2026-10-01T15:00:00+00:00', returned: true }),
+      delivery({ deliveryDate: '2026-10-01T15:00:00+00:00', returned: true, returnedHandheld: true }),
     ]
 
     expect(filterDeliveries(rows, 'today', NOW)).toHaveLength(2)
@@ -66,6 +71,28 @@ describe('inventoryOperational', () => {
     expect(filterDeliveries(rows, 'overdue', NOW)).toHaveLength(1)
     expect(overdueDays(rows[2], NOW)).toBe(3)
     expect(overdueDays(rows[3], NOW)).toBe(0)
+  })
+
+  it('trata como devueltas las entregas legadas con returned = true', () => {
+    const legacy = delivery({ returned: true, expectedReturn: '2026-10-01' })
+    const legacyWithRp4d = delivery({ returned: true, includeRp4d: true, expectedReturn: '2026-10-01' })
+    const rp4dPending = delivery({ returnedHandheld: true, includeRp4d: true })
+    const handheldPending = delivery({})
+    const rows = [legacy, legacyWithRp4d, rp4dPending, handheldPending]
+
+    expect(isDeliveryComplete(legacy)).toBe(true)
+    expect(isDeliveryComplete(legacyWithRp4d)).toBe(true)
+    expect(filterDeliveries(rows, 'pending', NOW)).toEqual([rp4dPending, handheldPending])
+    expect(filterDeliveries([legacy, legacyWithRp4d], 'overdue', NOW)).toHaveLength(0)
+  })
+
+  it('envia al API el periodo de cada filtro superior', () => {
+    expect(deliveryFilterParams).toEqual({
+      all: 'all',
+      today: 'today',
+      pending: 'pending-returns',
+      overdue: 'expired',
+    })
   })
 
   it('filtra devoluciones del dia', () => {

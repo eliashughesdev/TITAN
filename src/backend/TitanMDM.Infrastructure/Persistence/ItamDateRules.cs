@@ -107,4 +107,17 @@ public static class ItamPeriods
     public const string Today = "today";
     public const string Pending = "pending";
     public const string Overdue = "overdue";
+
+    /// <summary>
+    /// Acepta los nombres de los filtros superiores de Entregas
+    /// (pending-returns, expired) además de los canónicos.
+    /// </summary>
+    public static string Normalize(string? period)
+        => (period ?? All).Trim().ToLowerInvariant() switch
+        {
+            Today => Today,
+            Pending or "pending-returns" or "pending_returns" => Pending,
+            Overdue or "expired" => Overdue,
+            _ => All,
+        };
 }

@@ -429,9 +429,6 @@ public sealed partial class InventoryService : IInventoryService
             .AsNoTracking()
             .Where(x => x.Deleted != true);
 
-        if (returned.HasValue)
-            deliveries = deliveries.Where(x => x.Returned == returned.Value);
-
         if (!string.IsNullOrWhiteSpace(query))
         {
             var q = query.Trim();
@@ -444,19 +441,27 @@ public sealed partial class InventoryService : IInventoryService
 
         var rows = await deliveries.ToListAsync(cancellationToken);
 
+        // Registros legados: "returned" = 1 implica Hand Held y RP4D devueltas.
+        foreach (var row in rows)
+            DeliveryReturnState.NormalizeLegacy(row);
+
+        IEnumerable<Delivery> filtered = rows;
+        if (returned.HasValue)
+            filtered = filtered.Where(x => DeliveryReturnState.IsPending(x) != returned.Value);
+
         // Fechas en texto: el filtro por dia y el orden se resuelven con
         // ItamDateRules (zona del negocio, instante real), no por cadena.
         var today = _dates.Today();
 
-        IEnumerable<Delivery> filtered = (period ?? ItamPeriods.All).Trim().ToLowerInvariant() switch
+        filtered = ItamPeriods.Normalize(period) switch
         {
-            ItamPeriods.Today => rows.Where(x => _dates.ToBusinessDate(x.DeliveryDate) == today),
-            ItamPeriods.Pending => rows.Where(x => x.Returned != true),
-            ItamPeriods.Overdue => rows.Where(x =>
-                x.Returned != true &&
+            ItamPeriods.Today => filtered.Where(x => _dates.ToBusinessDate(x.DeliveryDate) == today),
+            ItamPeriods.Pending => filtered.Where(DeliveryReturnState.IsPending),
+            ItamPeriods.Overdue => filtered.Where(x =>
+                DeliveryReturnState.IsPending(x) &&
                 _dates.ToBusinessDate(x.ExpectedReturn) is { } expected &&
                 expected < today),
-            _ => rows,
+            _ => filtered,
         };
 
         return filtered
@@ -464,12 +469,19 @@ public sealed partial class InventoryService : IInventoryService
             .ToList();
     }
 
-    public Task<Delivery?> GetDeliveryAsync(
+    public async Task<Delivery?> GetDeliveryAsync(
         string id,
         CancellationToken cancellationToken = default)
-        => _db.Deliveries
+    {
+        var delivery = await _db.Deliveries
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (delivery is not null)
+            DeliveryReturnState.NormalizeLegacy(delivery);
+
+        return delivery;
+    }
 
     public async Task<Delivery> CreateDeliveryAsync(
         Delivery delivery,
@@ -484,7 +496,7 @@ public sealed partial class InventoryService : IInventoryService
             delivery.AssetTag,
             cancellationToken);
 
-        var printer = await ResolveDeliveryPrinterAsync(
+        var rp4d = await ResolveDeliveryRp4dAsync(
             delivery,
             asset,
             cancellationToken);
@@ -533,18 +545,18 @@ public sealed partial class InventoryService : IInventoryService
                 cancellationToken);
         }
 
-        if (printer is not null)
+        if (rp4d is not null)
         {
-            printer.Status = "asignado";
-            printer.AssignedTo = delivery.EmployeeCode;
-            printer.AssignedToName = delivery.AssignedToName;
-            printer.UpdatedAt = Now();
-            printer.UpdatedBy = userName;
+            rp4d.Status = "asignado";
+            rp4d.AssignedTo = delivery.EmployeeCode;
+            rp4d.AssignedToName = delivery.AssignedToName;
+            rp4d.UpdatedAt = Now();
+            rp4d.UpdatedBy = userName;
 
             await AddHistoryAsync(
-                printer.Id,
+                rp4d.Id,
                 "delivery",
-                $"Impresora RP4 entregada con {delivery.AssetTag} a {delivery.AssignedToName} ({delivery.EmployeeCode}).",
+                $"RP4D entregada con {delivery.AssetTag} a {delivery.AssignedToName} ({delivery.EmployeeCode}).",
                 userName,
                 null,
                 delivery,
@@ -560,93 +572,93 @@ public sealed partial class InventoryService : IInventoryService
     /// se limpian los campos; con el switch activo la impresora es obligatoria,
     /// debe existir en inventario, estar libre y ser un equipo RP4.
     /// </summary>
-    private async Task<Asset?> ResolveDeliveryPrinterAsync(
+    private async Task<Asset?> ResolveDeliveryRp4dAsync(
         Delivery delivery,
         Asset? handheld,
         CancellationToken cancellationToken)
     {
-        if (!delivery.IncludePrinter)
+        if (!delivery.IncludeRp4d)
         {
-            delivery.PrinterId = null;
-            delivery.PrinterSerialNumber = null;
+            delivery.Rp4dId = null;
+            delivery.Rp4dSerialNumber = null;
             return null;
         }
 
-        var printerId = delivery.PrinterId?.Trim();
-        var printerSerial = delivery.PrinterSerialNumber?.Trim();
+        var rp4dId = delivery.Rp4dId?.Trim();
+        var rp4dSerial = delivery.Rp4dSerialNumber?.Trim();
 
-        if (string.IsNullOrWhiteSpace(printerId) && string.IsNullOrWhiteSpace(printerSerial))
+        if (string.IsNullOrWhiteSpace(rp4dId) && string.IsNullOrWhiteSpace(rp4dSerial))
         {
             throw new InventoryValidationException(
-                "INVENTORY_PRINTER_REQUIRED",
-                "Seleccione la impresora RP4 o desactive \"Incluir impresora RP4\".");
+                "INVENTORY_RP4D_REQUIRED",
+                "Seleccione la RP4D o desactive \"Incluir RP4D\".");
         }
 
-        Asset? printer = null;
-        if (!string.IsNullOrWhiteSpace(printerId))
+        Asset? rp4d = null;
+        if (!string.IsNullOrWhiteSpace(rp4dId))
         {
-            printer = await _db.Assets.FirstOrDefaultAsync(x => x.Id == printerId, cancellationToken);
+            rp4d = await _db.Assets.FirstOrDefaultAsync(x => x.Id == rp4dId, cancellationToken);
         }
 
-        if (printer is null && !string.IsNullOrWhiteSpace(printerSerial))
+        if (rp4d is null && !string.IsNullOrWhiteSpace(rp4dSerial))
         {
-            printer = await _db.Assets.FirstOrDefaultAsync(
-                x => x.SerialNumber == printerSerial && x.Deleted != true,
+            rp4d = await _db.Assets.FirstOrDefaultAsync(
+                x => x.SerialNumber == rp4dSerial && x.Deleted != true,
                 cancellationToken);
         }
 
-        if (printer is null || printer.Deleted == true)
+        if (rp4d is null || rp4d.Deleted == true)
         {
             throw new InventoryValidationException(
-                "INVENTORY_PRINTER_NOT_FOUND",
-                "La impresora indicada no existe en el inventario.");
+                "INVENTORY_RP4D_NOT_FOUND",
+                "La RP4D indicada no existe en el inventario.");
         }
 
-        if (handheld is not null && printer.Id == handheld.Id)
+        if (handheld is not null && rp4d.Id == handheld.Id)
         {
             throw new InventoryValidationException(
-                "INVENTORY_PRINTER_SAME_AS_ASSET",
-                "La impresora no puede ser el mismo activo que la Handheld.");
+                "INVENTORY_RP4D_SAME_AS_ASSET",
+                "La RP4D no puede ser el mismo activo que la Handheld.");
         }
 
-        var categoryName = printer.CategoryId is null
+        var categoryName = rp4d.CategoryId is null
             ? null
             : await _db.Categories
                 .AsNoTracking()
-                .Where(x => x.Id == printer.CategoryId)
+                .Where(x => x.Id == rp4d.CategoryId)
                 .Select(x => x.Name)
                 .FirstOrDefaultAsync(cancellationToken);
 
-        if (!IsRp4Printer(printer, categoryName))
+        if (!IsRp4dPrinter(rp4d, categoryName))
         {
             throw new InventoryValidationException(
-                "INVENTORY_PRINTER_NOT_RP4",
-                $"El activo {printer.AssetTag} no es una impresora Honeywell RP4.");
+                "INVENTORY_RP4D_INVALID",
+                $"El activo {rp4d.AssetTag} no es una RP4D Honeywell.");
         }
 
-        if (EqualsState(printer.Status, "asignado"))
+        if (EqualsState(rp4d.Status, "asignado"))
         {
             throw new InventoryValidationException(
-                "INVENTORY_PRINTER_UNAVAILABLE",
-                $"La impresora {printer.AssetTag} ya está asignada a {printer.AssignedToName ?? "otro colaborador"}.");
+                "INVENTORY_RP4D_UNAVAILABLE",
+                $"La RP4D {rp4d.AssetTag} ya está asignada a {rp4d.AssignedToName ?? "otro colaborador"}.");
         }
 
-        delivery.PrinterId = printer.Id;
-        delivery.PrinterSerialNumber = string.IsNullOrWhiteSpace(printer.SerialNumber)
-            ? printerSerial
-            : printer.SerialNumber;
+        delivery.Rp4dId = rp4d.Id;
+        delivery.Rp4dSerialNumber = string.IsNullOrWhiteSpace(rp4d.SerialNumber)
+            ? rp4dSerial
+            : rp4d.SerialNumber;
 
-        return printer;
+        return rp4d;
     }
 
     /// <summary>Impresora portátil Honeywell RP4 (RP4, RP4D...) por categoría, nombre o modelo.</summary>
-    public static bool IsRp4Printer(Asset asset, string? categoryName)
+    public static bool IsRp4dPrinter(Asset asset, string? categoryName)
     {
         ArgumentNullException.ThrowIfNull(asset);
 
-        return Contains(categoryName, "RP4") ||
-               Contains(asset.Name, "RP4") ||
-               Contains(asset.HardwareModel, "RP4");
+        return Contains(categoryName, "RP4D") ||
+               Contains(asset.Name, "RP4D") ||
+               Contains(asset.HardwareModel, "RP4D");
     }
 
     // ============================================================
@@ -723,10 +735,9 @@ public sealed partial class InventoryService : IInventoryService
             item.EmployeeCode ??= delivery.EmployeeCode;
             item.ReturnedBy ??= delivery.AssignedToName;
 
-            delivery.Returned = true;
-            delivery.ReturnDate = item.ReturnDate;
-
-            await ReleaseDeliveryPrinterAsync(delivery, item, userName, cancellationToken);
+            delivery.ReturnedHandheld = true;
+            delivery.HandheldReturnDate = ParseReturnDate(item.ReturnDate);
+            UpdateDeliveryStatus(delivery);
         }
 
         if (asset is not null)
@@ -759,30 +770,187 @@ public sealed partial class InventoryService : IInventoryService
         return item;
     }
 
+    public async Task<Delivery> ReturnHandheldAsync(
+        string deliveryId,
+        Return? item,
+        string? userName,
+        CancellationToken cancellationToken = default)
+    {
+        var delivery = await _db.Deliveries
+            .FirstOrDefaultAsync(x => x.Id == deliveryId, cancellationToken)
+            ?? throw new InventoryValidationException(
+                "INVENTORY_DELIVERY_NOT_FOUND",
+                "La entrega indicada no existe.");
+
+        if (DeliveryReturnState.HandheldReturned(delivery))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_HANDHELD_ALREADY_RETURNED",
+                "La Hand Held de esta entrega ya fue devuelta.");
+        }
+
+        var asset = await ResolveAssetAsync(delivery.AssetId, delivery.AssetTag, cancellationToken);
+        var record = PrepareReturn(item, delivery, asset, userName);
+
+        delivery.ReturnedHandheld = true;
+        delivery.HandheldReturnDate = ParseReturnDate(record.ReturnDate);
+
+        if (asset is not null)
+        {
+            asset.Status = "disponible";
+            asset.AssignedTo = null;
+            asset.AssignedToName = null;
+            asset.Condition = string.IsNullOrWhiteSpace(record.Condition)
+                ? asset.Condition
+                : record.Condition.Trim().ToLowerInvariant();
+            asset.UpdatedAt = Now();
+            asset.UpdatedBy = userName;
+
+            await AddHistoryAsync(
+                asset.Id,
+                "return",
+                $"Devuelto por {record.ReturnedBy} ({record.EmployeeCode}). Condición: {record.Condition}.",
+                userName,
+                null,
+                record,
+                cancellationToken);
+        }
+
+        _db.Returns.Add(record);
+        UpdateDeliveryStatus(delivery);
+        await _db.SaveChangesAsync(cancellationToken);
+        return delivery;
+    }
+
+    public async Task<Delivery> ReturnRp4dAsync(
+        string deliveryId,
+        Return? item,
+        string? userName,
+        CancellationToken cancellationToken = default)
+    {
+        var delivery = await _db.Deliveries
+            .FirstOrDefaultAsync(x => x.Id == deliveryId, cancellationToken)
+            ?? throw new InventoryValidationException(
+                "INVENTORY_DELIVERY_NOT_FOUND",
+                "La entrega indicada no existe.");
+
+        if (!delivery.IncludeRp4d || string.IsNullOrWhiteSpace(delivery.Rp4dId))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_RP4D_NOT_INCLUDED",
+                "La entrega no incluye una RP4D.");
+        }
+
+        if (DeliveryReturnState.Rp4dReturned(delivery))
+        {
+            throw new InventoryValidationException(
+                "INVENTORY_RP4D_ALREADY_RETURNED",
+                "La RP4D de esta entrega ya fue devuelta.");
+        }
+
+        var rp4d = await _db.Assets
+            .FirstOrDefaultAsync(x => x.Id == delivery.Rp4dId, cancellationToken)
+            ?? throw new InventoryValidationException(
+                "INVENTORY_RP4D_NOT_FOUND",
+                "La RP4D de la entrega no existe en el inventario.");
+
+        var record = PrepareReturn(item, delivery, rp4d, userName);
+
+        delivery.ReturnedRp4d = true;
+        delivery.Rp4dReturnDate = ParseReturnDate(record.ReturnDate);
+
+        if (EqualsState(rp4d.Status, "asignado"))
+        {
+            rp4d.Status = "disponible";
+            rp4d.AssignedTo = null;
+            rp4d.AssignedToName = null;
+            rp4d.UpdatedAt = Now();
+            rp4d.UpdatedBy = userName;
+
+            await AddHistoryAsync(
+                rp4d.Id,
+                "return",
+                $"RP4D devuelta con {delivery.AssetTag} por {record.ReturnedBy ?? delivery.AssignedToName} ({delivery.EmployeeCode}).",
+                userName,
+                null,
+                record,
+                cancellationToken);
+        }
+
+        _db.Returns.Add(record);
+        UpdateDeliveryStatus(delivery);
+        await _db.SaveChangesAsync(cancellationToken);
+        return delivery;
+    }
+
+    private Return PrepareReturn(
+        Return? item,
+        Delivery delivery,
+        Asset? asset,
+        string? userName)
+    {
+        var record = item ?? new Return();
+        if (string.IsNullOrWhiteSpace(record.Id))
+            record.Id = Guid.NewGuid().ToString();
+
+        record.DeliveryId = delivery.Id;
+        record.AssetId = asset?.Id ?? record.AssetId ?? delivery.AssetId;
+        record.AssetTag = asset?.AssetTag ?? record.AssetTag ?? delivery.AssetTag;
+        record.AssetName ??= asset?.Name ?? delivery.AssetName;
+        record.EmployeeCode ??= delivery.EmployeeCode;
+        record.ReturnedBy ??= delivery.AssignedToName;
+        record.ReturnDate = string.IsNullOrWhiteSpace(record.ReturnDate)
+            ? Now()
+            : record.ReturnDate;
+        record.CreatedAt = Now();
+        record.ReceivedBy ??= userName;
+        return record;
+    }
+
+    private static DateTime ParseReturnDate(string value)
+        => DateTime.TryParse(
+            value,
+            Invariant,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : DateTime.UtcNow;
+
+    private static void UpdateDeliveryStatus(Delivery delivery)
+    {
+        var complete = delivery.ReturnedHandheld &&
+                       (!delivery.IncludeRp4d || delivery.ReturnedRp4d);
+        delivery.Returned = complete;
+        delivery.ReturnDate = complete
+            ? (delivery.Rp4dReturnDate ?? delivery.HandheldReturnDate)
+                ?.ToString("yyyy-MM-ddTHH:mm:ssZ", Invariant)
+            : null;
+    }
+
     /// <summary>La impresora RP4 entregada con la Handheld vuelve a estar disponible.</summary>
-    private async Task ReleaseDeliveryPrinterAsync(
+    private async Task ReleaseDeliveryRp4dAsync(
         Delivery delivery,
         Return item,
         string? userName,
         CancellationToken cancellationToken)
     {
-        if (!delivery.IncludePrinter || string.IsNullOrWhiteSpace(delivery.PrinterId))
+        if (!delivery.IncludeRp4d || string.IsNullOrWhiteSpace(delivery.Rp4dId))
             return;
 
-        var printer = await _db.Assets
-            .FirstOrDefaultAsync(x => x.Id == delivery.PrinterId, cancellationToken);
+        var rp4d = await _db.Assets
+            .FirstOrDefaultAsync(x => x.Id == delivery.Rp4dId, cancellationToken);
 
-        if (printer is null || !EqualsState(printer.Status, "asignado"))
+        if (rp4d is null || !EqualsState(rp4d.Status, "asignado"))
             return;
 
-        printer.Status = "disponible";
-        printer.AssignedTo = null;
-        printer.AssignedToName = null;
-        printer.UpdatedAt = Now();
-        printer.UpdatedBy = userName;
+        rp4d.Status = "disponible";
+        rp4d.AssignedTo = null;
+        rp4d.AssignedToName = null;
+        rp4d.UpdatedAt = Now();
+        rp4d.UpdatedBy = userName;
 
         await AddHistoryAsync(
-            printer.Id,
+            rp4d.Id,
             "return",
             $"Impresora RP4 devuelta con {delivery.AssetTag} por {item.ReturnedBy ?? delivery.AssignedToName} ({delivery.EmployeeCode}).",
             userName,
@@ -1380,8 +1548,8 @@ public sealed partial class InventoryService : IInventoryService
             DamagedAssets: assets.Count(x => EqualsState(x.Status, "danado")),
             RetiredAssets: assets.Count(x => EqualsState(x.Status, "baja")),
             TotalEmployees: employeeCount,
-            ActiveDeliveries: deliveries.Count(x => x.Returned != true),
-            ReturnedDeliveries: deliveries.Count(x => x.Returned == true),
+            ActiveDeliveries: deliveries.Count(DeliveryReturnState.IsPending),
+            ReturnedDeliveries: deliveries.Count(x => !DeliveryReturnState.IsPending(x)),
             PendingReceptions: receptionCount,
             WarrantiesExpiringSoon: expiring,
             TotalPurchaseCost: decimal.Round(totalCost, 2),

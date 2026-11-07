@@ -6,7 +6,7 @@ using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.IntegrationTests.Inventory;
 
-/// <summary>Entregas de Handheld con impresora Honeywell RP4 opcional.</summary>
+/// <summary>Entregas de Handheld con impresora Honeywell RP4D opcional.</summary>
 public sealed class DeliveryPrinterTests
 {
     private static ItamDbContext NewDb()
@@ -42,12 +42,12 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var delivery = NewDelivery(handheld);
-        delivery.PrinterId = printer.Id; // basura del formulario: se ignora
+        delivery.Rp4dId = printer.Id; // basura del formulario: se ignora
         var saved = await service.CreateDeliveryAsync(delivery, "tester", null);
 
-        Assert.False(saved.IncludePrinter);
-        Assert.Null(saved.PrinterId);
-        Assert.Null(saved.PrinterSerialNumber);
+        Assert.False(saved.IncludeRp4d);
+        Assert.Null(saved.Rp4dId);
+        Assert.Null(saved.Rp4dSerialNumber);
         Assert.Equal("disponible", (await db.Assets.FindAsync(printer.Id))!.Status);
         Assert.Equal("asignado", (await db.Assets.FindAsync(handheld.Id))!.Status);
     }
@@ -60,23 +60,30 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var delivery = NewDelivery(handheld);
-        delivery.IncludePrinter = true;
-        delivery.PrinterId = printer.Id;
+        delivery.IncludeRp4d = true;
+        delivery.Rp4dId = printer.Id;
         var saved = await service.CreateDeliveryAsync(delivery, "tester", null);
 
-        Assert.True(saved.IncludePrinter);
-        Assert.Equal(printer.Id, saved.PrinterId);
-        Assert.Equal("RP4-SN-1", saved.PrinterSerialNumber);
+        Assert.True(saved.IncludeRp4d);
+        Assert.Equal(printer.Id, saved.Rp4dId);
+        Assert.Equal("RP4-SN-1", saved.Rp4dSerialNumber);
         var assigned = (await db.Assets.FindAsync(printer.Id))!;
         Assert.Equal("asignado", assigned.Status);
         Assert.Equal("Ana Pérez", assigned.AssignedToName);
         Assert.Contains(db.AssetHistory, x => x.AssetId == printer.Id && x.Action == "delivery");
 
-        await service.CreateReturnAsync(new Return { DeliveryId = saved.Id, Condition = "bueno" }, "tester");
+        await service.ReturnHandheldAsync(saved.Id, new Return { DeliveryId = saved.Id, Condition = "bueno" }, "tester");
 
-        var released = (await db.Assets.FindAsync(printer.Id))!;
-        Assert.Equal("disponible", released.Status);
-        Assert.Null(released.AssignedToName);
+        var handheldReleased = (await db.Assets.FindAsync(handheld.Id))!;
+        Assert.Equal("disponible", handheldReleased.Status);
+        var printerStillAssigned = (await db.Assets.FindAsync(printer.Id))!;
+        Assert.Equal("asignado", printerStillAssigned.Status);
+
+        await service.ReturnRp4dAsync(saved.Id, null, "tester");
+
+        var printerReleased = (await db.Assets.FindAsync(printer.Id))!;
+        Assert.Equal("disponible", printerReleased.Status);
+        Assert.Null(printerReleased.AssignedToName);
         Assert.Contains(db.AssetHistory, x => x.AssetId == printer.Id && x.Action == "return");
     }
 
@@ -88,11 +95,11 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var delivery = NewDelivery(handheld);
-        delivery.IncludePrinter = true;
-        delivery.PrinterSerialNumber = " RP4-SN-1 ";
+        delivery.IncludeRp4d = true;
+        delivery.Rp4dSerialNumber = " RP4-SN-1 ";
         var saved = await service.CreateDeliveryAsync(delivery, "tester", null);
 
-        Assert.Equal(printer.Id, saved.PrinterId);
+        Assert.Equal(printer.Id, saved.Rp4dId);
     }
 
     [Fact]
@@ -103,12 +110,12 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var delivery = NewDelivery(handheld);
-        delivery.IncludePrinter = true;
+        delivery.IncludeRp4d = true;
 
         var error = await Assert.ThrowsAsync<InventoryValidationException>(
             () => service.CreateDeliveryAsync(delivery, "tester", null));
 
-        Assert.Equal("INVENTORY_PRINTER_REQUIRED", error.Code);
+        Assert.Equal("INVENTORY_RP4D_REQUIRED", error.Code);
         Assert.Empty(db.Deliveries);
         Assert.Equal("disponible", (await db.Assets.FindAsync(handheld.Id))!.Status);
     }
@@ -121,13 +128,13 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var delivery = NewDelivery(handheld);
-        delivery.IncludePrinter = true;
-        delivery.PrinterId = printer.Id;
+        delivery.IncludeRp4d = true;
+        delivery.Rp4dId = printer.Id;
 
         var error = await Assert.ThrowsAsync<InventoryValidationException>(
             () => service.CreateDeliveryAsync(delivery, "tester", null));
 
-        Assert.Equal("INVENTORY_PRINTER_UNAVAILABLE", error.Code);
+        Assert.Equal("INVENTORY_RP4D_UNAVAILABLE", error.Code);
     }
 
     [Fact]
@@ -138,32 +145,32 @@ public sealed class DeliveryPrinterTests
         var service = new InventoryService(db);
 
         var same = NewDelivery(handheld);
-        same.IncludePrinter = true;
-        same.PrinterId = handheld.Id;
+        same.IncludeRp4d = true;
+        same.Rp4dId = handheld.Id;
         var sameError = await Assert.ThrowsAsync<InventoryValidationException>(
             () => service.CreateDeliveryAsync(same, "tester", null));
-        Assert.Equal("INVENTORY_PRINTER_SAME_AS_ASSET", sameError.Code);
+        Assert.Equal("INVENTORY_RP4D_SAME_AS_ASSET", sameError.Code);
 
         db.Assets.Add(new Asset { Id = "lap-1", AssetTag = "LAP-001", Name = "Laptop Dell" });
         await db.SaveChangesAsync();
 
         var other = NewDelivery(handheld);
-        other.IncludePrinter = true;
-        other.PrinterId = "lap-1";
+        other.IncludeRp4d = true;
+        other.Rp4dId = "lap-1";
         var otherError = await Assert.ThrowsAsync<InventoryValidationException>(
             () => service.CreateDeliveryAsync(other, "tester", null));
-        Assert.Equal("INVENTORY_PRINTER_NOT_RP4", otherError.Code);
+        Assert.Equal("INVENTORY_RP4D_INVALID", otherError.Code);
     }
 
     [Theory]
     [InlineData("RP4D", "Impresora", null, true)]
-    [InlineData(null, "Honeywell rp4 #12", null, true)]
-    [InlineData(null, "Impresora", "RP4", true)]
+    [InlineData(null, "Honeywell rp4d #12", null, true)]
+    [InlineData(null, "Impresora", "RP4D", true)]
     [InlineData("Impresora", "Zebra ZQ520", "ZQ520", false)]
-    public void Identifica_impresoras_rp4(string? category, string name, string? model, bool expected)
+    public void Identifica_impresoras_rp4d(string? category, string name, string? model, bool expected)
     {
         var asset = new Asset { Name = name, HardwareModel = model };
 
-        Assert.Equal(expected, InventoryService.IsRp4Printer(asset, category));
+        Assert.Equal(expected, InventoryService.IsRp4dPrinter(asset, category));
     }
 }

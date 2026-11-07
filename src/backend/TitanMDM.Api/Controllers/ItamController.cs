@@ -382,8 +382,9 @@ public sealed class ItamController : ControllerBase
         [FromQuery] string? q,
         [FromQuery] bool? returned,
         [FromQuery] string? period,
+        [FromQuery] string? filter,
         CancellationToken cancellationToken)
-        => Ok(await _inventory.GetDeliveriesAsync(q, returned, period, cancellationToken));
+        => Ok(await _inventory.GetDeliveriesAsync(q, returned, period ?? filter, cancellationToken));
 
     [HttpGet("deliveries/{id}")]
     [RequireAnyPermission(
@@ -412,6 +413,52 @@ public sealed class ItamController : ControllerBase
                 delivery,
                 UserName(),
                 UserEmail(),
+                cancellationToken));
+        }
+        catch (InventoryValidationException ex)
+        {
+            return BadRequest(new { code = ex.Code, message = ex.Message });
+        }
+    }
+
+    [HttpPost("deliveries/{id}/return-handheld")]
+    [RequireAnyPermission(
+        PermissionCodes.Inventory.Manage,
+        PermissionCodes.Inventory.AssetsManage)]
+    public async Task<IActionResult> ReturnHandheld(
+        string id,
+        [FromBody] Return? item,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await _inventory.ReturnHandheldAsync(
+                id,
+                item,
+                UserName(),
+                cancellationToken));
+        }
+        catch (InventoryValidationException ex)
+        {
+            return BadRequest(new { code = ex.Code, message = ex.Message });
+        }
+    }
+
+    [HttpPost("deliveries/{id}/return-rp4d")]
+    [RequireAnyPermission(
+        PermissionCodes.Inventory.Manage,
+        PermissionCodes.Inventory.AssetsManage)]
+    public async Task<IActionResult> ReturnRp4d(
+        string id,
+        [FromBody] Return? item,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await _inventory.ReturnRp4dAsync(
+                id,
+                item,
+                UserName(),
                 cancellationToken));
         }
         catch (InventoryValidationException ex)

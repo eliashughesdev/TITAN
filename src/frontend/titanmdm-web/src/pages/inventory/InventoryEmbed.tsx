@@ -15,6 +15,7 @@ import {
   ReturnForm,
   SessionForm,
 } from './InventoryScreens'
+import { isDeliveryComplete } from './inventoryOperational'
 import './InventoryPage.css'
 import './inventory_theme.css'
 
@@ -24,7 +25,7 @@ const formTitles: Record<FormName, { title: string; subtitle: string }> = {
   asset: { title: 'Activo de inventario', subtitle: 'Registre o actualice los datos del equipo.' },
   employee: { title: 'Colaborador', subtitle: 'Datos del empleado para asignaciones y devoluciones.' },
   delivery: { title: 'Nueva entrega', subtitle: 'Asigne un equipo disponible y capture la firma.' },
-  return: { title: 'Registrar devolución', subtitle: 'Reciba el equipo y documente su condición.' },
+  return: { title: 'Devolución', subtitle: 'Registre Hand Held y RP4D por separado.' },
   reception: { title: 'Nueva recepción', subtitle: 'Ingrese equipos nuevos al inventario.' },
   session: { title: 'Sesión de conteo', subtitle: 'Defina el alcance del conteo físico.' },
 }
@@ -161,9 +162,8 @@ function AssetEmbed({ id, meta }: { id: string; meta: { title: string; subtitle:
         onCancel={closeFrame}
         onSave={async form => {
           const payload: Partial<Asset> = {
-            assetTag: form.assetTag,
-            name: form.name,
-            serialNumber: form.serialNumber || null,
+            name: form.name.trim(),
+            serialNumber: form.serialNumber.trim() || null,
             status: form.status,
             condition: form.condition,
             categoryId: form.categoryId || null,
@@ -174,11 +174,13 @@ function AssetEmbed({ id, meta }: { id: string; meta: { title: string; subtitle:
             purchaseCost: form.purchaseCost ? Number(form.purchaseCost) : null,
             warrantyEnd: form.warrantyEnd || null,
             depreciationYears: form.depreciationYears ? Number(form.depreciationYears) : null,
-            macAddress: form.macAddress || null,
-            hostname: form.hostname || null,
-            assignedToName: form.assignedToName || null,
-            notes: form.notes || null,
+            macAddress: form.macAddress.trim() || null,
+            hostname: form.hostname.trim() || null,
+            assignedToName: form.assignedToName.trim() || null,
+            notes: form.notes.trim() || null,
           }
+
+          if (form.assetTag.trim()) payload.assetTag = form.assetTag.trim()
 
           const saved = id
             ? await itamApi.updateAsset(id, payload)
@@ -252,7 +254,11 @@ function ReturnEmbed({ deliveryId, meta }: { deliveryId: string; meta: { title: 
       <ReturnForm
         delivery={delivery}
         onCancel={closeFrame}
-        onSaved={() => notify({ entity: 'return' })}
+        onSaved={updated => {
+          if (isDeliveryComplete(updated)) {
+            notify({ entity: 'return' })
+          }
+        }}
       />
     </Frame>
   )

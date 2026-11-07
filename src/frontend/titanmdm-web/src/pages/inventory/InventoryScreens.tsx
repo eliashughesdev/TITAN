@@ -33,9 +33,13 @@ import { TypeaheadSearch } from './TypeaheadSearch'
 import type { InventorySectionId } from './inventoryNav'
 import {
   deliveryFilterLabels,
+  deliveryFilterParams,
   deliveryReport,
   filterDeliveries,
   filterReturns,
+  isDeliveryComplete,
+  isHandheldReturned,
+  isRp4dReturned,
   monthKeyLabel,
   overdueDays,
   returnReport,
@@ -44,7 +48,7 @@ import {
 } from './inventoryOperational'
 import type { OperationalReport } from './inventoryReportExport'
 import { useInventoryAccess } from './inventoryAccess'
-import { availableRp4Printers, printerLabel } from './deliveryPrinter'
+import { availableRp4dPrinters, rp4dLabel } from './deliveryPrinter'
 import {
   downloadAssetExport,
   itamApi,
@@ -64,7 +68,33 @@ import {
 const statusOptions = ['disponible', 'asignado', 'mantenimiento', 'danado', 'baja', 'reservado', 'transito']
 const conditionOptions = ['nuevo', 'bueno', 'regular', 'malo']
 
-const errorMessage = (error: unknown) =>
+const errorMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const data = (error as { response?: { data?: unknown } }).response?.data
+
+    if (typeof data === 'string' && data.trim()) return data
+
+    if (data && typeof data === 'object') {
+      const body = data as Record<string, unknown>
+
+      for (const key of ['message', 'title', 'error'] as const) {
+        const value = body[key]
+        if (typeof value === 'string' && value.trim()) return value
+      }
+
+      if (body.errors && typeof body.errors === 'object') {
+        const messages = Object.values(body.errors as Record<string, unknown>)
+          .flatMap(value => Array.isArray(value) ? value : [value])
+        const first = messages.find(value => typeof value === 'string' && value.trim())
+        if (typeof first === 'string') return first
+      }
+    }
+  }
+
+  return fallbackErrorMessage(error)
+}
+
+const fallbackErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : 'No se pudo completar la operación.'
 
 function useAsync<T>(loader: () => Promise<T>, deps: unknown[]) {
@@ -803,13 +833,33 @@ function QuickFilters<T extends string>({
 
 function DeliveriesScreen() {
   const { canManageAssets } = useInventoryAccess()
-  const deliveries = useAsync(() => itamApi.deliveries(), [])
   const [showForm, setShowForm] = useState(false)
   const [returning, setReturning] = useState<Delivery | null>(null)
   const [filter, setFilter] = useState<DeliveryFilter>('all')
+  // Todas las entregas (contadores de los chips) y la lista filtrada por el API.
+  const deliveries = useAsync(() => itamApi.deliveries(), [])
+  const filtered = useAsync(
+    () => (filter === 'all'
+      ? Promise.resolve<Delivery[] | null>(null)
+      : itamApi.deliveries({ period: deliveryFilterParams[filter] })),
+    [filter],
+  )
 
   const allRows = useMemo(() => deliveries.data ?? [], [deliveries.data])
-  const rows = useMemo(() => filterDeliveries(allRows, filter), [allRows, filter])
+  // Mientras responde el API se aplica la misma regla en cliente, para no
+  // mostrar filas del filtro anterior.
+  const rows = useMemo(
+    () => (filter === 'all'
+      ? allRows
+      : filtered.loading || !filtered.data
+        ? filterDeliveries(allRows, filter)
+        : filtered.data),
+    [allRows, filter, filtered.data, filtered.loading],
+  )
+  const reloadDeliveries = () => {
+    deliveries.reload()
+    filtered.reload()
+  }
   const counts = useMemo(
     () => ({
       all: allRows.length,
@@ -838,7 +888,10 @@ function DeliveriesScreen() {
           )}
         </header>
 
-        <StatusLine loading={deliveries.loading} error={deliveries.error} />
+        <StatusLine
+          loading={deliveries.loading || filtered.loading}
+          error={deliveries.error || filtered.error}
+        />
 
         <InventoryDataTable
           tableKey="itam-deliveries"
@@ -854,12 +907,12 @@ function DeliveriesScreen() {
             ['assetTag', 'Activo'],
             ['assetName', 'Equipo'],
             {
-              key: 'printerSerialNumber',
-              label: 'Impresora RP4',
+              key: 'rp4dSerialNumber',
+              label: 'RP4D',
               render: row => {
                 const delivery = row as unknown as Delivery
-                return delivery.includePrinter
-                  ? <span className="inventory-badge inventory-badge--info">{delivery.printerSerialNumber || 'Incluida'}</span>
+                return delivery.includeRp4d
+                  ? <span className="inventory-badge inventory-badge--info">{delivery.rp4dSerialNumber || 'Incluida'}</span>
                   : <span className="inventory-muted">—</span>
               },
             },
@@ -877,13 +930,33 @@ function DeliveriesScreen() {
                   : <span className="inventory-muted">—</span>
               },
             },
-            ['returned', 'Devuelto'],
+            {
+              key: 'returnedHandheld',
+              label: 'Hand Held',
+              render: row => {
+                const delivery = row as unknown as Delivery
+                return isHandheldReturned(delivery)
+                  ? <span className="inventory-badge inventory-badge--ok">Devuelta</span>
+                  : <span className="inventory-badge inventory-badge--warn">Pendiente</span>
+              },
+            },
+            {
+              key: 'returnedRp4d',
+              label: 'RP4D',
+              render: row => {
+                const delivery = row as unknown as Delivery
+                if (!delivery.includeRp4d) return <span className="inventory-muted">-</span>
+                return isRp4dReturned(delivery)
+                  ? <span className="inventory-badge inventory-badge--ok">Devuelta</span>
+                  : <span className="inventory-badge inventory-badge--warn">Pendiente</span>
+              },
+            },
             {
               key: 'actions',
               label: 'Acciones',
               render: row => {
                 const delivery = row as unknown as Delivery
-                if (delivery.returned) return <span className="inventory-muted">Cerrada</span>
+                if (isDeliveryComplete(delivery)) return <span className="inventory-muted">Cerrada</span>
                 if (!canManageAssets) return <span className="inventory-muted">Activa</span>
                 return (
                   <button type="button" className="inventory-btn inventory-btn--small" onClick={() => setReturning(delivery)}>
@@ -902,7 +975,7 @@ function DeliveriesScreen() {
           subtitle="Seleccione activo y colaborador, capture la firma."
           src="/inventory/embed?form=delivery"
           onClose={() => setShowForm(false)}
-          onSaved={() => deliveries.reload()}
+          onSaved={reloadDeliveries}
         />
       )}
 
@@ -912,7 +985,7 @@ function DeliveriesScreen() {
           subtitle={`Entrega de ${returning.assignedToName} · ${returning.deliveryDate ?? ''}`}
           src={`/inventory/embed?form=return&deliveryId=${encodeURIComponent(returning.id)}`}
           onClose={() => setReturning(null)}
-          onSaved={() => deliveries.reload()}
+          onSaved={reloadDeliveries}
         />
       )}
     </>
@@ -929,23 +1002,23 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
   const [signature, setSignature] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [includePrinter, setIncludePrinter] = useState(false)
-  const [printerId, setPrinterId] = useState('')
+  const [includeRp4d, setIncludeRp4d] = useState(false)
+  const [rp4dId, setRp4dId] = useState('')
 
-  // Las impresoras se cargan solo al activar el switch.
-  const printerAssets = useAsync(
-    () => (includePrinter ? itamApi.assets({ status: 'disponible' }) : Promise.resolve<Asset[]>([])),
-    [includePrinter],
+  // Las RP4D se cargan solo al activar el switch.
+  const rp4dAssets = useAsync(
+    () => (includeRp4d ? itamApi.assets({ status: 'disponible' }) : Promise.resolve<Asset[]>([])),
+    [includeRp4d],
   )
-  const printerCatalogs = useAsync(
-    () => (includePrinter ? itamApi.catalogs() : Promise.resolve<Catalogs | null>(null)),
-    [includePrinter],
+  const rp4dCatalogs = useAsync(
+    () => (includeRp4d ? itamApi.catalogs() : Promise.resolve<Catalogs | null>(null)),
+    [includeRp4d],
   )
-  const printers = useMemo(
-    () => availableRp4Printers(printerAssets.data ?? [], printerCatalogs.data?.categories ?? [], asset?.id),
-    [printerAssets.data, printerCatalogs.data, asset?.id],
+  const rp4dOptions = useMemo(
+    () => availableRp4dPrinters(rp4dAssets.data ?? [], rp4dCatalogs.data?.categories ?? [], asset?.id),
+    [rp4dAssets.data, rp4dCatalogs.data, asset?.id],
   )
-  const printer = printers.find(item => item.id === printerId) ?? null
+  const rp4d = rp4dOptions.find(item => item.id === rp4dId) ?? null
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -953,8 +1026,8 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
       setError('Seleccione un activo y un empleado.')
       return
     }
-    if (includePrinter && !printer) {
-      setError('Seleccione la impresora RP4 o desactive "Incluir impresora RP4".')
+    if (includeRp4d && !rp4d) {
+      setError('Seleccione la RP4D o desactive "Incluir RP4D".')
       return
     }
     setSaving(true)
@@ -974,9 +1047,9 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
         accessories: accessories || null,
         notes: notes || null,
         signature: signature || null,
-        includePrinter,
-        printerId: includePrinter ? printer?.id ?? null : null,
-        printerSerialNumber: includePrinter ? printer?.serialNumber ?? null : null,
+        includeRp4d,
+        rp4dId: includeRp4d ? rp4d?.id ?? null : null,
+        rp4dSerialNumber: includeRp4d ? rp4d?.serialNumber ?? null : null,
       })
       onSaved()
     } catch (err) {
@@ -996,7 +1069,7 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
             placeholder="Buscar por etiqueta, serie o nombre..."
             onSelect={result => setAsset(result.raw as Asset)}
           />
-          {asset && <small className="inventory-muted">Seleccionado: {asset.assetTag} · {asset.name}</small>}
+          {asset && <small className="text-blue-600 font-medium">Seleccionado: {asset.assetTag} · {asset.name}</small>}
         </Field>
 
         <Field label="Empleado">
@@ -1005,7 +1078,7 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
             placeholder="Buscar por nombre, código o correo..."
             onSelect={result => setEmployee(result.raw as Employee)}
           />
-          {employee && <small className="inventory-muted">Seleccionado: {employee.name} {employee.code ? `· ${employee.code}` : ''}</small>}
+          {employee && <small className="text-blue-600 font-medium">Seleccionado: {employee.name} {employee.code ? `· ${employee.code}` : ''}</small>}
         </Field>
 
         <div className="inventory-field">
@@ -1013,40 +1086,40 @@ export function DeliveryForm({ onSaved, onCancel }: { onSaved: () => void; onCan
             <input
               type="checkbox"
               role="switch"
-              checked={includePrinter}
-              aria-checked={includePrinter}
+              checked={includeRp4d}
+              aria-checked={includeRp4d}
               onChange={event => {
-                setIncludePrinter(event.target.checked)
-                if (!event.target.checked) setPrinterId('')
+                setIncludeRp4d(event.target.checked)
+                if (!event.target.checked) setRp4dId('')
               }}
             />
             <span className="inventory-switch__track" aria-hidden="true" />
-            <span>¿Incluir impresora RP4 en la entrega?</span>
+            <span>¿Incluir RP4D en la entrega?</span>
           </label>
-          {includePrinter && (
+          {includeRp4d && (
             <>
               <select
                 className="inventory-input"
-                value={printerId}
-                onChange={event => setPrinterId(event.target.value)}
-                aria-label="Impresora Honeywell RP4"
-                disabled={printerAssets.loading || printerCatalogs.loading}
+                value={rp4dId}
+                onChange={event => setRp4dId(event.target.value)}
+                aria-label="RP4D Honeywell"
+                disabled={rp4dAssets.loading || rp4dCatalogs.loading}
               >
                 <option value="">
-                  {printerAssets.loading || printerCatalogs.loading
-                    ? 'Cargando impresoras...'
-                    : printers.length === 0
-                      ? 'No hay impresoras RP4 disponibles'
-                      : 'Seleccione la impresora RP4...'}
+                  {rp4dAssets.loading || rp4dCatalogs.loading
+                    ? 'Cargando RP4D...'
+                    : rp4dOptions.length === 0
+                      ? 'No hay RP4D disponibles'
+                      : 'Seleccione la RP4D...'}
                 </option>
-                {printers.map(item => <option key={item.id} value={item.id}>{printerLabel(item)}</option>)}
+                {rp4dOptions.map(item => <option key={item.id} value={item.id}>{rp4dLabel(item)}</option>)}
               </select>
-              {(printerAssets.error || printerCatalogs.error) && (
-                <small className="inventory-error">{printerAssets.error || printerCatalogs.error}</small>
+              {(rp4dAssets.error || rp4dCatalogs.error) && (
+                <small className="inventory-error">{rp4dAssets.error || rp4dCatalogs.error}</small>
               )}
-              {!printerAssets.loading && !printerCatalogs.loading && printers.length === 0 && (
+              {!rp4dAssets.loading && !rp4dCatalogs.loading && rp4dOptions.length === 0 && (
                 <small className="inventory-muted">
-                  Registre la RP4 en Activos (categoría RP4D, estado disponible) para poder entregarla.
+                  Registre la RP4D en Activos (categoría RP4D, estado disponible) para poder entregarla.
                 </small>
               )}
             </>
@@ -1195,7 +1268,15 @@ function ReturnsScreen() {
         <ReturnForm
           delivery={selectedDelivery}
           onCancel={() => setSelectedDelivery(null)}
-          onSaved={() => { setSelectedDelivery(null); returns.reload(); deliveries.reload() }}
+          onSaved={updated => {
+            returns.reload()
+            deliveries.reload()
+            setSelectedDelivery(
+              isDeliveryComplete(updated)
+                ? null
+                : updated,
+            )
+          }}
         />
       )}
     </>
@@ -1208,44 +1289,55 @@ export function ReturnForm({
   onCancel,
 }: {
   delivery: Delivery
-  onSaved: () => void
+  onSaved: (delivery: Delivery) => void
   onCancel: () => void
 }) {
   const [condition, setCondition] = useState(delivery.condition ?? 'bueno')
   const [notes, setNotes] = useState('')
   const [signature, setSignature] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving] = useState<'handheld' | 'rp4d' | null>(null)
   const [error, setError] = useState('')
+  const [current, setCurrent] = useState(delivery)
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setSaving(true)
+  const handheldPending = !isHandheldReturned(current)
+  const rp4dPending = !isRp4dReturned(current)
+  const complete = !handheldPending && !rp4dPending
+
+  const dateLabel = (value?: string | null) =>
+    value ? new Date(value).toLocaleDateString('es-DO') : ''
+
+  const returnDevice = async (kind: 'handheld' | 'rp4d') => {
+    setSaving(kind)
     setError('')
     try {
-      await itamApi.createReturn({
-        deliveryId: delivery.id,
-        assetId: delivery.assetId,
-        assetTag: delivery.assetTag,
-        assetName: delivery.assetName,
-        employeeCode: delivery.employeeCode,
-        returnedBy: delivery.assignedToName,
+      const payload = {
+        deliveryId: current.id,
+        assetId: kind === 'handheld' ? current.assetId : current.rp4dId,
+        assetTag: kind === 'handheld' ? current.assetTag : current.rp4dSerialNumber,
+        assetName: kind === 'handheld' ? current.assetName : 'RP4D',
+        employeeCode: current.employeeCode,
+        returnedBy: current.assignedToName,
         condition,
         notes: notes || null,
         signature: signature || null,
-      })
-      onSaved()
+      }
+      const updated = kind === 'handheld'
+        ? await itamApi.returnHandheld(current.id, payload)
+        : await itamApi.returnRp4d(current.id, payload)
+      setCurrent(updated)
+      onSaved(updated)
     } catch (err) {
       setError(errorMessage(err))
     } finally {
-      setSaving(false)
+      setSaving(null)
     }
   }
 
   return (
     <article className="inventory-card">
-      <h3>Devolución · {delivery.assetTag}</h3>
-      <p className="inventory-muted">Empleado: {delivery.assignedToName} {delivery.employeeCode ? `· ${delivery.employeeCode}` : ''}</p>
-      <form className="inventory-form" onSubmit={submit}>
+      <h3>Devolución · {current.assetTag}</h3>
+      <p className="inventory-muted">Empleado: {current.assignedToName} {current.employeeCode ? `· ${current.employeeCode}` : ''}</p>
+      <div className="inventory-form">
         <Field label="Condición de retorno">
           <select className="inventory-input" value={condition} onChange={event => setCondition(event.target.value)}>
             {conditionOptions.map(option => <option key={option} value={option}>{option}</option>)}
@@ -1254,13 +1346,33 @@ export function ReturnForm({
         <Field label="Notas"><textarea className="inventory-input" rows={2} value={notes} onChange={event => setNotes(event.target.value)} /></Field>
         <Field label="Firma del empleado"><SignaturePad onChange={data => setSignature(data.base64)} /></Field>
 
+        <div className="inventory-field">
+          <label>Hand Held</label>
+          <div className="inventory-actions">
+            {isHandheldReturned(current)
+              ? <span className="inventory-badge inventory-badge--ok">Devuelta {dateLabel(current.handheldReturnDate)}</span>
+              : <button type="button" className="inventory-btn inventory-btn--primary" disabled={saving !== null} onClick={() => returnDevice('handheld')}>{saving === 'handheld' ? 'Guardando...' : 'Devolver Hand Held'}</button>}
+          </div>
+        </div>
+
+        <div className="inventory-field">
+          <label>RP4D</label>
+          <div className="inventory-actions">
+            {!current.includeRp4d
+              ? <span className="inventory-muted">No incluida</span>
+              : isRp4dReturned(current)
+                ? <span className="inventory-badge inventory-badge--ok">Devuelta {dateLabel(current.rp4dReturnDate)}</span>
+                : <button type="button" className="inventory-btn inventory-btn--primary" disabled={saving !== null} onClick={() => returnDevice('rp4d')}>{saving === 'rp4d' ? 'Guardando...' : 'Devolver RP4D'}</button>}
+          </div>
+        </div>
+
+        {complete && <p className="inventory-badge inventory-badge--ok">Entrega completada.</p>}
         {error && <p className="inventory-error">{error}</p>}
 
         <div className="inventory-form__actions">
-          <button type="submit" className="inventory-btn inventory-btn--primary" disabled={saving}>{saving ? 'Guardando...' : 'Registrar devolución'}</button>
-          <button type="button" className="inventory-btn" onClick={onCancel}>Cancelar</button>
+          <button type="button" className="inventory-btn" onClick={onCancel}>Cerrar</button>
         </div>
-      </form>
+      </div>
     </article>
   )
 }

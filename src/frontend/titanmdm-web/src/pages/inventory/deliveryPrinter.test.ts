@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { availableRp4Printers, isRp4Printer, printerLabel } from './deliveryPrinter'
+import { availableRp4dPrinters, isRp4dPrinter, rp4dLabel } from './deliveryPrinter'
 import type { Asset, CatalogItem } from './inventoryApi'
 
 const asset = (overrides: Partial<Asset>): Asset => ({
@@ -19,15 +19,15 @@ const categories: CatalogItem[] = [
 ]
 
 describe('deliveryPrinter', () => {
-  it('reconoce la RP4 por categoría, nombre o modelo', () => {
-    expect(isRp4Printer(asset({}), 'RP4D')).toBe(true)
-    expect(isRp4Printer(asset({ name: 'Honeywell rp4 #3' }))).toBe(true)
-    expect(isRp4Printer(asset({ hardwareModel: 'RP4' }))).toBe(true)
-    expect(isRp4Printer(asset({ name: 'Zebra ZQ520' }), 'Impresora')).toBe(false)
+  it('reconoce la RP4D por categoría, nombre o modelo', () => {
+    expect(isRp4dPrinter(asset({}), 'RP4D')).toBe(true)
+    expect(isRp4dPrinter(asset({ name: 'Honeywell rp4d #3' }))).toBe(true)
+    expect(isRp4dPrinter(asset({ hardwareModel: 'RP4D' }))).toBe(true)
+    expect(isRp4dPrinter(asset({ name: 'Zebra ZQ520' }), 'Impresora')).toBe(false)
   })
 
-  it('solo ofrece RP4 libres, distintas de la Handheld y ordenadas', () => {
-    const list = availableRp4Printers(
+  it('solo ofrece RP4D libres, distintas de la Handheld y ordenadas', () => {
+    const list = availableRp4dPrinters(
       [
         asset({ id: 'p2', assetTag: 'RP4-002', categoryId: 'cat-rp4' }),
         asset({ id: 'p1', assetTag: 'RP4-001', categoryId: 'cat-rp4' }),
@@ -42,8 +42,8 @@ describe('deliveryPrinter', () => {
     expect(list.map(item => item.id)).toEqual(['p1'])
   })
 
-  it('etiqueta la impresora con etiqueta, nombre y serie', () => {
-    expect(printerLabel(asset({ assetTag: 'RP4-001', name: 'RP4D', serialNumber: 'SN1' }))).toBe('RP4-001 · RP4D · S/N SN1')
-    expect(printerLabel(asset({ assetTag: 'RP4-001', name: 'RP4D' }))).toBe('RP4-001 · RP4D')
+  it('etiqueta la RP4D con etiqueta, nombre y serie', () => {
+    expect(rp4dLabel(asset({ assetTag: 'RP4-001', name: 'RP4D', serialNumber: 'SN1' }))).toBe('RP4-001 · RP4D · S/N SN1')
+    expect(rp4dLabel(asset({ assetTag: 'RP4-001', name: 'RP4D' }))).toBe('RP4-001 · RP4D')
   })
 })

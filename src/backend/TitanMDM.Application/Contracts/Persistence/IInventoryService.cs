@@ -131,7 +131,11 @@ public interface IInventoryService
         string? userName,
         CancellationToken cancellationToken = default);
 
-    /// <param name="period">all | today | pending | overdue (zona horaria del negocio).</param>
+    /// <param name="period">
+    /// all | today | pending (pending-returns) | overdue (expired), en la zona
+    /// horaria del negocio. Pendiente = Hand Held sin devolver o RP4D incluida
+    /// sin devolver; los registros legados con returned = 1 cuentan como devueltos.
+    /// </param>
     Task<List<Delivery>> GetDeliveriesAsync(
         string? query = null,
         bool? returned = null,
@@ -160,6 +164,18 @@ public interface IInventoryService
 
     Task<Return> CreateReturnAsync(
         Return item,
+        string? userName,
+        CancellationToken cancellationToken = default);
+
+    Task<Delivery> ReturnHandheldAsync(
+        string deliveryId,
+        Return? item,
+        string? userName,
+        CancellationToken cancellationToken = default);
+
+    Task<Delivery> ReturnRp4dAsync(
+        string deliveryId,
+        Return? item,
         string? userName,
         CancellationToken cancellationToken = default);
 

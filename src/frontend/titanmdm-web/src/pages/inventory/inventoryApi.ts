@@ -85,12 +85,15 @@ export type Delivery = {
   deliveryDate: string
   returned: boolean
   returnDate?: string | null
+  returnedHandheld: boolean
+  handheldReturnDate?: string | null
+  returnedRp4d: boolean
+  rp4dReturnDate?: string | null
   deleted: boolean
   createdAt: string
-  /** Impresora Honeywell RP4 entregada junto con la Handheld (opcional). */
-  includePrinter?: boolean
-  printerId?: string | null
-  printerSerialNumber?: string | null
+  includeRp4d?: boolean
+  rp4dId?: string | null
+  rp4dSerialNumber?: string | null
 }
 
 export type ReturnRecord = {
@@ -346,11 +349,17 @@ export const itamApi = {
   deleteEmployee: (id: string) =>
     apiClient.delete(`/itam/employees/${id}`),
 
-  deliveries: (params?: { q?: string; returned?: boolean }) =>
+  deliveries: (params?: { q?: string; returned?: boolean; period?: string }) =>
     apiClient.get<Delivery[]>('/itam/deliveries', { params }).then(r => r.data),
 
   createDelivery: (payload: Partial<Delivery>) =>
     apiClient.post<Delivery>('/itam/deliveries', payload).then(r => r.data),
+
+  returnHandheld: (deliveryId: string, payload: Partial<ReturnRecord>) =>
+    apiClient.post<Delivery>(`/itam/deliveries/${deliveryId}/return-handheld`, payload).then(r => r.data),
+
+  returnRp4d: (deliveryId: string, payload: Partial<ReturnRecord>) =>
+    apiClient.post<Delivery>(`/itam/deliveries/${deliveryId}/return-rp4d`, payload).then(r => r.data),
 
   returns: (params?: { q?: string }) =>
     apiClient.get<ReturnRecord[]>('/itam/returns', { params }).then(r => r.data),
