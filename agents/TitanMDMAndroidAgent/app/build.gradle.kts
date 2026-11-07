@@ -125,6 +125,40 @@ android {
     }
 }
 
+/*
+ * Auto-publicación del APK de aprovisionamiento: tras assembleDebug, el APK
+ * se copia a deploy/app-debug.apk, se regenera el QR y se empuja SOLO ese
+ * archivo a origin/main (scripts/android/Publish-AgentApk.ps1), para que la
+ * URL raw del QR sirva siempre la última compilación.
+ * Desactivar: -PtitanAutoPublish=false o TITAN_AUTO_PUBLISH=false.
+ */
+val autoPublishApk = providers.gradleProperty("titanAutoPublish")
+    .orElse(providers.environmentVariable("TITAN_AUTO_PUBLISH"))
+    .map { it.trim().lowercase() !in setOf("false", "0", "no") }
+    .getOrElse(true)
+
+val publishDeployApk = tasks.register<Exec>("publishDeployApk") {
+    group = "titan"
+    description = "Copia el APK debug a deploy/, regenera el QR y lo publica en origin/main."
+    // Valores resueltos en configuración: el closure de onlyIf no debe
+    // capturar el script (configuration cache).
+    val publishScript = rootProject.layout.projectDirectory
+        .file("../../scripts/android/Publish-AgentApk.ps1")
+        .asFile
+    val canRun = System.getProperty("os.name").startsWith("Windows") && publishScript.exists()
+    onlyIf { canRun }
+    commandLine(
+        "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", publishScript.absolutePath,
+    )
+}
+
+if (autoPublishApk) {
+    tasks.matching { it.name == "assembleDebug" }.configureEach {
+        finalizedBy(publishDeployApk)
+    }
+}
+
 dependencies {
 
     // Compose

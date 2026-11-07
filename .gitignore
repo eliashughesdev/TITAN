@@ -86,6 +86,7 @@ application_default_credentials.json
 
 # Android Enterprise QR provisioning payload (contains Wi-Fi credentials)
 /provisioning-qr.json
+/provisioning-qr.png
 
 *.pem
 *.pfx

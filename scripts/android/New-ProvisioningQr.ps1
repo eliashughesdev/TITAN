@@ -28,7 +28,9 @@ param(
     [string]$WifiPassword,
     [string]$WifiSecurityType = 'WPA',
     [string]$AccountEmail,
-    [string]$Locale = 'es_DO'
+    [string]$Locale = 'es_DO',
+    [string]$PngPath,
+    [switch]$SkipPng
 )
 
 Set-StrictMode -Version Latest
@@ -132,3 +134,19 @@ $null = $json | ConvertFrom-Json
 [IO.File]::WriteAllText([IO.Path]::GetFullPath($OutputPath), $json, [Text.UTF8Encoding]::new($false))
 Write-Host "QR generado: $([IO.Path]::GetFullPath($OutputPath)) ($($json.Length) caracteres)"
 Write-Host "Checksum de firma: $($payload["${prefix}DEVICE_ADMIN_SIGNATURE_CHECKSUM"])"
+
+# PNG del QR generado del mismo texto (evita generadores web que alteran el JSON).
+if (-not $SkipPng) {
+    if (-not $PngPath) { $PngPath = [IO.Path]::ChangeExtension([IO.Path]::GetFullPath($OutputPath), '.png') }
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if ($node) {
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { & $node.Source (Join-Path $PSScriptRoot 'qr-png.cjs') ([IO.Path]::GetFullPath($OutputPath)) $PngPath }
+        finally { $ErrorActionPreference = $previous }
+        if ($LASTEXITCODE -ne 0) { Write-Warning 'No se pudo generar el PNG del QR.' }
+    }
+    else {
+        Write-Warning 'Node.js no está en PATH: no se generó el PNG del QR.'
+    }
+}
