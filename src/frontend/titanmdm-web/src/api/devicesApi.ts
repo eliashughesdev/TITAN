@@ -71,6 +71,20 @@ export const devicesApi = {
     return response.data
   },
 
+  async updateAlias(
+    deviceId: string,
+    alias: string | null,
+  ): Promise<{ deviceId: string; alias: string | null }> {
+    const response =
+      await apiClient
+        .put<{ deviceId: string; alias: string | null }>(
+          `/devices/${deviceId}/alias`,
+          { alias },
+        )
+
+    return response.data
+  },
+
   async getDeviceById(
     deviceId: string,
   ): Promise<DeviceDetails> {

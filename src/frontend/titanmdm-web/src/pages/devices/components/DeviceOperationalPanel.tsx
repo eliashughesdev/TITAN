@@ -1,6 +1,7 @@
 import {
   Activity,
   BellRing,
+  LockKeyhole,
   CheckCircle2,
   Layers3,
   RefreshCw,
@@ -894,6 +895,63 @@ export function DeviceOperationalPanel({
               'RING_DEVICE'
                 ? 'Enviando alarma...'
                 : 'Hacer sonar dispositivo'}
+            </button>
+          </div>
+        </article>
+      )}
+
+      {!windows && canRing && (
+        <article className="op-panel device-op-alarm">
+          <header>
+            <LockKeyhole
+              size={18}
+            />
+
+            <div>
+              <strong>
+                Bloqueo remoto
+              </strong>
+
+              <span>
+                Apaga y bloquea la pantalla al instante.
+              </span>
+            </div>
+          </header>
+
+          <div className="device-op-alarm-body">
+            <p>
+              El agente ejecuta el bloqueo del sistema
+              (requiere TitanMDM Agent como administrador del
+              equipo). Se desbloquea con el PIN o patrón del
+              dispositivo, si tiene.
+            </p>
+
+            <button
+              type="button"
+              className="device-op-alarm-button"
+              disabled={
+                Boolean(working)
+              }
+              onClick={() => {
+                if (
+                  window.confirm(
+                    '¿Bloquear la pantalla del dispositivo ahora?',
+                  )
+                ) {
+                  void execute(
+                    'LOCK_DEVICE',
+                  )
+                }
+              }}
+            >
+              <LockKeyhole
+                size={16}
+              />
+
+              {working ===
+              'LOCK_DEVICE'
+                ? 'Bloqueando...'
+                : 'Bloquear pantalla'}
             </button>
           </div>
         </article>

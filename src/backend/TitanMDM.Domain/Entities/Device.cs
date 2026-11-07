@@ -116,6 +116,40 @@ public sealed class Device
 
     public string? Department { get; private set; }
 
+    /// <summary>Etiqueta operativa (p. ej. HH-ALMACEN-01) visible en consola y agente.</summary>
+    public string? Alias { get; private set; }
+
+    public const int MaxAliasLength = 64;
+
+    public void SetAlias(string? alias)
+    {
+        var value = alias?.Trim();
+        if (string.IsNullOrEmpty(value))
+        {
+            Alias = null;
+        }
+        else
+        {
+            if (value.Length > MaxAliasLength)
+            {
+                throw new ArgumentException(
+                    $"El alias no puede superar {MaxAliasLength} caracteres.",
+                    nameof(alias));
+            }
+
+            if (value.Any(char.IsControl))
+            {
+                throw new ArgumentException(
+                    "El alias contiene caracteres no válidos.",
+                    nameof(alias));
+            }
+
+            Alias = value;
+        }
+
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public int? BatteryLevel { get; private set; }
 
     public bool IsManaged { get; private set; }

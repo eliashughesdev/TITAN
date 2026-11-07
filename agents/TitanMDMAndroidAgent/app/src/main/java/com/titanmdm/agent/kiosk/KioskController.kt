@@ -242,6 +242,8 @@ object KioskController {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
+            // Lectura del QR con la cámara sin diálogo en un equipo desatendido.
+            add(Manifest.permission.CAMERA)
         }
         for (permission in permissions) {
             dpm.setPermissionGrantState(

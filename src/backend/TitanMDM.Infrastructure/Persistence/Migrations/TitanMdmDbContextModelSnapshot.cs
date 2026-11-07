@@ -969,6 +969,10 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Alias")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("AssignedUser")
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");

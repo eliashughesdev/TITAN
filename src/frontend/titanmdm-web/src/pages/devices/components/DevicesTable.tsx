@@ -19,6 +19,7 @@ import type {
 import {
   formatDeviceDateTime,
 } from '../utils/devicesPage.utils'
+import { DeviceAliasEditor } from './DeviceAliasEditor'
 import './DevicesTable.css'
 
 type Props = {
@@ -27,6 +28,8 @@ type Props = {
   isWindowsWorkspace: boolean
   isAndroidWorkspace: boolean
   onOpenDevice: (device: DeviceListItem) => void
+  /** Alias editado en la fila: el contenedor actualiza su lista. */
+  onAliasChanged?: (deviceId: string, alias: string | null) => void
 }
 
 const statuses: Record<string, string> = {
@@ -78,6 +81,7 @@ export function DevicesTable({
   isWindowsWorkspace,
   isAndroidWorkspace,
   onOpenDevice,
+  onAliasChanged,
 }: Props) {
   const [selected, setSelected] = useState<string[]>([])
 
@@ -122,7 +126,7 @@ export function DevicesTable({
     ]
 
     const lines = rows.map(x => [
-      x.deviceName,
+      x.alias ? `${x.alias} (${x.deviceName})` : x.deviceName,
       x.platform,
       statuses[x.status] ?? x.status,
       x.assignedUser,
@@ -267,6 +271,13 @@ export function DevicesTable({
                       >
                         {device.deviceName}
                       </button>
+
+                      <DeviceAliasEditor
+                        compact
+                        deviceId={device.id}
+                        alias={device.alias}
+                        onSaved={alias => onAliasChanged?.(device.id, alias)}
+                      />
 
                       <span>
                         {device.manufacturer ??

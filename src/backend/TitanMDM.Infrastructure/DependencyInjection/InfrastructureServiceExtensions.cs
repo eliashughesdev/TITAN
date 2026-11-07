@@ -346,6 +346,10 @@ public static class InfrastructureServiceExtensions
             IDeviceRegistrationService,
             DeviceRegistrationService>();
 
+        services.AddScoped<
+            IDeviceAliasService,
+            TitanMDM.Infrastructure.Devices.DeviceAliasService>();
+
         // ============================================================
         // DEVICES
         // ============================================================

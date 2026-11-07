@@ -1,5 +1,12 @@
 package com.titanmdm.agent.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import com.titanmdm.agent.core.storage.DeviceAliasStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +34,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.titanmdm.agent.scanner.HoneywellScanner
+import com.titanmdm.agent.scanner.KeystrokeScanner
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -58,18 +66,7 @@ fun TitanAgentScreen(
                 Arrangement.spacedBy(16.dp)
         ) {
 
-            Text(
-                text = "TitanMDM",
-                style =
-                    MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = "Agente de inscripción interna",
-                style =
-                    MaterialTheme.typography.titleMedium
-            )
+            AgentHeader(state)
 
             if (state.loading) {
 
@@ -238,6 +235,52 @@ private fun StatusCard(
     }
 }
 
+/** Cabecera verde: alias de la consola (o nombre del equipo) y estado. */
+@Composable
+private fun AgentHeader(state: AgentUiState) {
+    val context = LocalContext.current
+    // Sin alias (o borrado en la consola) vuelve al nombre del equipo.
+    val alias by remember { DeviceAliasStore.observe(context) }
+        .collectAsState(initial = DeviceAliasStore.alias(context))
+
+    val title = if (state.enrolled) {
+        DeviceAliasStore.label(alias, state.deviceName, "TitanMDM")
+    } else {
+        "TitanMDM"
+    }
+    val subtitle = when {
+        !state.enrolled -> "Agente de inscripción interna"
+        !alias.isNullOrBlank() -> "${state.manufacturer} ${state.model}".trim().ifBlank { state.deviceName }
+        else -> "Equipo administrado por TitanMDM"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(HeaderGreen)
+            .padding(horizontal = 20.dp, vertical = 18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
+    }
+}
+
+private val HeaderGreen = Color(0xFF16A36A)
+
 @Composable
 private fun EnrollmentCard(
     state: AgentUiState,
@@ -258,7 +301,12 @@ private fun EnrollmentCard(
     // Lector Honeywell reclamado solo mientras esta pantalla esta visible.
     DisposableEffect(honeywell.available) {
         val stop = HoneywellScanner.listen(context) { data -> onScanned(data, false) }
-        onDispose { stop() }
+        // Modo teclado (Keystroke): mismo tratamiento que el modo Intent.
+        val stopKeystroke = KeystrokeScanner.listen { data -> onScanned(data, false) }
+        onDispose {
+            stop()
+            stopKeystroke()
+        }
     }
 
     Card(

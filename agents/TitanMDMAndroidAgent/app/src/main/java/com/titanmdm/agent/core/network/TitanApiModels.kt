@@ -176,7 +176,14 @@ data class HeartbeatResponse(
     val serverTimeUtc: String,
 
     @SerialName("lastSeenAtUtc")
-    val lastSeenAtUtc: String? = null
+    val lastSeenAtUtc: String? = null,
+
+    /** Alias de la consola (p. ej. HH-ALMACEN-01); null = sin alias. */
+    @SerialName("alias")
+    val alias: String? = null,
+
+    @SerialName("deviceName")
+    val deviceName: String? = null
 )
 
 

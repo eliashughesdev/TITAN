@@ -481,7 +481,9 @@ public sealed class DeviceAgentService
             device.ComplianceStatus
                 .ToString(),
             DateTime.UtcNow,
-            device.LastSeenAtUtc);
+            device.LastSeenAtUtc,
+            device.Alias,
+            device.DeviceName);
     }
 
     private async Task RecordLauncherAcknowledgementAsync(

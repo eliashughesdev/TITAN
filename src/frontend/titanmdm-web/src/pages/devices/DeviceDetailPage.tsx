@@ -177,6 +177,10 @@ export function DeviceDetailPage() {
           void loadDevice()
         }
 
+        onAliasSaved={() =>
+          void loadDevice()
+        }
+
         onCommand={
           commandType => {
             void sendCommand(

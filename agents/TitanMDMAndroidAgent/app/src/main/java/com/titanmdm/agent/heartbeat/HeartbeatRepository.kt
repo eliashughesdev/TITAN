@@ -5,6 +5,7 @@ import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.network.HeartbeatRequest
 import com.titanmdm.agent.core.network.TitanApiClient
 import com.titanmdm.agent.core.storage.AgentIdentityStore
+import com.titanmdm.agent.core.storage.DeviceAliasStore
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
 import com.titanmdm.agent.launcher.TitanLauncherAcknowledgementStore
 import com.titanmdm.agent.location.HybridLocationProvider
@@ -96,6 +97,9 @@ class HeartbeatRepository(
             when {
 
                 response.isSuccessful -> {
+                    response.body()?.let { body ->
+                        DeviceAliasStore.save(appContext, body.alias, body.deviceName)
+                    }
                     HeartbeatResult.Success
                 }
 

@@ -41,6 +41,8 @@ export interface DeviceListItem {
   interactiveUser: string | null
   interactiveSessionId: number | null
   interactiveUserUpdatedAtUtc: string | null
+  /** Alias operativo asignado en la consola (p. ej. HH-ALMACEN-01). */
+  alias?: string | null
 }
 
 export interface DeviceDetails {
@@ -70,6 +72,7 @@ export interface DeviceDetails {
   interactiveUserUpdatedAtUtc: string | null
   createdAtUtc: string
   updatedAtUtc: string
+  alias?: string | null
 }
 
 export interface DeviceListResult {

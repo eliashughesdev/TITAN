@@ -754,6 +754,92 @@ public sealed class AndroidPolicyAssignmentService
             publication.GooglePolicyName);
     }
 
+    public async Task<int> RequeueAgentPoliciesForPackageAsync(
+        Guid organizationId,
+        string packageName,
+        Guid actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (organizationId == Guid.Empty ||
+            actorUserId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(packageName))
+        {
+            return 0;
+        }
+
+        var candidates =
+            await (
+                from assignment in _dbContext.DevicePolicyAssignments.AsNoTracking()
+                join policy in _dbContext.Policies.AsNoTracking()
+                    on assignment.PolicyId equals policy.Id
+                join publication in _dbContext.AndroidPolicyPublications.AsNoTracking()
+                    on new { assignment.PolicyId, Version = policy.CurrentVersion }
+                    equals new { publication.PolicyId, Version = publication.PolicyVersion }
+                join device in _dbContext.Devices.AsNoTracking()
+                    on assignment.DeviceId equals device.Id
+                where
+                    assignment.OrganizationId == organizationId &&
+                    assignment.Status != PolicyAssignmentStatus.Removed &&
+                    policy.Platform == PolicyPlatform.Android &&
+                    policy.Status != PolicyStatus.Archived &&
+                    device.Platform == DevicePlatform.Android &&
+                    device.IsManaged &&
+                    !device.IsDeleted &&
+                    publication.CompiledPolicyJson != null &&
+                    !_dbContext.AndroidDevices.Any(x =>
+                        x.OrganizationId == organizationId &&
+                        x.DeviceId == device.Id)
+                select new
+                {
+                    assignment.PolicyId,
+                    assignment.DeviceId,
+                    publication.CompiledPolicyJson
+                })
+            .ToListAsync(cancellationToken);
+
+        var requeued = 0;
+        foreach (var candidate in candidates)
+        {
+            var includesPackage =
+                AgentApplicationPlanner
+                    .ReadRequiredApplications(candidate.CompiledPolicyJson!)
+                    .Any(app => string.Equals(app.PackageName, packageName, StringComparison.Ordinal));
+
+            if (!includesPackage)
+                continue;
+
+            try
+            {
+                await AssignAsync(
+                    organizationId,
+                    candidate.PolicyId,
+                    candidate.DeviceId,
+                    null,
+                    cancellationToken,
+                    actorUserId);
+                requeued++;
+            }
+            catch (InvalidOperationException exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Policy not requeued after APK upload. DeviceId={DeviceId}, PolicyId={PolicyId}",
+                    candidate.DeviceId,
+                    candidate.PolicyId);
+            }
+        }
+
+        if (requeued > 0)
+        {
+            _logger.LogInformation(
+                "Agent policies requeued after APK upload. Package={Package}, Devices={Devices}",
+                packageName,
+                requeued);
+        }
+
+        return requeued;
+    }
+
     /// <summary>
     /// Devuelve la managed configuration del launcher (paquete del
     /// agente) contenida en la política compilada, o null si la

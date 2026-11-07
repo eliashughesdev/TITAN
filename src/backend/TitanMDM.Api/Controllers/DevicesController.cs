@@ -29,15 +29,71 @@ public sealed class DevicesController
     private readonly IScopeAccessService
         _scopeAccessService;
 
+    private readonly IDeviceAliasService?
+        _aliasService;
+
+    private const string DevicesUpdatePermission =
+        "devices.update";
+
     public DevicesController(
         IDeviceQueryService deviceQueryService,
-        IScopeAccessService scopeAccessService)
+        IScopeAccessService scopeAccessService,
+        IDeviceAliasService? aliasService = null)
     {
         _deviceQueryService =
             deviceQueryService;
 
         _scopeAccessService =
             scopeAccessService;
+
+        _aliasService =
+            aliasService;
+    }
+
+    // ============================================================
+    // ALIAS
+    // ============================================================
+
+    [HttpPut("{deviceId:guid}/alias")]
+    public async Task<IActionResult>
+        UpdateAlias(
+            Guid deviceId,
+            [FromBody] UpdateDeviceAliasRequest request,
+            CancellationToken cancellationToken = default)
+    {
+        if (!HasPermission(DevicesUpdatePermission))
+            return Forbid();
+
+        var context = GetSecurityContext();
+        if (context is null)
+            return Unauthorized();
+
+        if (_aliasService is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        if (!await _scopeAccessService.CanAccessDeviceAsync(
+                context.Value.OrganizationId,
+                context.Value.UserId,
+                deviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var result = await _aliasService.SetAliasAsync(
+                context.Value.OrganizationId,
+                deviceId,
+                request?.Alias,
+                cancellationToken);
+
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
     }
 
     // ============================================================

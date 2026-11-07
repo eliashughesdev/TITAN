@@ -20,4 +20,5 @@ public sealed record DeviceListItemDto(
     DateTime? LastSeenAtUtc,
     string? InteractiveUser,
     int? InteractiveSessionId,
-    DateTime? InteractiveUserUpdatedAtUtc);
+    DateTime? InteractiveUserUpdatedAtUtc,
+    string? Alias = null);

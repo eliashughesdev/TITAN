@@ -3,11 +3,14 @@ package com.titanmdm.agent
 import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.titanmdm.agent.kiosk.KioskController
+import com.titanmdm.agent.scanner.KeystrokeScanner
 import com.titanmdm.agent.service.AgentForegroundService
 import com.titanmdm.agent.ui.TitanAgentScreen
 import com.titanmdm.agent.ui.theme.TitanMDMAndroidAgentTheme
@@ -34,6 +37,10 @@ class MainActivity : ComponentActivity() {
                 TitanAgentScreen()
             }
         }
+
+        // Lector Honeywell en modo teclado: se observa cada pulsación antes
+        // que la UI (incluido un campo de texto con el foco).
+        window.callback = KeystrokeWindowCallback(window.callback)
     }
 
     override fun onResume() {
@@ -61,4 +68,11 @@ class MainActivity : ComponentActivity() {
             runCatching { startLockTask() }
         }
     }
+}
+/** Envuelve el Window.Callback de la actividad para entregar las teclas al lector. */
+private class KeystrokeWindowCallback(
+    private val delegate: Window.Callback
+) : Window.Callback by delegate {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        KeystrokeScanner.onKeyEvent(event) || delegate.dispatchKeyEvent(event)
 }

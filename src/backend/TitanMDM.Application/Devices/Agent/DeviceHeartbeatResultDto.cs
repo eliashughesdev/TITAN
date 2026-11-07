@@ -5,4 +5,6 @@ public sealed record DeviceHeartbeatResultDto(
     string Status,
     string ComplianceStatus,
     DateTime ServerTimeUtc,
-    DateTime? LastSeenAtUtc);
+    DateTime? LastSeenAtUtc,
+    string? Alias = null,
+    string? DeviceName = null);

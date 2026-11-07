@@ -8,6 +8,7 @@ import com.titanmdm.agent.commands.CommandRepository
 import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.storage.AgentIdentity
 import com.titanmdm.agent.core.storage.AgentIdentityStore
+import com.titanmdm.agent.core.storage.DeviceAliasStore
 import com.titanmdm.agent.enrollment.EnrollmentPayloadParser
 import com.titanmdm.agent.enrollment.registration.RegistrationRepository
 import com.titanmdm.agent.enrollment.registration.RegistrationResult
@@ -37,6 +38,8 @@ data class AgentUiState(
     val identity: AgentIdentity? = null,
 
     val deviceName: String = "",
+    /** Alias de la consola; la cabecera lo muestra en lugar del modelo. */
+    val deviceAlias: String? = null,
     val manufacturer: String = "",
     val model: String = "",
     val androidVersion: String = "",
@@ -228,6 +231,9 @@ class AgentViewModel(
                         deviceName =
                             identity?.deviceName
                                 ?: inventory.deviceName,
+
+                        deviceAlias =
+                            DeviceAliasStore.alias(appContext),
 
                         manufacturer =
                             inventory.manufacturer,
@@ -427,7 +433,10 @@ class AgentViewModel(
                     _uiState.value =
                         _uiState.value.copy(
                             lastHeartbeatStatus =
-                                "Sincronizado correctamente"
+                                "Sincronizado correctamente",
+
+                            deviceAlias =
+                                DeviceAliasStore.alias(appContext)
                         )
                 }
 

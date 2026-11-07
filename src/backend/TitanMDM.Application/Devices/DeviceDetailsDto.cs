@@ -26,4 +26,5 @@ public sealed record DeviceDetailsDto(
     int? InteractiveSessionId,
     DateTime? InteractiveUserUpdatedAtUtc,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string? Alias = null);

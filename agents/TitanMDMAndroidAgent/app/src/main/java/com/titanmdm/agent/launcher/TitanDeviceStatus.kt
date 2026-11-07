@@ -6,13 +6,16 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
+import com.titanmdm.agent.core.storage.DeviceAliasStore
 
 /** Indicadores de la cabecera del launcher: batería y red. */
 data class TitanDeviceStatus(
     val batteryPercent: Int? = null,
     val charging: Boolean = false,
     val network: String = "Sin red",
-    val online: Boolean = false
+    val online: Boolean = false,
+    /** Alias asignado en la consola (p. ej. HH-ALMACEN-01). */
+    val alias: String? = null
 ) {
     val batteryLabel: String
         get() = batteryPercent?.let { "Batería $it%${if (charging) " · cargando" else ""}" }
@@ -49,7 +52,8 @@ data class TitanDeviceStatus(
                 batteryPercent = percent,
                 charging = plugged,
                 network = network,
-                online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true,
+                alias = runCatching { DeviceAliasStore.alias(context) }.getOrNull()
             )
         }
     }

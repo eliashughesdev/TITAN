@@ -469,6 +469,9 @@ export function DevicesPage() {
         )}
 
         <DevicesTable
+          onAliasChanged={() =>
+            void inventory.loadDevices()
+          }
           devices={
             inventory.devices
           }

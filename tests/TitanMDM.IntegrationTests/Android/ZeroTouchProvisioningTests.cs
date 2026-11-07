@@ -187,6 +187,66 @@ public sealed class ZeroTouchProvisioningTests
     }
 
     [Fact]
+    public async Task Subir_el_apk_despues_reenvia_la_politica_a_los_equipos_que_lo_esperan()
+    {
+        await using var db = Open();
+        var (organization, user) = await SeedOrganizationAsync(db);
+        var policy = await SeedPolicyAsync(db, organization.Id, user.Id, published: true);
+        var created = await new EnrollmentService(db).CreateTokenAsync(
+            organization.Id, user.Id, new CreateEnrollmentTokenRequest("Android", 60, 5, policy.Id));
+
+        // Se inscribe antes de que exista el APK: la app va como no disponible.
+        await CreateRegistrationService(db).RegisterAsync(NewRequest(created.Token, "CK65-0003"));
+        var first = await db.DeviceCommands.SingleAsync();
+        Assert.False(SampleApp(first)["available"]!.GetValue<bool>());
+
+        var assignments = CreateAssignmentService(db);
+        var deployment = new SoftwareDeploymentService(db, new DeviceCommandService(db, new NullNotifier()), assignments);
+        await using (var apk = File.OpenRead(SampleApk))
+        {
+            await deployment.UploadPackageAsync(
+                organization.Id, user.Id,
+                new TitanMDM.Application.Applications.CreateSoftwarePackageRequest("Titan E2E Sample", "1.7", "APK", null),
+                "titan-e2e-sample.apk", apk);
+        }
+
+        var latest = await db.DeviceCommands.OrderByDescending(x => x.CreatedAtUtc).FirstAsync();
+        Assert.NotEqual(first.Id, latest.Id);
+        Assert.Equal(AndroidPolicyAssignmentService.AgentLauncherCommandType, latest.CommandType);
+        Assert.True(SampleApp(latest)["available"]!.GetValue<bool>());
+
+        // Un APK que ninguna política usa no reenvía nada.
+        Assert.Equal(0, await assignments.RequeueAgentPoliciesForPackageAsync(organization.Id, "com.otra.app", user.Id));
+    }
+
+    [Fact]
+    public async Task Alias_se_guarda_se_borra_y_se_valida()
+    {
+        await using var db = Open();
+        var (organization, user) = await SeedOrganizationAsync(db);
+        var created = await new EnrollmentService(db).CreateTokenAsync(
+            organization.Id, user.Id, new CreateEnrollmentTokenRequest("Android", 60, 1));
+        var registered = await CreateRegistrationService(db).RegisterAsync(NewRequest(created.Token, "CK65-0004"));
+        var service = new TitanMDM.Infrastructure.Devices.DeviceAliasService(db);
+
+        var saved = await service.SetAliasAsync(organization.Id, registered.DeviceId, "  HH-ALMACEN-01 ");
+        Assert.Equal("HH-ALMACEN-01", saved!.Alias);
+        Assert.Equal("HH-ALMACEN-01", (await db.Devices.SingleAsync()).Alias);
+
+        Assert.Null((await service.SetAliasAsync(organization.Id, registered.DeviceId, "  "))!.Alias);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.SetAliasAsync(organization.Id, registered.DeviceId, new string('x', Device.MaxAliasLength + 1)));
+
+        // Otra organización no puede tocar el equipo.
+        Assert.Null(await service.SetAliasAsync(Guid.NewGuid(), registered.DeviceId, "HH-AJENO"));
+    }
+
+    private static JsonObject SampleApp(DeviceCommand command) =>
+        JsonNode.Parse(command.PayloadJson)!["applications"]!.AsArray()
+            .Select(x => x!.AsObject())
+            .Single(x => x["packageName"]!.GetValue<string>() == SamplePackage);
+
+    [Fact]
     public async Task Planner_ignora_bloqueadas_y_al_agente()
     {
         var apps = AgentApplicationPlanner.ReadRequiredApplications(
@@ -278,19 +338,22 @@ public sealed class ZeroTouchProvisioningTests
         return package;
     }
 
+    private static AndroidPolicyAssignmentService CreateAssignmentService(TitanMdmDbContext db) =>
+        new(
+            db,
+            new AndroidManagementClient(
+                new HttpClient(),
+                Options.Create(new AndroidManagementOptions { ProjectId = "titan-test", MaxRetryAttempts = 0 }),
+                new StubTokenProvider(),
+                NullLogger<AndroidManagementClient>.Instance),
+            NullLogger<AndroidPolicyAssignmentService>.Instance,
+            new DeviceCommandService(db, new NullNotifier()));
+
     private static DeviceRegistrationService CreateRegistrationService(TitanMdmDbContext db) =>
         new(
             db,
             new NullDispatcher(),
-            new AndroidPolicyAssignmentService(
-                db,
-                new AndroidManagementClient(
-                    new HttpClient(),
-                    Options.Create(new AndroidManagementOptions { ProjectId = "titan-test", MaxRetryAttempts = 0 }),
-                    new StubTokenProvider(),
-                    NullLogger<AndroidManagementClient>.Instance),
-                NullLogger<AndroidPolicyAssignmentService>.Instance,
-                new DeviceCommandService(db, new NullNotifier())),
+            CreateAssignmentService(db),
             NullLogger<DeviceRegistrationService>.Instance);
 
     private static TitanMdmDbContext Open() =>

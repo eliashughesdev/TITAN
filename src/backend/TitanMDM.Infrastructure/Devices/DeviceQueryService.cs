@@ -141,6 +141,13 @@ public sealed class DeviceQueryService
                     device.DeviceName.Contains(
                         term)
                     ||
+                    (
+                        device.Alias != null
+                        &&
+                        device.Alias.Contains(
+                            term)
+                    )
+                    ||
                     device.SerialNumber.Contains(
                         term)
                     ||
@@ -295,7 +302,8 @@ public sealed class DeviceQueryService
                         device.LastSeenAtUtc,
                         device.InteractiveUser,
                         device.InteractiveSessionId,
-                        device.InteractiveUserUpdatedAtUtc))
+                        device.InteractiveUserUpdatedAtUtc,
+                        device.Alias))
             .ToListAsync(
                 cancellationToken);
 
@@ -364,7 +372,8 @@ public sealed class DeviceQueryService
                             device.InteractiveSessionId,
                             device.InteractiveUserUpdatedAtUtc,
                             device.CreatedAtUtc,
-                            device.UpdatedAtUtc))
+                            device.UpdatedAtUtc,
+                            device.Alias))
                 .FirstOrDefaultAsync(
                     cancellationToken);
     }

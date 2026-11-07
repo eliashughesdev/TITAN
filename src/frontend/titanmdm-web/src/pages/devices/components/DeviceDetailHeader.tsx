@@ -11,6 +11,8 @@ import type {
   DeviceDetails,
 } from '../../../types/device'
 
+import { DeviceAliasEditor } from './DeviceAliasEditor'
+
 interface Props {
   device: DeviceDetails
   loading: boolean
@@ -26,6 +28,9 @@ interface Props {
     (
       commandType: string,
     ) => void
+
+  onAliasSaved?:
+    (alias: string | null) => void
 }
 
 export function DeviceDetailHeader({
@@ -34,6 +39,7 @@ export function DeviceDetailHeader({
   sendingCommand,
   onRefresh,
   onCommand,
+  onAliasSaved,
 }: Props) {
   const isAndroid =
     device.platform ===
@@ -57,8 +63,14 @@ export function DeviceDetailHeader({
         <div>
           <div className="device-detail-title-line">
             <h1>
-              {device.deviceName}
+              {device.alias || device.deviceName}
             </h1>
+
+            <DeviceAliasEditor
+              deviceId={device.id}
+              alias={device.alias}
+              onSaved={onAliasSaved}
+            />
 
             <span
               className={

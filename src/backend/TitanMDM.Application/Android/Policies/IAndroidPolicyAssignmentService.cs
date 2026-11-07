@@ -14,6 +14,18 @@ public interface IAndroidPolicyAssignmentService
         CancellationToken cancellationToken = default,
         Guid? actorUserId = null);
 
+    /// <summary>
+    /// Reenvía la política a los equipos del TitanMDM Agent cuya política
+    /// actual incluye <paramref name="packageName"/>: al subir el APK de una
+    /// app pendiente, los equipos ya inscritos la instalan sin reasignar.
+    /// </summary>
+    /// <returns>Número de equipos a los que se reenvió la política.</returns>
+    Task<int> RequeueAgentPoliciesForPackageAsync(
+        Guid organizationId,
+        string packageName,
+        Guid actorUserId,
+        CancellationToken cancellationToken = default);
+
     Task<AndroidPolicyAssignmentDto?> GetAsync(
         Guid organizationId,
         Guid policyId,

@@ -681,6 +681,19 @@ public sealed class AndroidPolicyCompiler
             return;
         }
 
+        /*
+         * "Modo de instalación" global: FORCE_INSTALLED convierte en
+         * obligatorias las apps marcadas como Disponible. Una app marcada
+         * individualmente como Forzada / Requerida / Bloqueada conserva
+         * siempre su tipo.
+         */
+        var globalInstallMode =
+            GetString(
+                applications,
+                "installMode",
+                "AVAILABLE")
+                .ToUpperInvariant();
+
         var compiledApps =
             policy["applications"]
                 as JsonArray
@@ -750,6 +763,12 @@ public sealed class AndroidPolicyCompiler
                 errors.Add(
                     $"Android: installType '{installType}' no es válido para {packageName}.");
                 continue;
+            }
+
+            if (installType == "AVAILABLE" &&
+                globalInstallMode == "FORCE_INSTALLED")
+            {
+                installType = "FORCE_INSTALLED";
             }
 
             var alreadyExists =

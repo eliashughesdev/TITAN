@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Application.Android.Policies;
 using TitanMDM.Application.Applications;
 using TitanMDM.Application.Commands;
 using TitanMDM.Domain.Entities;
@@ -37,10 +38,17 @@ public sealed class SoftwareDeploymentService
                 },
                 StringComparer.OrdinalIgnoreCase);
 
+    private readonly IAndroidPolicyAssignmentService?
+        _androidPolicies;
+
     public SoftwareDeploymentService(
         TitanMdmDbContext dbContext,
-        IDeviceCommandService commandService)
+        IDeviceCommandService commandService,
+        IAndroidPolicyAssignmentService? androidPolicies = null)
     {
+        _androidPolicies =
+            androidPolicies;
+
         _dbContext =
             dbContext;
 
@@ -146,11 +154,14 @@ public sealed class SoftwareDeploymentService
                     "El paquete recibido está vacío.");
             }
 
+            string? androidPackageName = null;
+
             if (normalizedPackageType ==
                 SoftwarePackageStorage.ApkPackageType)
             {
-                EnsureValidApk(
-                    fullPath);
+                androidPackageName =
+                    EnsureValidApk(
+                        fullPath);
             }
 
             var sha256 =
@@ -205,6 +216,29 @@ public sealed class SoftwareDeploymentService
             await _dbContext
                 .SaveChangesAsync(
                     cancellationToken);
+
+            // Equipos del agente que esperaban este APK lo instalan ya.
+            // Un fallo aquí no debe deshacer la subida (el APK ya está
+            // registrado); la política puede reasignarse desde la consola.
+            if (androidPackageName is not null &&
+                _androidPolicies is not null)
+            {
+                try
+                {
+                    await _androidPolicies
+                        .RequeueAgentPoliciesForPackageAsync(
+                            organizationId,
+                            androidPackageName,
+                            userId,
+                            cancellationToken);
+                }
+                catch (Exception exception) when (
+                    exception is not OperationCanceledException)
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        $"No se reenviaron políticas tras subir {androidPackageName}: {exception.Message}");
+                }
+            }
 
             return MapPackage(
                 package);
@@ -1077,16 +1111,19 @@ public sealed class SoftwareDeploymentService
     }
 
     /// <summary>El APK debe tener manifiesto legible y estar firmado.</summary>
-    private static void EnsureValidApk(
+    private static string EnsureValidApk(
         string fullPath)
     {
         try
         {
-            ApkInspector.ReadManifest(
-                fullPath);
+            var manifest =
+                ApkInspector.ReadManifest(
+                    fullPath);
 
             ApkInspector.ReadSigningCertificate(
                 fullPath);
+
+            return manifest.PackageName;
         }
         catch (Exception exception) when (
             exception is InvalidDataException or IOException or ArgumentException or System.Security.Cryptography.CryptographicException)

@@ -208,6 +208,18 @@ private fun CorporateHeader(
                         overflow = TextOverflow.Ellipsis
                     )
 
+                    // Alias del equipo asignado en la consola.
+                    deviceStatus.alias?.let { alias ->
+                        Text(
+                            text = alias,
+                            color = primaryColor,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
                     Text(
                         text = policy.welcomeMessage,
                         color = TitanMuted,

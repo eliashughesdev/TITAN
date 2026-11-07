@@ -37,6 +37,11 @@ public sealed class DeviceConfiguration
 
         builder.Property(
                 x =>
+                    x.Alias)
+            .HasMaxLength(Device.MaxAliasLength);
+
+        builder.Property(
+                x =>
                     x.Manufacturer)
             .HasMaxLength(100);
 
