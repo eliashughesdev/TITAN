@@ -91,6 +91,24 @@ public sealed class EnrollmentToken
 
     public DateTime? LastUsedAtUtc { get; private set; }
 
+    /// <summary>
+    /// Política Android que se asigna automáticamente al equipo que se
+    /// inscribe con esta credencial (QR de aprovisionamiento sin intervención).
+    /// </summary>
+    public Guid? AndroidPolicyId { get; private set; }
+
+    public void AssignAndroidPolicy(Guid? policyId)
+    {
+        if (policyId is not null && Platform != DevicePlatform.Android)
+        {
+            throw new InvalidOperationException(
+                "Solo las credenciales Android pueden llevar una política Android.");
+        }
+
+        AndroidPolicyId = policyId == Guid.Empty ? null : policyId;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public DateTime? RevokedAtUtc { get; private set; }
 
     public bool CanBeUsed()

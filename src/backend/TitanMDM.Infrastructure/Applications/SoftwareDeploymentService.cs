@@ -7,6 +7,7 @@ using TitanMDM.Application.Applications;
 using TitanMDM.Application.Commands;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
+using TitanMDM.Infrastructure.Android.Apk;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Applications;
@@ -31,7 +32,8 @@ public sealed class SoftwareDeploymentService
                     ".msi",
                     ".exe",
                     ".msix",
-                    ".appx"
+                    ".appx",
+                    ".apk"
                 },
                 StringComparer.OrdinalIgnoreCase);
 
@@ -46,10 +48,7 @@ public sealed class SoftwareDeploymentService
             commandService;
 
         _storageRoot =
-            Path.Combine(
-                AppContext.BaseDirectory,
-                "App_Data",
-                "software");
+            SoftwarePackageStorage.Root;
 
         Directory.CreateDirectory(
             _storageRoot);
@@ -145,6 +144,13 @@ public sealed class SoftwareDeploymentService
             {
                 throw new InvalidOperationException(
                     "El paquete recibido está vacío.");
+            }
+
+            if (normalizedPackageType ==
+                SoftwarePackageStorage.ApkPackageType)
+            {
+                EnsureValidApk(
+                    fullPath);
             }
 
             var sha256 =
@@ -470,6 +476,8 @@ public sealed class SoftwareDeploymentService
                     organizationId,
                     targetType,
                     request.TargetId,
+                    SoftwarePackageStorage.TargetPlatform(
+                        package.PackageType),
                     cancellationToken);
 
         if (
@@ -628,8 +636,11 @@ public sealed class SoftwareDeploymentService
         if (
             device is null
             ||
-            device.Platform !=
-                DevicePlatform.Windows)
+            (device.Platform !=
+                DevicePlatform.Windows
+             &&
+             device.Platform !=
+                DevicePlatform.Android))
         {
             return null;
         }
@@ -649,7 +660,12 @@ public sealed class SoftwareDeploymentService
                         x.IsActive,
                     cancellationToken);
 
-        if (package is null)
+        if (
+            package is null
+            ||
+            SoftwarePackageStorage.TargetPlatform(
+                package.PackageType) !=
+                device.Platform)
         {
             return null;
         }
@@ -677,8 +693,11 @@ public sealed class SoftwareDeploymentService
                         x.OrganizationId ==
                             device.OrganizationId
                         &&
-                        x.CommandType ==
+                        (x.CommandType ==
                             "SOFTWARE_INSTALL"
+                         ||
+                         x.CommandType ==
+                            "APPLY_LAUNCHER_POLICY")
                         &&
                         x.PayloadJson.Contains(
                             packageIdText)
@@ -724,6 +743,7 @@ public sealed class SoftwareDeploymentService
         Guid organizationId,
         string targetType,
         Guid targetId,
+        DevicePlatform targetPlatform,
         CancellationToken cancellationToken)
     {
         if (
@@ -750,10 +770,12 @@ public sealed class SoftwareDeploymentService
 
             if (
                 device.Platform !=
-                DevicePlatform.Windows)
+                targetPlatform)
             {
                 throw new InvalidOperationException(
-                    "Los paquetes Windows solo pueden desplegarse a dispositivos Windows.");
+                    targetPlatform == DevicePlatform.Android
+                        ? "Los paquetes APK solo pueden desplegarse a dispositivos Android."
+                        : "Los paquetes Windows solo pueden desplegarse a dispositivos Windows.");
             }
 
             return (
@@ -808,7 +830,7 @@ public sealed class SoftwareDeploymentService
                         organizationId
                     &&
                     device.Platform ==
-                        DevicePlatform.Windows
+                        targetPlatform
                     &&
                     !device.IsDeleted
 
@@ -1046,9 +1068,32 @@ public sealed class SoftwareDeploymentService
             "APPX" =>
                 "application/appx",
 
+            "APK" =>
+                "application/vnd.android.package-archive",
+
             _ =>
                 "application/octet-stream"
         };
+    }
+
+    /// <summary>El APK debe tener manifiesto legible y estar firmado.</summary>
+    private static void EnsureValidApk(
+        string fullPath)
+    {
+        try
+        {
+            ApkInspector.ReadManifest(
+                fullPath);
+
+            ApkInspector.ReadSigningCertificate(
+                fullPath);
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException or IOException or ArgumentException or System.Security.Cryptography.CryptographicException)
+        {
+            throw new InvalidOperationException(
+                $"El archivo no es un APK Android válido: {exception.Message}");
+        }
     }
 
     private static async Task<string>

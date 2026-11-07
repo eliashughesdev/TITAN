@@ -16,7 +16,9 @@ sealed interface RegistrationResult {
     ) : RegistrationResult
 
     data class Failure(
-        val message: String
+        val message: String,
+        /** Código HTTP del rechazo; null = sin respuesta (red, servidor caído). */
+        val httpCode: Int? = null
     ) : RegistrationResult
 }
 
@@ -118,7 +120,8 @@ class RegistrationRepository(
                         401 -> "Token inválido, vencido o revocado. Genere un QR nuevo en la consola."
                         409 -> "Token agotado o el número de serie ya está inscrito (HTTP 409)."
                         else -> "TitanMDM rechazó la inscripción. HTTP ${response.code()}."
-                    }
+                    },
+                    response.code()
                 )
             }
 

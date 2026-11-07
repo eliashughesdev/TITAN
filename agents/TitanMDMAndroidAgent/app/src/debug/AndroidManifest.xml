@@ -2,5 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
     <application android:usesCleartextTraffic="true"
-                 tools:replace="android:usesCleartextTraffic" />
+                 tools:replace="android:usesCleartextTraffic">
+
+        <!-- Pruebas por adb: mismo camino que los extras del QR (solo UID shell). -->
+        <provider
+            android:name="com.titanmdm.agent.debug.ShellProvisioningProvider"
+            android:authorities="com.titanmdm.agent.shellprovisioning"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
 </manifest>

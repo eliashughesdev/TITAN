@@ -47,7 +47,8 @@ export function SoftwarePackageModal({
       'MSI' |
       'EXE' |
       'MSIX' |
-      'APPX'
+      'APPX' |
+      'APK'
     >('MSI')
 
   const [
@@ -188,7 +189,8 @@ export function SoftwarePackageModal({
                       | 'MSI'
                       | 'EXE'
                       | 'MSIX'
-                      | 'APPX',
+                      | 'APPX'
+                      | 'APK',
                   )
               }
             >
@@ -206,6 +208,10 @@ export function SoftwarePackageModal({
 
               <option value="APPX">
                 APPX
+              </option>
+
+              <option value="APK">
+                APK (Android)
               </option>
             </select>
           </label>
@@ -236,7 +242,7 @@ export function SoftwarePackageModal({
 
             <input
               type="file"
-              accept=".msi,.exe,.msix,.appx"
+              accept=".msi,.exe,.msix,.appx,.apk"
               onChange={
                 event =>
                   setFile(

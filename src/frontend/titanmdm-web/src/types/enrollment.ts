@@ -35,12 +35,28 @@ export interface CreatedEnrollmentToken {
   usedCount: number
   expiresAtUtc: string
   createdAtUtc: string
+  /** Política Android que el servidor asigna al inscribirse. */
+  androidPolicyId?: string | null
+  androidPolicyName?: string | null
+}
+
+/** GET /api/enrollment/android/provisioning: datos fijos del QR de fábrica. */
+export interface AndroidProvisioningInfo {
+  componentName: string
+  packageName: string
+  downloadUrl: string
+  signatureChecksum: string
+  apkSha256: string | null
+  versionCode: number | null
+  versionName: string | null
+  source: string
 }
 
 export interface CreateEnrollmentTokenRequest {
   platform: EnrollmentPlatform
   expirationMinutes: number
   maxUses: number
+  androidPolicyId?: string | null
 }
 
 export interface EnrollmentTokenValidationResult {

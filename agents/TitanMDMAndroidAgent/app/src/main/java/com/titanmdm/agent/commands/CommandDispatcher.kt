@@ -12,6 +12,7 @@ import com.titanmdm.agent.commands.handlers.LocationCommandHandler
 import com.titanmdm.agent.commands.handlers.LostModeCommandHandler
 import com.titanmdm.agent.commands.handlers.PingCommandHandler
 import com.titanmdm.agent.commands.handlers.SecurityStatusCommandHandler
+import com.titanmdm.agent.commands.handlers.SoftwareInstallCommandHandler
 import com.titanmdm.agent.core.network.DeviceCommandDto
 
 class CommandDispatcher(
@@ -55,6 +56,9 @@ class CommandDispatcher(
             ),
 
             ApplyLauncherPolicyCommandHandler(
+                applicationContext
+            ),
+            SoftwareInstallCommandHandler(
                 applicationContext
             ),
 

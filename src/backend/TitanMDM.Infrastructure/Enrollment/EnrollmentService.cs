@@ -101,6 +101,13 @@ public sealed class EnrollmentService
                 "The authenticated user does not belong to the organization.");
         }
 
+        var androidPolicy =
+            await ResolveAndroidPolicyAsync(
+                organizationId,
+                platform,
+                request.AndroidPolicyId,
+                cancellationToken);
+
         var rawToken = GenerateSecureToken();
 
         var tokenHash = HashToken(rawToken);
@@ -118,6 +125,9 @@ public sealed class EnrollmentService
                 request.MaxUses,
                 createdByUserId);
 
+        enrollmentToken.AssignAndroidPolicy(
+            androidPolicy?.Id);
+
         _dbContext.EnrollmentTokens.Add(
             enrollmentToken);
 
@@ -132,7 +142,72 @@ public sealed class EnrollmentService
             enrollmentToken.MaxUses,
             enrollmentToken.UsedCount,
             enrollmentToken.ExpiresAtUtc,
-            enrollmentToken.CreatedAtUtc);
+            enrollmentToken.CreatedAtUtc,
+            androidPolicy?.Id,
+            androidPolicy?.Name);
+    }
+
+    /// <summary>
+    /// La política debe ser Android, no archivada y tener publicada su
+    /// versión actual: es la que el agente recibirá al inscribirse.
+    /// </summary>
+    private async Task<Policy?> ResolveAndroidPolicyAsync(
+        Guid organizationId,
+        DevicePlatform platform,
+        Guid? policyId,
+        CancellationToken cancellationToken)
+    {
+        if (policyId is null || policyId == Guid.Empty)
+            return null;
+
+        if (platform != DevicePlatform.Android)
+        {
+            throw new InvalidOperationException(
+                "Solo las credenciales Android pueden llevar una política Android.");
+        }
+
+        var policy =
+            await _dbContext.Policies
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.OrganizationId == organizationId &&
+                        x.Id == policyId,
+                    cancellationToken)
+            ?? throw new InvalidOperationException(
+                "La política seleccionada no existe.");
+
+        if (policy.Platform != PolicyPlatform.Android)
+        {
+            throw new InvalidOperationException(
+                "La política seleccionada no pertenece a Android.");
+        }
+
+        if (policy.Status == PolicyStatus.Archived)
+        {
+            throw new InvalidOperationException(
+                "La política seleccionada está archivada.");
+        }
+
+        var published =
+            await _dbContext.AndroidPolicyPublications
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.OrganizationId == organizationId &&
+                        x.PolicyId == policy.Id &&
+                        x.PolicyVersion == policy.CurrentVersion &&
+                        x.CompiledPolicyJson != null &&
+                        x.CompiledPolicyJson != "",
+                    cancellationToken);
+
+        if (!published)
+        {
+            throw new InvalidOperationException(
+                "Publique la versión actual de la política antes de usarla en una inscripción.");
+        }
+
+        return policy;
     }
 
     public async Task<
@@ -167,7 +242,8 @@ public sealed class EnrollmentService
                         x.CreatedAtUtc,
                         x.UpdatedAtUtc,
                         x.LastUsedAtUtc,
-                        x.RevokedAtUtc))
+                        x.RevokedAtUtc,
+                        x.AndroidPolicyId))
             .ToArray();
     }
 

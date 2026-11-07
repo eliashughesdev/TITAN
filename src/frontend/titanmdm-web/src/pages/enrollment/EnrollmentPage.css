@@ -1501,3 +1501,52 @@
   color: #475569;
   font-size: 0.85rem;
 }
+
+/* ---------- QR de fábrica (Android Enterprise, 6 toques) ---------- */
+.enrollment-factory-qr {
+  border-color: #a7f3d0;
+  background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);
+}
+
+.enrollment-factory-qr h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #065f46;
+}
+
+.enrollment-factory-qr__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.enrollment-factory-qr__wifi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.enrollment-factory-qr__wifi select {
+  padding: 9px 12px;
+  border: 1px solid #7dd3fc;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 500;
+}
+
+.enrollment-factory-qr__check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #0c4a6e;
+}
+
+.enrollment-factory-qr .enrollment-agent-qr__code img {
+  width: min(420px, 100%);
+}
+
+ul.enrollment-agent-qr__warn {
+  padding-left: 18px;
+}

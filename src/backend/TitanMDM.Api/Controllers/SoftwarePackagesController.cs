@@ -101,21 +101,34 @@ public sealed class SoftwarePackagesController
         await using var stream =
             file.OpenReadStream();
 
-        var result =
-            await _service
-                .UploadPackageAsync(
-                    organizationId.Value,
-                    userId.Value,
-                    new CreateSoftwarePackageRequest(
-                        name,
-                        version,
-                        packageType,
-                        installArguments),
-                    file.FileName,
-                    stream,
-                    cancellationToken);
+        try
+        {
+            var result =
+                await _service
+                    .UploadPackageAsync(
+                        organizationId.Value,
+                        userId.Value,
+                        new CreateSoftwarePackageRequest(
+                            name,
+                            version,
+                            packageType,
+                            installArguments),
+                        file.FileName,
+                        stream,
+                        cancellationToken);
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (InvalidOperationException exception)
+        {
+            // Tipo no permitido, APK ilegible o sin firma, archivo vacío.
+            return BadRequest(
+                new
+                {
+                    message =
+                        exception.Message
+                });
+        }
     }
 
     [HttpPost("{packageId:guid}/deploy")]

@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.PersistableBundle
 import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.config.ServerEndpointStore
+import com.titanmdm.agent.enrollment.auto.AutoEnrollment
+import com.titanmdm.agent.enrollment.auto.ProvisioningConfig
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.service.AgentForegroundService
 
@@ -37,14 +39,29 @@ class TitanDeviceAdminReceiver : DeviceAdminReceiver() {
         fun component(context: Context): ComponentName =
             ComponentName(context.applicationContext, TitanDeviceAdminReceiver::class.java)
 
-        /** Guarda el servidor recibido en ADMIN_EXTRAS_BUNDLE del QR. */
+        /**
+         * ADMIN_EXTRAS_BUNDLE del QR: guarda el servidor y, si trae
+         * enrollment_token, deja programada la inscripción automática.
+         */
         fun applyProvisioningExtras(context: Context, extras: PersistableBundle?) {
-            val serverUrl = extras?.getString("server_url")
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?: return
+            if (extras == null) return
 
-            val normalized = AgentConfig.validateServerUrl(serverUrl).getOrNull() ?: return
+            val config = ProvisioningConfig.from(
+                mapOf(
+                    ProvisioningConfig.KEY_SERVER_URL to extras.getString(ProvisioningConfig.KEY_SERVER_URL),
+                    ProvisioningConfig.KEY_ENROLLMENT_TOKEN to extras.getString(ProvisioningConfig.KEY_ENROLLMENT_TOKEN)
+                )
+            )
+
+            if (config.canAutoEnroll) {
+                AutoEnrollment.accept(context, config)
+                return
+            }
+
+            // Solo servidor: el operador inscribe luego con el QR del agente.
+            val normalized = config.serverUrl
+                ?.let { AgentConfig.validateServerUrl(it).getOrNull() }
+                ?: return
             ServerEndpointStore.init(context)
             ServerEndpointStore.save(normalized)
         }

@@ -232,17 +232,22 @@ export function AppsPage() {
             applicationsApi
               .getDeployments(),
 
-            devicesApi
-              .getDevices({
-                platform:
-                  'Windows',
-
-                page:
-                  1,
-
-                pageSize:
-                  100,
+            // Windows (MSI/EXE/MSIX/APPX) y Android (APK): el API
+            // pagina de 100 en 100, se pide cada plataforma por separado.
+            Promise.all(
+              (['Windows', 'Android'] as const).map(
+                platform =>
+                  devicesApi.getDevices({
+                    platform,
+                    page: 1,
+                    pageSize: 100,
+                  }),
+              ),
+            ).then(
+              results => ({
+                items: results.flatMap(result => result.items),
               }),
+            ),
 
             deviceGroupsApi
               .getAll(),
@@ -750,7 +755,15 @@ export function AppsPage() {
 
                   {targetType ===
                   'Device'
-                    ? devices.map(
+                    ? devices
+                      .filter(
+                        device =>
+                          device.platform ===
+                          (deployPackage?.packageType === 'APK'
+                            ? 'Android'
+                            : 'Windows'),
+                      )
+                      .map(
                         device => (
                           <option
                             key={

@@ -34,6 +34,7 @@ using TitanMDM.Domain.Entities;
 
 using TitanMDM.Infrastructure.Android;
 using TitanMDM.Infrastructure.Android.Policies;
+using TitanMDM.Infrastructure.Android.Provisioning;
 using TitanMDM.Infrastructure.Applications;
 using TitanMDM.Infrastructure.Audit;
 using TitanMDM.Infrastructure.Authentication;
@@ -475,6 +476,22 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IAndroidRemoteActionService,
             AndroidRemoteActionService>();
+
+        // QR de aprovisionamiento (6 toques): APK y checksum del agente.
+        services
+            .AddOptions<
+                AndroidProvisioningOptions>()
+            .Bind(
+                configuration.GetSection(
+                    AndroidProvisioningOptions
+                        .SectionName));
+
+        services.AddHttpClient(
+            nameof(AndroidProvisioningInfoProvider));
+
+        services.AddSingleton<
+            IAndroidProvisioningInfoProvider,
+            AndroidProvisioningInfoProvider>();
 
         // ============================================================
         // SECURITY / COMPLIANCE

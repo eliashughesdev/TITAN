@@ -11,4 +11,5 @@ public sealed record EnrollmentTokenDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     DateTime? LastUsedAtUtc,
-    DateTime? RevokedAtUtc);
+    DateTime? RevokedAtUtc,
+    Guid? AndroidPolicyId = null);

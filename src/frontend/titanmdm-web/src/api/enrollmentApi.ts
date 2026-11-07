@@ -3,6 +3,7 @@ import axios from 'axios'
 import apiClient from './apiClient'
 
 import type {
+  AndroidProvisioningInfo,
   CreateEnrollmentTokenRequest,
   CreatedEnrollmentToken,
   CreateWindowsInstallerRequest,
@@ -34,6 +35,16 @@ export const enrollmentApi = {
       >(
         '/enrollment/tokens',
         request,
+      )
+
+    return response.data
+  },
+
+  async getAndroidProvisioning():
+    Promise<AndroidProvisioningInfo> {
+    const response =
+      await apiClient.get<AndroidProvisioningInfo>(
+        '/enrollment/android/provisioning',
       )
 
     return response.data

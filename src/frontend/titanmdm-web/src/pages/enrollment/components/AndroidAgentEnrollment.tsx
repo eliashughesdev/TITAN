@@ -8,6 +8,7 @@ import {
   getStatusLabel,
 } from '../utils/enrollmentFormatters'
 import { AndroidAgentEnrollmentQr } from './AndroidAgentEnrollmentQr'
+import { AndroidFactoryProvisioningQr } from './AndroidFactoryProvisioningQr'
 
 interface AndroidAgentEnrollmentProps {
   controller:
@@ -32,6 +33,10 @@ export default function AndroidAgentEnrollment({
 
     maxUses,
     setMaxUses,
+
+    androidPolicies,
+    policyId,
+    setPolicyId,
 
     createdToken,
 
@@ -213,6 +218,47 @@ export default function AndroidAgentEnrollment({
             </div>
 
             <div className="enrollment-field">
+              <label htmlFor="androidAgentPolicy">
+                Política al inscribirse
+              </label>
+
+              <select
+                id="androidAgentPolicy"
+                value={policyId}
+                disabled={
+                  creating ||
+                  !canCreate
+                }
+                onChange={(event) =>
+                  setPolicyId(
+                    event.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Sin política automática
+                </option>
+
+                {androidPolicies.map(
+                  (policy) => (
+                    <option
+                      key={policy.id}
+                      value={policy.id}
+                    >
+                      {policy.name} (v{policy.currentVersion})
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <small>
+                El equipo recibe esta política (apps,
+                launcher y restricciones) en cuanto se
+                inscribe. Debe estar publicada.
+              </small>
+            </div>
+
+            <div className="enrollment-field">
               <label htmlFor="androidAgentMaxUses">
                 Usos permitidos
               </label>
@@ -317,6 +363,11 @@ export default function AndroidAgentEnrollment({
                 mostrar el secreto después de
                 abandonar esta vista.
               </div>
+
+              <AndroidFactoryProvisioningQr
+                token={createdToken.token}
+                policyName={createdToken.androidPolicyName}
+              />
 
               <AndroidAgentEnrollmentQr token={createdToken.token} />
 

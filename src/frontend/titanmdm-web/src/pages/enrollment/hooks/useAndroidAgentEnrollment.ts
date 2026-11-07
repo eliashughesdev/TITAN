@@ -5,6 +5,7 @@ import {
 } from 'react'
 
 import { enrollmentApi } from '../../../api/enrollmentApi'
+import { policiesApi, type Policy } from '../../../api/policiesApi'
 
 import type {
   CreatedEnrollmentToken,
@@ -38,6 +39,17 @@ export function useAndroidAgentEnrollment() {
     maxUses,
     setMaxUses,
   ] = useState(1)
+
+  // Política que el servidor asigna al equipo al inscribirse (opcional).
+  const [
+    androidPolicies,
+    setAndroidPolicies,
+  ] = useState<Policy[]>([])
+
+  const [
+    policyId,
+    setPolicyId,
+  ] = useState('')
 
   const [
     createdToken,
@@ -120,10 +132,20 @@ export function useAndroidAgentEnrollment() {
         setLoading(true)
         setError(null)
 
-        const response =
-          await enrollmentApi.getTokens()
+        const [response, policies] =
+          await Promise.all([
+            enrollmentApi.getTokens(),
+            policiesApi.getAll('Android').catch(() => [] as Policy[]),
+          ])
 
         setTokens(response)
+        setAndroidPolicies(
+          policies.filter(
+            (policy) =>
+              policy.platform === 'Android'
+              && policy.status !== 'Archived',
+          ),
+        )
       } catch (requestError) {
         console.error(requestError)
 
@@ -163,6 +185,7 @@ export function useAndroidAgentEnrollment() {
             platform: 'Android',
             expirationMinutes,
             maxUses,
+            androidPolicyId: policyId || null,
           })
 
         setCreatedToken(response)
@@ -187,6 +210,7 @@ export function useAndroidAgentEnrollment() {
     }, [
       expirationMinutes,
       maxUses,
+      policyId,
       loadTokens,
     ])
 
@@ -276,6 +300,10 @@ export function useAndroidAgentEnrollment() {
 
     maxUses,
     setMaxUses,
+
+    androidPolicies,
+    policyId,
+    setPolicyId,
 
     createdToken,
 

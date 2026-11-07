@@ -3,6 +3,7 @@ package com.titanmdm.agent.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.titanmdm.agent.enrollment.auto.AutoEnrollment
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.location.GeofenceRegistrar
 import com.titanmdm.agent.service.AgentForegroundService
@@ -29,6 +30,11 @@ class BootReceiver : BroadcastReceiver() {
                         context.applicationContext
                     )
                 }
+
+                // Inscripción por QR que aún no llegó al servidor.
+                AutoEnrollment.resumeIfPending(
+                    context.applicationContext
+                )
 
                 // El SO olvida las geocercas al reiniciar.
                 GeofenceRegistrar.invalidate(

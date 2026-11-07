@@ -2,6 +2,7 @@ package com.titanmdm.agent
 
 import android.app.Application
 import com.titanmdm.agent.core.config.ServerEndpointStore
+import com.titanmdm.agent.enrollment.auto.AutoEnrollment
 import com.titanmdm.agent.workers.AgentWorkScheduler
 
 class TitanMdmApplication : Application() {
@@ -12,5 +13,6 @@ class TitanMdmApplication : Application() {
         ServerEndpointStore.init(this)
 
         AgentWorkScheduler.schedule(this)
+        AutoEnrollment.resumeIfPending(this)
     }
 }

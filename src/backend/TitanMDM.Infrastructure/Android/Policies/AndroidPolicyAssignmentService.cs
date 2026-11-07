@@ -653,6 +653,15 @@ public sealed class AndroidPolicyAssignmentService
             ExtractAgentLauncherConfiguration(
                 publication.CompiledPolicyJson);
 
+        // Apps obligatorias de la política: el agente descarga e instala
+        // los APK del repositorio de software (Device Owner, silencioso).
+        var applications =
+            await AgentApplicationPlanner.BuildAsync(
+                _dbContext,
+                organizationId,
+                publication.CompiledPolicyJson,
+                cancellationToken);
+
         var assignment =
             await _dbContext.DevicePolicyAssignments
                 .SingleOrDefaultAsync(
@@ -704,7 +713,10 @@ public sealed class AndroidPolicyAssignmentService
                 ["publicationId"] =
                     publication.Id.ToString("D"),
                 ["launcher"] =
-                    launcherConfiguration
+                    launcherConfiguration,
+
+                ["applications"] =
+                    applications
             };
 
         var command =
@@ -728,13 +740,14 @@ public sealed class AndroidPolicyAssignmentService
             "Android policy queued for TitanMDM Agent. " +
             "OrganizationId={OrganizationId}, PolicyId={PolicyId}, " +
             "PolicyVersion={PolicyVersion}, DeviceId={DeviceId}, " +
-            "CommandId={CommandId}, HasLauncher={HasLauncher}",
+            "CommandId={CommandId}, HasLauncher={HasLauncher}, Applications={Applications}",
             organizationId,
             policy.Id,
             policy.CurrentVersion,
             deviceId,
             command.Id,
-            launcherConfiguration is not null);
+            launcherConfiguration is not null,
+            applications.Count);
 
         return MapAgentAssignment(
             assignment,

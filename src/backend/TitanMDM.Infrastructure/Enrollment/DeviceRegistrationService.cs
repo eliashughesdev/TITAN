@@ -2,7 +2,10 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
+using TitanMDM.Application.Android.Policies;
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Enrollment.DeviceRegistration;
 using TitanMDM.Domain.Entities;
@@ -24,15 +27,30 @@ public sealed class DeviceRegistrationService
     private readonly IAutomationEventDispatcher
         _automation;
 
+    private readonly IAndroidPolicyAssignmentService?
+        _androidPolicies;
+
+    private readonly ILogger<DeviceRegistrationService>
+        _logger;
+
     public DeviceRegistrationService(
         TitanMdmDbContext dbContext,
-        IAutomationEventDispatcher automation)
+        IAutomationEventDispatcher automation,
+        IAndroidPolicyAssignmentService? androidPolicies = null,
+        ILogger<DeviceRegistrationService>? logger = null)
     {
         _dbContext =
             dbContext;
 
         _automation =
             automation;
+
+        _androidPolicies =
+            androidPolicies;
+
+        _logger =
+            logger ??
+            NullLogger<DeviceRegistrationService>.Instance;
     }
 
     public async Task<RegisterDeviceResultDto>
@@ -56,7 +74,10 @@ public sealed class DeviceRegistrationService
                 .Database
                 .CreateExecutionStrategy();
 
-        return await executionStrategy
+        EnrollmentToken? usedToken = null;
+
+        var registration =
+            await executionStrategy
             .ExecuteAsync(
                 async () =>
                 {
@@ -88,6 +109,9 @@ public sealed class DeviceRegistrationService
                         ValidateEnrollmentToken(
                             enrollmentToken,
                             request.Platform);
+
+                        usedToken =
+                            enrollmentToken;
 
                         var serialNumber =
                             request.SerialNumber
@@ -145,6 +169,67 @@ public sealed class DeviceRegistrationService
                         throw;
                     }
                 });
+
+        await AssignEnrollmentPolicyAsync(
+            usedToken,
+            registration,
+            cancellationToken);
+
+        return registration;
+    }
+
+    // ============================================================
+    // AUTO POLICY (QR de aprovisionamiento sin intervención)
+    // ============================================================
+
+    /// <summary>
+    /// Si la credencial lleva una política Android, se asigna al equipo
+    /// recién inscrito (o recuperado tras un restablecimiento de fábrica).
+    /// Un fallo no revierte la inscripción: el equipo queda administrado
+    /// y la política puede reasignarse desde la consola.
+    /// </summary>
+    private async Task AssignEnrollmentPolicyAsync(
+        EnrollmentToken? token,
+        RegisterDeviceResultDto registration,
+        CancellationToken cancellationToken)
+    {
+        if (token?.AndroidPolicyId is not Guid policyId ||
+            token.Platform != DevicePlatform.Android)
+        {
+            return;
+        }
+
+        if (_androidPolicies is null)
+        {
+            _logger.LogWarning(
+                "Enrollment policy not assigned: Android policy service unavailable. DeviceId={DeviceId}",
+                registration.DeviceId);
+            return;
+        }
+
+        try
+        {
+            await _androidPolicies.AssignAsync(
+                token.OrganizationId,
+                policyId,
+                registration.DeviceId,
+                null,
+                cancellationToken,
+                token.CreatedByUserId);
+
+            _logger.LogInformation(
+                "Enrollment policy queued. DeviceId={DeviceId}, PolicyId={PolicyId}",
+                registration.DeviceId,
+                policyId);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogError(
+                exception,
+                "Enrollment policy could not be assigned. DeviceId={DeviceId}, PolicyId={PolicyId}",
+                registration.DeviceId,
+                policyId);
+        }
     }
 
     // ============================================================

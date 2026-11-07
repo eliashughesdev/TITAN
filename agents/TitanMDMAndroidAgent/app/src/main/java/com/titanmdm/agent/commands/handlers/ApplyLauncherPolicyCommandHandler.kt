@@ -1,6 +1,8 @@
 package com.titanmdm.agent.commands.handlers
 
 import android.content.Context
+import com.titanmdm.agent.apps.install.PolicyApp
+import com.titanmdm.agent.apps.install.PolicyAppInstaller
 import com.titanmdm.agent.commands.CommandExecutionResult
 import com.titanmdm.agent.core.network.DeviceCommandDto
 import com.titanmdm.agent.kiosk.KioskController
@@ -24,7 +26,12 @@ import kotlinx.serialization.json.put
  * un equipo inscrito por el agente (sin Android Enterprise).
  *
  * Payload: { assignmentId, policyId, policyName, policyVersion,
- *            publicationId, launcher: { titan_*: ... } | null }
+ *            publicationId, launcher: { titan_*: ... } | null,
+ *            applications: [{ packageName, installType, available,
+ *                             downloadUrl, sha256, versionCode }] }
+ *
+ * Las apps obligatorias se descargan del repositorio de software del
+ * servidor y se instalan en silencio (Device Owner).
  *
  * "launcher" usa las mismas claves que la managed configuration de
  * Google; null significa que la política no incluye Titan Launcher y
@@ -67,6 +74,8 @@ class ApplyLauncherPolicyCommandHandler(
         // Bloqueos de la política (HOME, barra de estado, teclas).
         val kiosk = runCatching { KioskController.apply(context) }.getOrNull()
 
+        val apps = PolicyAppInstaller(context).apply(PolicyApp.parseList(payload["applications"]))
+
         val result = buildJsonObject {
             put("commandId", command.commandId)
             put("commandType", COMMAND_TYPE)
@@ -81,7 +90,17 @@ class ApplyLauncherPolicyCommandHandler(
                 put("systemKeysLocked", it.systemKeysLocked)
                 put("defaultHome", it.defaultHome)
             }
+            put("applications", apps.toJson())
             put("appliedAtUtc", System.currentTimeMillis())
+        }
+
+        if (!apps.allSatisfied) {
+            val detail = apps.failures().joinToString("; ") { "${it.packageName}: ${it.message ?: it.code}" }
+            return CommandExecutionResult.Failure(
+                errorCode = "POLICY_APPS_FAILED",
+                errorMessage = "Política aplicada, pero faltan apps: $detail",
+                resultJson = result.toString()
+            )
         }
 
         return CommandExecutionResult.Success(resultJson = result.toString())

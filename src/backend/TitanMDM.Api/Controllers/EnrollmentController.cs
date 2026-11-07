@@ -15,12 +15,40 @@ public sealed class EnrollmentController : ControllerBase
     _deviceRegistrationService;
     private readonly IEnrollmentService _enrollmentService;
 
+    private readonly IAndroidProvisioningInfoProvider? _androidProvisioning;
+
     public EnrollmentController(
       IEnrollmentService enrollmentService,
-      IDeviceRegistrationService deviceRegistrationService)
+      IDeviceRegistrationService deviceRegistrationService,
+      IAndroidProvisioningInfoProvider? androidProvisioning = null)
     {
         _enrollmentService = enrollmentService;
         _deviceRegistrationService = deviceRegistrationService;
+        _androidProvisioning = androidProvisioning;
+    }
+
+    /// <summary>
+    /// APK y checksum de firma del TitanMDM Agent para el QR de
+    /// aprovisionamiento de fábrica (Android Enterprise, 6 toques).
+    /// </summary>
+    [Authorize]
+    [HttpGet("android/provisioning")]
+    public async Task<IActionResult> GetAndroidProvisioning(
+        CancellationToken cancellationToken = default)
+    {
+        if (_androidProvisioning is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        try
+        {
+            return Ok(await _androidProvisioning.GetAsync(cancellationToken));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = exception.Message });
+        }
     }
 
     [Authorize]

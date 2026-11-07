@@ -64,6 +64,13 @@ object TitanApiClient {
             .retryOnConnectionFailure(true)
             .build()
 
+    /** Descargas grandes (APK de la política): mismo cliente, más tiempo de lectura. */
+    val downloadClient: OkHttpClient by lazy {
+        httpClient.newBuilder()
+            .readTimeout(5, TimeUnit.MINUTES)
+            .build()
+    }
+
     /*
      * El servidor puede cambiar al inscribir por QR: el cliente se
      * reconstruye cuando la URL activa difiere de la cacheada.

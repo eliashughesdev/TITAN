@@ -8,4 +8,6 @@ public sealed record CreatedEnrollmentTokenDto(
     int MaxUses,
     int UsedCount,
     DateTime ExpiresAtUtc,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    Guid? AndroidPolicyId = null,
+    string? AndroidPolicyName = null);
