@@ -23,6 +23,7 @@ export type FleetLocationState =
 export interface FleetLocation {
   deviceId: string
   deviceName: string
+  alias: string | null
   platform: 'Android'
   manufacturer: string | null
   model: string | null

@@ -12,7 +12,9 @@ internal static class DeviceCommandMapper
             command.OrganizationId,
             command.DeviceId,
             command.CommandType,
-            command.PayloadJson,
+            CommandPayloadRedactor.Redact(
+                command.CommandType,
+                command.PayloadJson),
             command.Status.ToString(),
             command.CreatedByUserId,
             command.CreatedAtUtc,

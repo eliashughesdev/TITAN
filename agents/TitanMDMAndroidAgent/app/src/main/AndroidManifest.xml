@@ -143,6 +143,16 @@
             android:turnScreenOn="true"
             android:theme="@android:style/Theme.Black.NoTitleBar" />
 
+        <!-- Bloqueo remoto: mensaje persistente sobre la pantalla bloqueada. -->
+        <activity
+            android:name=".lock.LockMessageActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar" />
+
         <!-- Aprovisionamiento por QR (Android 10+): el asistente exige estas dos acciones. -->
         <activity
             android:name=".admin.ProvisioningActivity"

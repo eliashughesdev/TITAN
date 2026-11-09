@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.titanmdm.agent.enrollment.auto.AutoEnrollment
 import com.titanmdm.agent.kiosk.KioskController
+import com.titanmdm.agent.lock.LockScreenController
 import com.titanmdm.agent.location.GeofenceRegistrar
 import com.titanmdm.agent.service.AgentForegroundService
 import com.titanmdm.agent.workers.AgentWorkScheduler
@@ -27,6 +28,13 @@ class BootReceiver : BroadcastReceiver() {
                 // Modo kiosco (solo efectivo con Device Owner).
                 runCatching {
                     KioskController.apply(
+                        context.applicationContext
+                    )
+                }
+
+                // Modo extravío: el mensaje vuelve a mostrarse tras reiniciar.
+                runCatching {
+                    LockScreenController.restore(
                         context.applicationContext
                     )
                 }

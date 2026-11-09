@@ -29,6 +29,8 @@ import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.titanmdm.agent.BuildConfig
+import com.titanmdm.agent.apps.install.RequiredAppsReconciler
+import com.titanmdm.agent.apps.install.TitanServerAppStore
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.service.AgentForegroundService
 import com.titanmdm.agent.ui.theme.TitanMDMAndroidAgentTheme
@@ -53,6 +55,8 @@ class TitanLauncherActivity : ComponentActivity() {
     private var logo by mutableStateOf<ImageBitmap?>(null)
     private var syncStatus by mutableStateOf("Sin sincronizar")
     private var resourceJob: Job? = null
+    private var installJob: Job? = null
+    private var autoInstallJob: Job? = null
     private var policyOrigin = TitanLauncherPolicyOrigin.None
     private var deviceStatus by mutableStateOf(TitanDeviceStatus())
 
@@ -75,6 +79,7 @@ class TitanLauncherActivity : ComponentActivity() {
                         // Nueva política: bloqueos y apps permitidas.
                         runCatching { KioskController.apply(this@TitanLauncherActivity) }
                         refresh()
+                        autoInstallRequiredApps()
                         syncLockTask()
                     }
                 }
@@ -165,6 +170,7 @@ class TitanLauncherActivity : ComponentActivity() {
         AgentForegroundService.start(this)
 
         refresh()
+        autoInstallRequiredApps()
     }
 
     override fun onResume() {
@@ -382,11 +388,38 @@ class TitanLauncherActivity : ComponentActivity() {
     }
 
     /**
-     * App autorizada pero no instalada: abre su ficha en la tienda del
-     * equipo (Play Store / tienda Honeywell). Sin tienda, avisa al operador.
+     * App autorizada pero no instalada: instala en silencio el APK de la
+     * política si el agente es Device Owner. Si no hay APK en el
+     * repositorio, abre la ficha de la tienda como respaldo.
      */
     private fun requestInstall(packageName: String) {
         if (policy.applications.none { it.packageName == packageName }) return
+
+        val app = TitanServerAppStore.read(this)
+            .firstOrNull { it.packageName == packageName && it.available }
+
+        if (app != null) {
+            installJob?.cancel()
+            installJob = lifecycleScope.launch {
+                Toast.makeText(
+                    this@TitanLauncherActivity,
+                    "Instalando $packageName...",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                val result = RequiredAppsReconciler.installOne(this@TitanLauncherActivity, packageName)
+                refresh()
+
+                val message = if (result?.success == true) {
+                    "$packageName instalada correctamente."
+                } else {
+                    "No se pudo instalar $packageName: " +
+                        (result?.message ?: result?.code ?: "error desconocido")
+                }
+                Toast.makeText(this@TitanLauncherActivity, message, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
 
         val intents = listOf(
             Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri()),
@@ -410,6 +443,17 @@ class TitanLauncherActivity : ComponentActivity() {
             "Solicite a TI la instalación de $packageName.",
             Toast.LENGTH_LONG
         ).show()
+    }
+
+    /** Apps obligatorias pendientes: mismo reintento que el servicio, sin esperar al ciclo. */
+    private fun autoInstallRequiredApps() {
+        if (RequiredAppsReconciler.pending(this).isEmpty()) return
+
+        autoInstallJob?.cancel()
+        autoInstallJob = lifecycleScope.launch {
+            RequiredAppsReconciler.reconcile(this@TitanLauncherActivity)
+            refresh()
+        }
     }
 
     private fun readHomeStatus(): TitanLauncherHomeStatus {

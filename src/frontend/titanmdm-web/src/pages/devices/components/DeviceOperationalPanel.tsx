@@ -2,6 +2,7 @@ import {
   Activity,
   BellRing,
   LockKeyhole,
+  LockKeyholeOpen,
   CheckCircle2,
   Layers3,
   RefreshCw,
@@ -53,6 +54,13 @@ import {
 import {
   formatDate,
 } from './operational/deviceOperational.utils'
+
+import {
+  LockDeviceModal,
+  type LockDeviceForm,
+} from './LockDeviceModal'
+
+import { deviceDisplayName } from './deviceAlias'
 
 import './DeviceOperationalPanel.css'
 
@@ -363,6 +371,11 @@ export function DeviceOperationalPanel({
     useState(true)
 
   const [
+    lockOpen,
+    setLockOpen,
+  ] = useState(false)
+
+  const [
     working,
     setWorking,
   ] =
@@ -443,6 +456,7 @@ export function DeviceOperationalPanel({
   async function execute(
     commandType: string,
     payloadJson = '{}',
+    expirationMinutes = 30,
   ): Promise<void> {
     if (working) {
       return
@@ -462,8 +476,7 @@ export function DeviceOperationalPanel({
             deviceId,
             commandType,
             payloadJson,
-            expirationMinutes:
-              30,
+            expirationMinutes,
           })
 
       const result =
@@ -913,17 +926,17 @@ export function DeviceOperationalPanel({
               </strong>
 
               <span>
-                Apaga y bloquea la pantalla al instante.
+                Modo extravío: PIN temporal y mensaje corporativo.
               </span>
             </div>
           </header>
 
           <div className="device-op-alarm-body">
             <p>
-              El agente ejecuta el bloqueo del sistema
-              (requiere TitanMDM Agent como administrador del
-              equipo). Se desbloquea con el PIN o patrón del
-              dispositivo, si tiene.
+              El agente bloquea la pantalla. Con PIN o mensaje, el
+              equipo queda en modo extravío (requiere Device Owner):
+              el mensaje aparece en la pantalla de bloqueo, sobrevive
+              a reinicios y solo se retira con "Quitar bloqueo y PIN".
             </p>
 
             <button
@@ -932,17 +945,7 @@ export function DeviceOperationalPanel({
               disabled={
                 Boolean(working)
               }
-              onClick={() => {
-                if (
-                  window.confirm(
-                    '¿Bloquear la pantalla del dispositivo ahora?',
-                  )
-                ) {
-                  void execute(
-                    'LOCK_DEVICE',
-                  )
-                }
-              }}
+              onClick={() => setLockOpen(true)}
             >
               <LockKeyhole
                 size={16}
@@ -952,6 +955,34 @@ export function DeviceOperationalPanel({
               'LOCK_DEVICE'
                 ? 'Bloqueando...'
                 : 'Bloquear pantalla'}
+            </button>
+
+            <button
+              type="button"
+              className="device-op-alarm-button device-op-alarm-button--secondary"
+              disabled={
+                Boolean(working)
+              }
+              onClick={() => {
+                if (
+                  window.confirm(
+                    '¿Quitar el modo extravío? Se retiran el mensaje y el PIN temporal del equipo.',
+                  )
+                ) {
+                  void execute(
+                    'UNLOCK_DEVICE',
+                  )
+                }
+              }}
+            >
+              <LockKeyholeOpen
+                size={16}
+              />
+
+              {working ===
+              'UNLOCK_DEVICE'
+                ? 'Quitando bloqueo...'
+                : 'Quitar bloqueo y PIN'}
             </button>
           </div>
         </article>
@@ -1065,6 +1096,32 @@ export function DeviceOperationalPanel({
           />
         </>
       )}
+      <LockDeviceModal
+        open={lockOpen}
+        busy={working === 'LOCK_DEVICE'}
+        deviceName={
+          snapshot
+            ? deviceDisplayName(snapshot.device)
+            : undefined
+        }
+        onCancel={() => setLockOpen(false)}
+        includePhone
+        onConfirm={(form: LockDeviceForm) => {
+          setLockOpen(false)
+          const payload: Record<string, string> = {}
+          if (form.pin) payload.pin = form.pin
+          if (form.message) payload.message = form.message
+          if (form.phone) payload.phone = form.phone
+          const lostMode = Boolean(form.pin || form.message)
+          // Modo extravío: el comando espera hasta 24 h a que el equipo
+          // se reconecte; el bloqueo simple caduca en 2 min (backend).
+          void execute(
+            'LOCK_DEVICE',
+            JSON.stringify(payload),
+            lostMode ? 1440 : 30,
+          )
+        }}
+      />
     </section>
   )
 }

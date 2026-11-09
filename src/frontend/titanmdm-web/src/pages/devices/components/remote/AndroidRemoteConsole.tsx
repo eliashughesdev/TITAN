@@ -69,6 +69,11 @@ import type {
 } from './androidRemoteConsole.types'
 
 import {
+  LockDeviceModal,
+  type LockDeviceForm,
+} from '../LockDeviceModal'
+
+import {
   actionLabel,
   androidActionCatalog,
   auditResultToCommandState,
@@ -133,6 +138,7 @@ export function AndroidRemoteConsole({
   const [syncing, setSyncing] = useState(false)
   const [busyAction, setBusyAction] =
     useState<AndroidRemoteAction | null>(null)
+  const [lockOpen, setLockOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [diagnosticsError, setDiagnosticsError] =
     useState<string | null>(null)
@@ -252,7 +258,10 @@ export function AndroidRemoteConsole({
     }
   }
 
-  async function execute(action: AndroidRemoteAction) {
+  async function execute(
+    action: AndroidRemoteAction,
+    preset?: AndroidRemoteActionRequest,
+  ) {
     if (!canExecute || busyAction) return
 
     const view = findCapability(capabilities, action)
@@ -262,11 +271,16 @@ export function AndroidRemoteConsole({
       return
     }
 
+    if (action === 'lock' && !preset) {
+      setLockOpen(true)
+      return
+    }
+
     const definition = androidActionCatalog.find(
       item => item.action === action,
     )
 
-    const request: AndroidRemoteActionRequest = { action }
+    const request: AndroidRemoteActionRequest = preset ?? { action }
 
     if (action === 'reset-password') {
       const password = window.prompt(
@@ -311,6 +325,7 @@ export function AndroidRemoteConsole({
         return
       }
     } else if (
+      action !== 'lock' &&
       !window.confirm(
         `¿Confirmas "${definition?.label ?? action}" sobre ${target}?`,
       )
@@ -539,6 +554,22 @@ export function AndroidRemoteConsole({
           </section>
         </aside>
       </div>
+
+      <LockDeviceModal
+        open={lockOpen}
+        busy={busyAction === 'lock'}
+        includePhone
+        deviceName={deviceName}
+        onCancel={() => setLockOpen(false)}
+        onConfirm={(form: LockDeviceForm) => {
+          setLockOpen(false)
+          const request: AndroidRemoteActionRequest = { action: 'lock' }
+          if (form.pin) request.newPassword = form.pin
+          if (form.message) request.lostModeMessage = form.message
+          if (form.phone) request.lostModePhoneNumber = form.phone
+          void execute('lock', request)
+        }}
+      />
     </section>
   )
 }

@@ -752,6 +752,13 @@ public sealed class AndroidPolicyCompiler
                     "AVAILABLE")
                     .ToUpperInvariant();
 
+            // Alias funcional solicitado por operaciones: la API de Google
+            // solo entiende FORCE_INSTALLED para instalación forzada.
+            if (installType == "REQUIRED_FOR_INSTALL")
+            {
+                installType = "FORCE_INSTALLED";
+            }
+
             if (installType is not
                 ("AVAILABLE"
                  or "FORCE_INSTALLED"

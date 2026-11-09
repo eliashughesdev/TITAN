@@ -78,10 +78,16 @@ public sealed class DeviceCommandService
                 "El dispositivo no existe o no pertenece a la organización.");
         }
 
+        // Un bloqueo por extravío (PIN o mensaje) debe llegar aunque el
+        // equipo tarde en reconectarse; el bloqueo simple caduca pronto.
         var expirationMinutes =
-            GetEffectiveExpirationMinutes(
+            CommandPayloadRedactor.IsLostModeLock(
                 request.CommandType,
-                request.ExpirationMinutes);
+                request.PayloadJson)
+                ? request.ExpirationMinutes
+                : GetEffectiveExpirationMinutes(
+                    request.CommandType,
+                    request.ExpirationMinutes);
 
         var expiresAtUtc =
             DateTime.UtcNow.AddMinutes(

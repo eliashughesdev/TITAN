@@ -219,11 +219,22 @@ describe('AndroidRemoteConsole', () => {
 
     await waitFor(() => expect(lockButton).toBeEnabled())
     fireEvent.click(lockButton)
+    fireEvent.change(screen.getByLabelText('PIN temporal'), {
+      target: { value: '1234' },
+    })
+    fireEvent.change(screen.getByLabelText('Mensaje en pantalla'), {
+      target: { value: 'Contacte a TI' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Bloquear ahora' }))
 
     await waitFor(() =>
       expect(
         androidEnterpriseApi.executeDeviceAction,
-      ).toHaveBeenCalledWith('device-1', { action: 'lock' }),
+      ).toHaveBeenCalledWith('device-1', {
+        action: 'lock',
+        newPassword: '1234',
+        lostModeMessage: 'Contacte a TI',
+      }),
     )
 
     expect(
@@ -250,6 +261,7 @@ describe('AndroidRemoteConsole', () => {
 
     await waitFor(() => expect(lockButton).toBeEnabled())
     fireEvent.click(lockButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Bloquear ahora' }))
 
     expect(
       await screen.findByText('Fallido'),

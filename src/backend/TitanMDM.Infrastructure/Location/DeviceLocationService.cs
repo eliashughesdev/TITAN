@@ -547,6 +547,12 @@ public sealed class DeviceLocationService
                     x.Device.DeviceName
                         .ToLower()
                         .Contains(search) ||
+                    (x.Device.Alias ?? "")
+                        .ToLower()
+                        .Contains(search) ||
+                    (x.Device.Model ?? "")
+                        .ToLower()
+                        .Contains(search) ||
                     (x.Device.Manufacturer ?? "")
                         .ToLower()
                         .Contains(search));
@@ -994,6 +1000,7 @@ public sealed class DeviceLocationService
         return new FleetLocationDto(
             device.Id,
             device.DeviceName,
+            device.Alias,
             device.Platform.ToString(),
             device.Manufacturer,
             device.Model,

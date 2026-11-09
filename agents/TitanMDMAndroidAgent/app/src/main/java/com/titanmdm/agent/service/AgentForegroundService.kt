@@ -27,6 +27,7 @@ import androidx.core.net.toUri
 import com.titanmdm.agent.MainActivity
 import com.titanmdm.agent.commands.CommandRepository
 import com.titanmdm.agent.core.storage.AgentIdentityStore
+import com.titanmdm.agent.apps.install.RequiredAppsReconciler
 import com.titanmdm.agent.heartbeat.HeartbeatRepository
 import com.titanmdm.agent.heartbeat.HeartbeatResult
 import com.titanmdm.agent.receivers.HeartbeatWatchdogReceiver
@@ -103,6 +104,12 @@ class AgentForegroundService : Service() {
 
             when (synchronize(heartbeat, commands)) {
                 SyncOutcome.Success -> {
+                    // Apps obligatorias que no se pudieron instalar al
+                    // recibir la política (red, descarga): reintento
+                    // desatendido con espera mínima entre intentos.
+                    runCatching { RequiredAppsReconciler.reconcile(applicationContext) }
+                        .onFailure { Log.w(TAG, "Reintento de apps obligatorias falló.", it) }
+
                     if (cycle % LOCATION_EVERY_CYCLES == 0) {
                         runCatching {
                             AgentWorkScheduler.reportLocationNow(applicationContext)

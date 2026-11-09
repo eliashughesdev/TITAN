@@ -906,6 +906,12 @@ button:disabled {
   color: #fff !important;
 }
 
+.device-op-alarm-button--secondary {
+  border-color: #475569 !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
 .device-op-alarm-button:disabled {
   opacity: .6;
   cursor: wait;

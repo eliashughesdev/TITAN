@@ -2,7 +2,8 @@ package com.titanmdm.agent.commands.handlers
 
 import android.content.Context
 import com.titanmdm.agent.apps.install.PolicyApp
-import com.titanmdm.agent.apps.install.PolicyAppInstaller
+import com.titanmdm.agent.apps.install.RequiredAppsReconciler
+import com.titanmdm.agent.apps.install.TitanServerAppStore
 import com.titanmdm.agent.commands.CommandExecutionResult
 import com.titanmdm.agent.core.network.DeviceCommandDto
 import com.titanmdm.agent.kiosk.KioskController
@@ -70,11 +71,12 @@ class ApplyLauncherPolicyCommandHandler(
         }
 
         TitanServerLauncherStore.save(context, restrictions)
+        TitanServerAppStore.save(context, payload["applications"])
 
         // Bloqueos de la política (HOME, barra de estado, teclas).
         val kiosk = runCatching { KioskController.apply(context) }.getOrNull()
 
-        val apps = PolicyAppInstaller(context).apply(PolicyApp.parseList(payload["applications"]))
+        val apps = RequiredAppsReconciler.install(context, PolicyApp.parseList(payload["applications"]))
 
         val result = buildJsonObject {
             put("commandId", command.commandId)

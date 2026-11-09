@@ -1,0 +1,107 @@
+.lock-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.lock-modal {
+  width: min(520px, 100%);
+  border: 1px solid var(--titan-border, #e2e8f0);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+}
+
+.lock-modal > header {
+  padding: 15px 17px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--titan-border, #e2e8f0);
+}
+
+.lock-modal h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.lock-modal > header span {
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.lock-modal > header button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.lock-form {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lock-form p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.lock-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lock-form label span {
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.lock-form input,
+.lock-form textarea {
+  padding: 10px 11px;
+  border: 1px solid var(--titan-border, #e2e8f0);
+  border-radius: 9px;
+  font: inherit;
+}
+
+.lock-form footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lock-form footer button {
+  height: 36px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--titan-border, #e2e8f0);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.lock-form footer .danger {
+  border-color: rgba(217, 76, 99, 0.25);
+  background: #fff1f3;
+  color: #b43d51;
+}
+
+.lock-form-error {
+  color: #a93448;
+}

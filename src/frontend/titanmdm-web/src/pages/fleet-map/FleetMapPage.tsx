@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import {
   CircleMarker,
+  Tooltip,
   MapContainer,
   TileLayer,
   useMap,
@@ -42,6 +43,7 @@ import {
   type FleetLocationFilters,
   type FleetLocationState,
 } from '../../api/locationApi'
+import { deviceDisplayName } from '../devices/components/deviceAlias'
 import { getActiveProvider } from '../../config/mapConfig'
 import 'leaflet/dist/leaflet.css'
 import './FleetMapPage.css'
@@ -542,7 +544,7 @@ export function FleetMapPage() {
                         style={{ backgroundColor: markerColorFor(location) }}
                       />
                       <span className="fleet-device-name">
-                        {location.deviceName}
+                        {deviceDisplayName(location)}
                       </span>
                       <span className="fleet-device-state">
                         {LOCATION_STATE_LABELS[location.locationState]}
@@ -581,7 +583,9 @@ export function FleetMapPage() {
                   eventHandlers={{
                     click: () => setSelectedDeviceId(location.deviceId),
                   }}
-                />
+                >
+                  <Tooltip>{deviceDisplayName(location)}</Tooltip>
+                </CircleMarker>
               ))}
             </MapContainer>
 
@@ -629,7 +633,7 @@ export function FleetMapPage() {
                     size={20}
                     color={markerColorFor(selectedDevice)}
                   />
-                  <h3>{selectedDevice.deviceName}</h3>
+                  <h3>{deviceDisplayName(selectedDevice)}</h3>
                 </div>
 
                 <div className="fleet-device-card__body">

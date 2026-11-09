@@ -228,10 +228,58 @@ public sealed class AndroidRemoteActionService
         switch (action)
         {
             case AndroidRemoteActionType.Lock:
-                return NameOf(
-                    await _client.LockDeviceAsync(
-                        deviceName,
-                        cancellationToken));
+            {
+                string? commandName = null;
+
+                // PIN temporal: se aplica antes de bloquear para que el
+                // operador pueda recuperar el equipo con esa credencial.
+                if (!string.IsNullOrWhiteSpace(
+                        request.NewPassword))
+                {
+                    commandName = NameOf(
+                        await _client.ResetPasswordAsync(
+                            deviceName,
+                            request.NewPassword.Trim(),
+                            cancellationToken));
+                }
+
+                // Mensaje corporativo: Managed Play lo muestra en modo
+                // perdido, que además mantiene el equipo bloqueado.
+                if (!string.IsNullOrWhiteSpace(
+                        request.LostModeMessage))
+                {
+                    var lostMode =
+                        new JsonObject
+                        {
+                            ["type"] =
+                                "START_LOST_MODE",
+                            ["lostModeMessage"] =
+                                request.LostModeMessage.Trim()
+                        };
+
+                    if (!string.IsNullOrWhiteSpace(
+                            request.LostModePhoneNumber))
+                    {
+                        lostMode["lostModePhoneNumber"] =
+                            request.LostModePhoneNumber.Trim();
+                    }
+
+                    commandName = NameOf(
+                        await _client.StartLostModeAsync(
+                            deviceName,
+                            lostMode,
+                            cancellationToken));
+                }
+                else
+                {
+                    commandName = NameOf(
+                        await _client.LockDeviceAsync(
+                            deviceName,
+                            cancellationToken));
+                }
+
+                return commandName;
+            }
 
             case AndroidRemoteActionType.Reboot:
                 return NameOf(

@@ -23,6 +23,7 @@ vi.mock('./apiClient', () => ({
 const baseFleetRow: FleetLocation = {
   deviceId: 'device-1',
   deviceName: 'Tablet Alfa',
+  alias: null,
   platform: 'Android',
   manufacturer: 'Samsung',
   model: 'Tab A9',

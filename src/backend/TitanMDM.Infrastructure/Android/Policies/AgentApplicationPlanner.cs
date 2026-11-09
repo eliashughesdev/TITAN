@@ -25,6 +25,7 @@ public static class AgentApplicationPlanner
         new(StringComparer.OrdinalIgnoreCase)
         {
             "FORCE_INSTALLED",
+            "REQUIRED_FOR_INSTALL",
             "REQUIRED_FOR_SETUP",
             "PREINSTALLED",
             "KIOSK",

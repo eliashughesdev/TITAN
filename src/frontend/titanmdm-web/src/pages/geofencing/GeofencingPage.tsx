@@ -46,6 +46,8 @@ import type {
   DeviceListItem,
 } from '../../types/device'
 
+import { deviceDisplayName } from '../devices/components/deviceAlias'
+
 import { useAuth } from '../../auth/AuthContext'
 import { Permissions } from '../../auth/permissions'
 import { getActiveProvider } from '../../config/mapConfig'
@@ -416,6 +418,12 @@ export function GeofencingPage() {
       return devices.filter(
         (device) =>
           device.deviceName
+            .toLowerCase()
+            .includes(value) ||
+          (device.alias ?? '')
+            .toLowerCase()
+            .includes(value) ||
+          (device.model ?? '')
             .toLowerCase()
             .includes(value) ||
           device.serialNumber
@@ -1438,7 +1446,7 @@ export function GeofencingPage() {
 
                   <div>
                     <strong>
-                      {device.deviceName}
+                      {deviceDisplayName(device)}
                     </strong>
 
                     <span>
@@ -1448,7 +1456,9 @@ export function GeofencingPage() {
                     </span>
 
                     <small>
-                      {device.serialNumber}
+                      {device.alias?.trim()
+                        ? `${device.deviceName} · ${device.serialNumber}`
+                        : device.serialNumber}
                     </small>
                   </div>
                 </label>

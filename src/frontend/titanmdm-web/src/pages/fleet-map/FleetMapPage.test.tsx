@@ -55,6 +55,9 @@ vi.mock('react-leaflet', () => ({
   }) => (
     <div data-testid="fleet-marker" data-center={center.join(',')} />
   ),
+  Tooltip: ({ children }: { children?: ReactNode }) => (
+    <span data-testid="fleet-tooltip">{children}</span>
+  ),
   useMap: () => map,
 }))
 
@@ -89,6 +92,7 @@ function fleetRow(
   return {
     deviceId: 'device-1',
     deviceName: 'Tablet Alfa',
+    alias: null,
     platform: 'Android',
     manufacturer: 'Samsung',
     model: 'Tab A9',
@@ -173,6 +177,21 @@ describe('FleetMapPage ANDROID-FIX-02', () => {
       'data-center',
       '-34.6037,-58.3816',
     )
+  })
+
+  it('shows the device alias instead of the system name', async () => {
+    vi.mocked(locationApi.getFleet).mockResolvedValue([
+      fleetRow({ alias: 'Tablet Bodega' }),
+    ])
+
+    renderMap()
+
+    expect(
+      await screen.findByText('Tablet Bodega'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Tablet Alfa'),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the Android enrollment empty state', async () => {

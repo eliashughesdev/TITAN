@@ -706,14 +706,23 @@ public sealed class SoftwareDeploymentService
 
         /*
          * Solo permitimos la descarga si existe
-         * un comando SOFTWARE_INSTALL para ese
-         * dispositivo que referencia este packageId.
+         * un comando del dispositivo que referencia
+         * este packageId.
+         *
+         * SOFTWARE_INSTALL es una autorización puntual.
+         * APPLY_LAUNCHER_POLICY se conserva como
+         * autorización de la política asignada durante
+         * 30 días para que el launcher pueda reintentar
+         * la instalación silenciosa sin intervención.
          *
          * Esto evita que un agente autenticado pueda
          * descargar paquetes arbitrarios del tenant.
          */
         var packageIdText =
             packageId.ToString();
+
+        var now =
+            DateTime.UtcNow;
 
         var authorized =
             await _dbContext
@@ -727,17 +736,22 @@ public sealed class SoftwareDeploymentService
                         x.OrganizationId ==
                             device.OrganizationId
                         &&
-                        (x.CommandType ==
-                            "SOFTWARE_INSTALL"
-                         ||
-                         x.CommandType ==
-                            "APPLY_LAUNCHER_POLICY")
-                        &&
                         x.PayloadJson.Contains(
                             packageIdText)
                         &&
-                        x.ExpiresAtUtc >
-                            DateTime.UtcNow,
+                        (
+                            (x.CommandType ==
+                                "SOFTWARE_INSTALL"
+                             &&
+                             x.ExpiresAtUtc >
+                                now)
+                            ||
+                            (x.CommandType ==
+                                "APPLY_LAUNCHER_POLICY"
+                             &&
+                             x.CreatedAtUtc >
+                                now.AddDays(-30))
+                        ),
                     cancellationToken);
 
         if (!authorized)

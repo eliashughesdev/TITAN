@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.titanmdm.agent.admin.TitanDeviceAdminReceiver
+import com.titanmdm.agent.lock.LockScreenController
 import com.titanmdm.agent.launcher.TitanLauncherActivity
 
 /**
@@ -98,6 +99,9 @@ object KioskController {
         if (dpm != null && dpm.isDeviceOwnerApp(app.packageName)) {
             runCatching { grantLocationPermissions(dpm, admin, app.packageName) }
                 .onFailure { Log.w(TAG, "No fue posible conceder permisos de ubicación.", it) }
+
+            // Token del PIN remoto (LOCK_DEVICE con PIN temporal).
+            LockScreenController.ensureResetToken(app)
 
             val wanted = effective(app, owner = true)
             runCatching { applyHome(dpm, admin, app, wanted.home) }

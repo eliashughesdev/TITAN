@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Audit;
 using TitanMDM.Domain.Enums;
+using TitanMDM.Infrastructure.Commands;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Audit;
@@ -701,7 +702,11 @@ public sealed class AuditQueryService
             row.DeliveryAttempts,
             row.ErrorCode,
             row.ErrorMessage,
-            row.PayloadJson,
+            row.PayloadJson is null
+                ? null
+                : CommandPayloadRedactor.Redact(
+                    row.CommandType,
+                    row.PayloadJson),
             row.ResultJson,
             null,
             null);

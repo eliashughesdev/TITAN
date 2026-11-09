@@ -15,6 +15,9 @@ export function normalizeDeviceAlias(raw: string): { value: string | null; error
   return { value }
 }
 
-/** Alias si existe; si no, el nombre reportado por el equipo. */
-export const deviceDisplayName = (device: { alias?: string | null; deviceName: string }) =>
-  device.alias?.trim() || device.deviceName
+/** Alias si existe; si no, el nombre reportado por el equipo y, en último caso, el modelo. */
+export const deviceDisplayName = (device: {
+  alias?: string | null
+  deviceName: string
+  model?: string | null
+}) => device.alias?.trim() || device.deviceName.trim() || device.model?.trim() || 'Dispositivo'
