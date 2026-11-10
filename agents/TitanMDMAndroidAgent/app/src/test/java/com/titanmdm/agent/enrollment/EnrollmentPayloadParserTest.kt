@@ -9,6 +9,15 @@ import org.junit.Test
 
 class EnrollmentPayloadParserTest {
 
+    @Test
+    fun `solo el QR completo cuenta como lectura estructurada del gatillo`() {
+        assertTrue(EnrollmentPayloadParser.isStructured(" titanmdm://enroll?token=abc\r\n"))
+        assertTrue(EnrollmentPayloadParser.isStructured("{\"token\":\"abc\"}"))
+        assertFalse(EnrollmentPayloadParser.isStructured("abcdef0123456789abcdef"))
+        assertFalse(EnrollmentPayloadParser.isStructured("titan"))
+        assertFalse(EnrollmentPayloadParser.isStructured(null))
+    }
+
     private val token = "tmdm_AbCdEf0123456789-_xyz"
 
     @Test

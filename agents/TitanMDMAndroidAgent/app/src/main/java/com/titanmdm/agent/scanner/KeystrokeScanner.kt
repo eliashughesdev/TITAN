@@ -1,5 +1,7 @@
 package com.titanmdm.agent.scanner
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -11,14 +13,25 @@ import java.util.concurrent.CopyOnWriteArraySet
  * de una persona por la velocidad (ráfaga de pulsaciones muy seguidas).
  *
  * MainActivity reenvía aquí cada KeyEvent; la pantalla de inscripción se
- * suscribe mientras está visible. Complementa al modo Intent
+ * suscribe mientras está visible. Si el perfil del lector no agrega sufijo
+ * (ENTER/TAB), la lectura se cierra sola tras [IDLE_FLUSH_MS] sin teclas. Complementa al modo Intent
  * ([HoneywellScanner]), que es el preferido cuando el lector lo permite.
  */
 object KeystrokeScanner {
 
     private const val TAG = "TitanKeystroke"
+    private const val IDLE_FLUSH_MS = 150L
     private val listeners = CopyOnWriteArraySet<(String) -> Unit>()
     private val buffer = KeystrokeBurstBuffer()
+    private val handler = Handler(Looper.getMainLooper())
+    private val idleFlush = Runnable { deliver(buffer.finish(SystemClock.uptimeMillis())) }
+
+    private fun deliver(scanned: String?): Boolean {
+        if (scanned == null) return false
+        Log.i(TAG, "Lectura en modo teclado (${scanned.length} caracteres).")
+        listeners.forEach { it(scanned) }
+        return true
+    }
 
     fun listen(onScan: (String) -> Unit): () -> Unit {
         listeners += onScan
@@ -35,16 +48,16 @@ object KeystrokeScanner {
 
         return when (event.keyCode) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_TAB -> {
-                val scanned = buffer.finish(now) ?: return false
-                Log.i(TAG, "Lectura en modo teclado (${scanned.length} caracteres).")
-                listeners.forEach { it(scanned) }
-                true
+                handler.removeCallbacks(idleFlush)
+                deliver(buffer.finish(now))
             }
 
             else -> {
                 val char = event.unicodeChar
                 if (char > 0 && !Character.isISOControl(char)) {
                     buffer.add(char.toChar(), now)
+                    handler.removeCallbacks(idleFlush)
+                    handler.postDelayed(idleFlush, IDLE_FLUSH_MS)
                 }
                 false
             }

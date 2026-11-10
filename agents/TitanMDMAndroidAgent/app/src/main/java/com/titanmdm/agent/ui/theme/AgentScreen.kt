@@ -28,11 +28,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.titanmdm.agent.enrollment.EnrollmentPayloadParser
 import com.titanmdm.agent.scanner.HoneywellScanner
 import com.titanmdm.agent.scanner.KeystrokeScanner
 import androidx.compose.runtime.collectAsState
@@ -298,16 +305,41 @@ private fun EnrollmentCard(
             result.contents?.let { onScanned(it, true) }
         }
 
-    // Lector Honeywell reclamado solo mientras esta pantalla esta visible.
-    DisposableEffect(honeywell.available) {
-        val stop = HoneywellScanner.listen(context) { data -> onScanned(data, false) }
+    // Gatillo laser: inscripcion desatendida, sin tocar la pantalla. Solo
+    // se acepta un QR con formato TitanMDM (titanmdm://enroll o JSON).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(honeywell.available, lifecycleOwner) {
+        val onLaser: (String) -> Unit = { data ->
+            onScanned(data, EnrollmentPayloadParser.isStructured(data))
+        }
+        val stop = HoneywellScanner.register(context, onLaser)
         // Modo teclado (Keystroke): mismo tratamiento que el modo Intent.
-        val stopKeystroke = KeystrokeScanner.listen { data -> onScanned(data, false) }
+        val stopKeystroke = KeystrokeScanner.listen(onLaser)
+
+        // El Data Collection Service solo entrega al dueño del primer plano:
+        // reclamar en ON_RESUME y soltar en ON_PAUSE.
+        val observer = LifecycleEventObserver { _, event ->
+            if (!honeywell.available) return@LifecycleEventObserver
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> HoneywellScanner.claim(context)
+                Lifecycle.Event.ON_PAUSE -> HoneywellScanner.release(context)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (honeywell.available) HoneywellScanner.release(context)
             stop()
             stopKeystroke()
         }
     }
+
+    // Lector en modo teclado que "escribe" en el campo con el foco: el
+    // campo del token lo toma desde el inicio.
+    val tokenFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { tokenFocus.requestFocus() } }
 
     Card(
         modifier =
@@ -331,7 +363,7 @@ private fun EnrollmentCard(
             Text(
                 text =
                     if (honeywell.available)
-                        "Escanea el QR de inscripción con el lector (gatillo) o la cámara, o escribe el token."
+                        "Presiona el gatillo y apunta al QR de inscripción: el equipo se inscribe solo. También puedes usar la cámara o escribir el token."
                     else
                         "Escanea el QR generado en Inscripción → Android Agent, o escribe el token."
             )
@@ -373,7 +405,9 @@ private fun EnrollmentCard(
                 enabled =
                     !state.registering,
                 modifier =
-                    Modifier.fillMaxWidth()
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(tokenFocus)
             )
 
             Button(

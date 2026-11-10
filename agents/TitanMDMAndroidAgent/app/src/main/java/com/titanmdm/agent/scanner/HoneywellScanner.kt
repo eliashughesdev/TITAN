@@ -9,15 +9,18 @@ import android.os.Bundle
 import androidx.core.content.ContextCompat
 
 /**
- * Lector integrado de handhelds Honeywell (CT40/CT45/CT60/EDA51...) via
+ * Lector integrado de handhelds Honeywell (CK65/CT40/CT45/CT60/EDA51...) via
  * "Intent API" del Data Collection Service. No requiere SDK propietario.
  *
- * Mientras el agente reclama el lector, cada lectura llega como broadcast
- * [ACTION_BARCODE] con el texto en "data". Al soltarlo, el lector vuelve
- * a su perfil normal (teclado/wedge) para las demas apps.
+ * Mientras el agente reclama el lector, cada lectura del gatillo llega como
+ * broadcast [ACTION_BARCODE] con el texto en "data". Al soltarlo, el lector
+ * vuelve a su perfil normal (teclado/wedge) para las demas apps.
  *
- * En modo teclado (configuracion de fabrica) no hace falta nada de esto:
- * la lectura se escribe en el campo del token y el agente la interpreta.
+ * El reclamo solo es valido con la actividad en primer plano: hay que
+ * reclamar en onResume y soltar en onPause (ver [AgentScreen]).
+ *
+ * En modo teclado (configuracion de fabrica) la lectura llega por
+ * [KeystrokeScanner] o directamente al campo del token.
  */
 object HoneywellScanner {
 
@@ -32,6 +35,12 @@ object HoneywellScanner {
 
     /** Accion propia hacia la que el lector entrega las lecturas. */
     const val ACTION_BARCODE = "com.titanmdm.agent.action.HONEYWELL_BARCODE"
+
+    /**
+     * Accion generica que algunos perfiles de Honeywell (Scan to Intent
+     * configurado por TI o EZConfig) usan por defecto.
+     */
+    const val ACTION_BARCODE_GENERIC = "com.honeywell.decode.intent.ACTION_BARCODE_DATA"
 
     data class Info(
         val vendorDevice: Boolean,
@@ -53,8 +62,13 @@ object HoneywellScanner {
 
     fun claim(context: Context) {
         val properties = Bundle().apply {
+            // Entrega por Intent (no teclado): evita la doble entrada.
             putBoolean("DPR_DATA_INTENT", true)
             putString("DPR_DATA_INTENT_ACTION", ACTION_BARCODE)
+            // El QR de inscripcion debe leerse aunque el perfil lo tenga apagado.
+            putBoolean("DEC_QR_ENABLED", true)
+            // El gatillo fisico dispara la lectura sin que la app lo controle.
+            putString("TRIG_CONTROL_MODE", "autoControl")
         }
         context.sendBroadcast(
             Intent(ACTION_CLAIM)
@@ -69,35 +83,43 @@ object HoneywellScanner {
         context.sendBroadcast(Intent(ACTION_RELEASE).setPackage(SERVICE_PACKAGE))
     }
 
+    /** Texto de la lectura: "data" o, si falta, "dataBytes" en UTF-8. */
+    fun barcodeText(intent: Intent): String? =
+        intent.getStringExtra("data")?.takeIf { it.isNotBlank() }
+            ?: intent.getByteArrayExtra("dataBytes")
+                ?.toString(Charsets.UTF_8)
+                ?.takeIf { it.isNotBlank() }
+
     /**
-     * Reclama el lector y registra el receptor. Devuelve la funcion que
-     * libera ambos (llamar en onPause / onDispose).
+     * Registra el receptor de lecturas (sin reclamar el lector). Devuelve la
+     * funcion que lo quita. El reclamo se hace aparte con [claim]/[release]
+     * siguiendo el ciclo de vida de la pantalla.
      */
-    fun listen(context: Context, onBarcode: (String) -> Unit): () -> Unit {
+    fun register(context: Context, onBarcode: (String) -> Unit): () -> Unit {
         if (!info(context).available) return {}
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context, intent: Intent) {
-                if (intent.action != ACTION_BARCODE) return
-                val data = intent.getStringExtra("data") ?: return
+                if (intent.action != ACTION_BARCODE && intent.action != ACTION_BARCODE_GENERIC) return
+                val data = barcodeText(intent) ?: return
                 ScannerTelemetry.recordScan(receiverContext, intent.getStringExtra("codeId"))
                 onBarcode(data)
             }
         }
 
-        // Exportado: el emisor es el servicio de Honeywell (otra app).
-        // Las lecturas solo rellenan el formulario; inscribir exige confirmacion.
+        // Exportado: el emisor es el servicio de Honeywell (otra app). Solo
+        // escucha mientras la pantalla de inscripcion (equipo sin inscribir)
+        // esta visible, y el QR solo se acepta con el formato de TitanMDM.
         ContextCompat.registerReceiver(
             context,
             receiver,
-            IntentFilter(ACTION_BARCODE),
+            IntentFilter().apply {
+                addAction(ACTION_BARCODE)
+                addAction(ACTION_BARCODE_GENERIC)
+            },
             ContextCompat.RECEIVER_EXPORTED
         )
-        claim(context)
 
-        return {
-            runCatching { context.unregisterReceiver(receiver) }
-            release(context)
-        }
+        return { runCatching { context.unregisterReceiver(receiver) } }
     }
 }

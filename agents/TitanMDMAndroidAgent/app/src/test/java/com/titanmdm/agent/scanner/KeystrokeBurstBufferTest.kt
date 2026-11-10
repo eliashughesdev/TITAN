@@ -27,6 +27,15 @@ class KeystrokeBurstBufferTest {
     }
 
     @Test
+    fun `sin sufijo enter la lectura se cierra por inactividad`() {
+        val buffer = KeystrokeBurstBuffer()
+        val end = type(buffer, qr, 1_000, gapMs = 3)
+
+        // KeystrokeScanner llama finish() 150 ms despues de la ultima tecla.
+        assertEquals(qr, buffer.finish(end + 150))
+    }
+
+    @Test
     fun `tecleo humano lento no se toma como lectura`() {
         val buffer = KeystrokeBurstBuffer()
         val end = type(buffer, "a".repeat(20), 1_000, gapMs = 250)

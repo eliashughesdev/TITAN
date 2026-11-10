@@ -17,6 +17,8 @@ import com.titanmdm.agent.heartbeat.HeartbeatResult
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.service.AgentForegroundService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,6 +64,9 @@ data class AgentUiState(
     val message: String? = null,
     val error: String? = null
 )
+
+/** Pausa tras la que se da por terminada una lectura en modo teclado. */
+private const val WEDGE_IDLE_MS = 300L
 
 class AgentViewModel(
     application: Application
@@ -131,20 +136,26 @@ class AgentViewModel(
         value: String
     ) {
 
-        // Lector Honeywell en modo teclado: el QR completo llega al campo.
-        if (value.startsWith("${EnrollmentPayloadParser.SCHEME}://", ignoreCase = true) ||
-            value.trimStart().startsWith("{")
-        ) {
-            if (applyScannedPayload(value, autoRegister = false)) return
-        }
-
         _uiState.value =
             _uiState.value.copy(
                 enrollmentToken = value,
                 error = null,
                 message = null
             )
+
+        // Lector Honeywell en modo teclado: el QR completo se "escribe" en
+        // el campo, a veces caracter a caracter. Se interpreta cuando la
+        // rafaga termina, no con cada letra (un QR a medias no es valido).
+        wedgeParseJob?.cancel()
+        if (EnrollmentPayloadParser.isStructured(value)) {
+            wedgeParseJob = viewModelScope.launch {
+                delay(WEDGE_IDLE_MS)
+                applyScannedPayload(value, autoRegister = true)
+            }
+        }
     }
+
+    private var wedgeParseJob: Job? = null
 
     /**
      * QR leido por camara o por el lector Honeywell.
@@ -155,6 +166,11 @@ class AgentViewModel(
         raw: String,
         autoRegister: Boolean
     ): Boolean {
+
+        // El gatillo puede entregar la misma lectura por dos vias (Intent y
+        // teclado); una inscripcion en curso o hecha no se repite.
+        if (_uiState.value.registering || _uiState.value.enrolled) return true
+        wedgeParseJob?.cancel()
 
         val payload = EnrollmentPayloadParser.parse(raw)
 

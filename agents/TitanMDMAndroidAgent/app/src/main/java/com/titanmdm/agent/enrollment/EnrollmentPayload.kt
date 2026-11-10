@@ -34,6 +34,16 @@ object EnrollmentPayloadParser {
     // La consola emite 64 hex; se toleran caracteres URL-safe/base64.
     private val tokenPattern = Regex("^[A-Za-z0-9._~+/=-]+$")
 
+    /**
+     * QR completo de la consola (URI o JSON), no un token suelto: es lo
+     * unico que el gatillo laser inscribe sin confirmacion, para que una
+     * etiqueta cualquiera (serie, activo) no dispare una inscripcion.
+     */
+    fun isStructured(raw: String?): Boolean {
+        val text = raw?.trim()?.trim('\u0000') ?: return false
+        return text.startsWith("$SCHEME://", ignoreCase = true) || text.startsWith("{")
+    }
+
     fun parse(raw: String?): EnrollmentPayload? {
         // Los lectores en modo teclado suelen agregar \r, \n o \t al final.
         val text = raw?.trim()?.trim('\u0000') ?: return null

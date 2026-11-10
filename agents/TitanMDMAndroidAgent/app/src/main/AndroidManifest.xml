@@ -47,6 +47,10 @@
         </intent>
     </queries>
 
+    <!-- Lector Honeywell: permiso del Intent API del Data Collection Service
+         (reclamar el lector y recibir lecturas). Ignorado en otras marcas. -->
+    <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
+
     <!-- Lector Honeywell (Data Collection Service): visibilidad de paquete en Android 11+. -->
     <queries>
         <package android:name="com.intermec.datacollectionservice" />
