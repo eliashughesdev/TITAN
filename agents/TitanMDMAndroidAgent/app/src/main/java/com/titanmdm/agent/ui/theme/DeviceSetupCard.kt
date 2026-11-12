@@ -1,8 +1,12 @@
 package com.titanmdm.agent.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -28,6 +33,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.service.AgentForegroundService
 import com.titanmdm.agent.workers.AgentWorkScheduler
@@ -45,30 +54,60 @@ fun DeviceSetupCard(enrolled: Boolean) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     var hint by remember { mutableStateOf<String?>(null) }
+    var askedForeground by remember { mutableStateOf(false) }
     val status = remember(refresh) { KioskController.apply(context) }
 
     fun reload() {
         refresh++
-        // Reporte inmediato para que el servidor deje de ver PERMISSION_DENIED.
-        if (enrolled) AgentWorkScheduler.syncNow(context.applicationContext)
+        if (enrolled) {
+            // El servicio se vuelve a declarar con el tipo "location" ahora
+            // que hay permiso (inscripción manual) y suscribe GPS/red.
+            AgentForegroundService.start(context)
+            // Reporte inmediato para que el servidor deje de ver PERMISSION_DENIED.
+            AgentWorkScheduler.syncNow(context.applicationContext)
+        }
+    }
+
+    // Al volver de Ajustes (ubicación del sistema, "Permitir todo el tiempo").
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refresh++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val foreground = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { reload() }
 
+    val activity = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { reload() }
+
+    fun openAppSettings() {
+        try {
+            activity.launch(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.fromParts("package", context.packageName, null))
+            )
+        } catch (_: ActivityNotFoundException) {
+            hint = "Abra Ajustes > Aplicaciones > TitanMDM Agent > Permisos > Ubicación."
+        }
+    }
+
     val background = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
-            hint = "Android exige elegir \"Permitir todo el tiempo\" en Ajustes > Ubicación de TitanMDM Agent."
+            // Android 11+ solo permite "Todo el tiempo" desde Ajustes; tras
+            // un rechazo el diálogo ya no aparece: se abre la pantalla.
+            hint = "Elija \"Permitir todo el tiempo\" en Permisos > Ubicación de TitanMDM Agent."
+            openAppSettings()
         }
         reload()
     }
-
-    val activity = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { reload() }
 
     fun requestForeground() {
         val permissions = mutableListOf(
@@ -83,7 +122,10 @@ fun DeviceSetupCard(enrolled: Boolean) {
 
     // Al inscribirse se solicita la ubicación una vez, sin esperar al operador.
     LaunchedEffect(enrolled) {
-        if (enrolled && !status.locationGranted && !status.deviceOwner) requestForeground()
+        if (enrolled && !status.locationGranted && !status.deviceOwner) {
+            askedForeground = true
+            requestForeground()
+        }
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -105,7 +147,30 @@ fun DeviceSetupCard(enrolled: Boolean) {
 
             HorizontalDivider()
 
-            SetupRow("Ubicación precisa", status.locationGranted, "Conceder") { requestForeground() }
+            SetupRow(
+                "Ubicación del sistema activada",
+                status.locationServicesEnabled,
+                "Activar"
+            ) {
+                try {
+                    activity.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                } catch (_: ActivityNotFoundException) {
+                    hint = "Active Ajustes > Ubicación."
+                }
+            }
+
+            SetupRow("Ubicación precisa", status.locationGranted, "Conceder") {
+                // Rechazado antes con "No volver a preguntar": solo queda Ajustes.
+                val activityRef = context as? Activity
+                val canAsk = activityRef == null ||
+                    ActivityCompat.shouldShowRequestPermissionRationale(
+                        activityRef,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) ||
+                    !askedForeground
+                askedForeground = true
+                if (canAsk) requestForeground() else openAppSettings()
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 SetupRow(

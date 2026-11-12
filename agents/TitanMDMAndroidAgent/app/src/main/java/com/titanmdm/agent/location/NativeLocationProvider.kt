@@ -56,16 +56,6 @@ object NativeLocationProvider {
             .maxByOrNull { it.time }
 
     @SuppressLint("MissingPermission")
-    fun bestLastKnown(
-        manager: LocationManager,
-        maxAgeMs: Long
-    ): Location? =
-        lastKnown(manager)
-            ?.takeIf {
-                System.currentTimeMillis() - it.time <= maxAgeMs
-            }
-
-    @SuppressLint("MissingPermission")
     suspend fun currentFromProvider(
         manager: LocationManager,
         provider: String,

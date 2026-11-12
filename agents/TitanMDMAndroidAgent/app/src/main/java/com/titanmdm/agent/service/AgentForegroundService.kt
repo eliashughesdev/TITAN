@@ -30,6 +30,7 @@ import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.apps.install.RequiredAppsReconciler
 import com.titanmdm.agent.heartbeat.HeartbeatRepository
 import com.titanmdm.agent.heartbeat.HeartbeatResult
+import com.titanmdm.agent.location.LocationWatcher
 import com.titanmdm.agent.receivers.HeartbeatWatchdogReceiver
 import com.titanmdm.agent.workers.AgentWorkScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,9 @@ class AgentForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    /** El servicio se inició con el tipo "location" (permiso concedido). */
+    private var foregroundWithLocation = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -75,6 +79,7 @@ class AgentForegroundService : Service() {
 
         acquireWakeLock()
         registerNetworkWatchdog()
+        LocationWatcher.ensure(this)
         scheduleWatchdog(this)
 
         if (loop?.isActive != true) {
@@ -84,6 +89,7 @@ class AgentForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        LocationWatcher.stop()
         unregisterNetworkWatchdog()
         releaseWakeLock()
         scope.cancel()
@@ -101,6 +107,8 @@ class AgentForegroundService : Service() {
                 stopSelf()
                 break
             }
+
+            refreshLocationTracking()
 
             when (synchronize(heartbeat, commands)) {
                 SyncOutcome.Success -> {
@@ -263,6 +271,24 @@ class AgentForegroundService : Service() {
         networkCallback = null
     }
 
+    /**
+     * Inscripción manual: el usuario puede conceder la ubicación después de
+     * arrancar el servicio. Se vuelve a declarar el servicio con el tipo
+     * "location" (Android 10+ no deja leer la ubicación en segundo plano a
+     * un servicio sin ese tipo) y se suscriben los proveedores.
+     */
+    private fun refreshLocationTracking() {
+        runCatching {
+            if (!foregroundWithLocation &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                hasLocationPermission(this)
+            ) {
+                startInForeground()
+            }
+            LocationWatcher.ensure(this)
+        }.onFailure { Log.w(TAG, "No fue posible actualizar el rastreo de ubicación.", it) }
+    }
+
     private fun startInForeground(): Boolean {
         ensureChannel(this)
         val notification = buildNotification(this)
@@ -296,6 +322,7 @@ class AgentForegroundService : Service() {
                 notification,
                 primaryType
             )
+            foregroundWithLocation = locationType != 0
             true
         }.recoverCatching {
             /*

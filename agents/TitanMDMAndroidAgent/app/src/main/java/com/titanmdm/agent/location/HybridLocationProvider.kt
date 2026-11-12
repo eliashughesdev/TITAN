@@ -16,12 +16,24 @@ data class HybridLocationSnapshot(
     val wifi: WifiAccessPointSnapshot
 )
 
+/**
+ * Doble motor de ubicación: Google (FusedLocation) si existe y el
+ * LocationManager nativo (GPS + red) si no, con la caché del servicio
+ * ([LocationWatcher]) y la última posición conocida como respaldo.
+ *
+ * Orden: posición reciente de la caché (sin esperar), Fused, GPS, red y,
+ * si nada responde a tiempo, la mejor posición conocida de hasta 7 días
+ * con su hora real. Así el heartbeat no sale sin coordenadas mientras el
+ * equipo haya tenido alguna posición, sin inventar ninguna.
+ */
 object HybridLocationProvider {
 
     private const val FUSED_TIMEOUT_MS = 3_000L
     private const val GPS_TIMEOUT_MS = 2_500L
     private const val NETWORK_TIMEOUT_MS = 1_500L
-    private const val LAST_KNOWN_MAX_AGE_MS = 30 * 60 * 1000L
+
+    /** Posición de la caché que se usa sin consultar a los proveedores. */
+    private const val FRESH_CACHE_MS = 2 * 60_000L
 
     @SuppressLint("MissingPermission")
     suspend fun capture(
@@ -38,50 +50,43 @@ object HybridLocationProvider {
         val manager = appContext.getSystemService(LocationManager::class.java)
             ?: return HybridLocationSnapshot(null, wifi)
 
-        val fused = runCatching {
-            withTimeoutOrNull(timeoutMs.coerceAtMost(FUSED_TIMEOUT_MS)) {
-                awaitFusedLocation(appContext)
-            }
-        }.getOrNull()
+        val now = System.currentTimeMillis()
+        LocationWatcher.cached(appContext)
+            ?.takeIf { now - it.time in 0..FRESH_CACHE_MS }
+            ?.let { return HybridLocationSnapshot(it, wifi) }
 
-        if (fused != null) {
-            return HybridLocationSnapshot(fused, wifi)
+        val fresh =
+            runCatching {
+                withTimeoutOrNull(timeoutMs.coerceAtMost(FUSED_TIMEOUT_MS)) {
+                    awaitFusedLocation(appContext)
+                }
+            }.getOrNull()
+                ?: NativeLocationProvider.currentFromProvider(
+                    manager,
+                    LocationManager.GPS_PROVIDER,
+                    GPS_TIMEOUT_MS
+                )
+                ?: NativeLocationProvider.currentFromProvider(
+                    manager,
+                    LocationManager.NETWORK_PROVIDER,
+                    NETWORK_TIMEOUT_MS
+                )
+
+        if (fresh != null) {
+            LocationWatcher.offer(fresh, appContext)
+            return HybridLocationSnapshot(fresh, wifi)
         }
 
-        val gps = NativeLocationProvider.currentFromProvider(
-            manager,
-            LocationManager.GPS_PROVIDER,
-            GPS_TIMEOUT_MS
-        )
-
-        if (gps != null) {
-            return HybridLocationSnapshot(gps, wifi)
-        }
-
-        NativeLocationProvider.bestLastKnown(
-            manager,
-            LAST_KNOWN_MAX_AGE_MS
-        )?.let { fallback ->
-            return HybridLocationSnapshot(fallback, wifi)
-        }
-
-        val network = NativeLocationProvider.currentFromProvider(
-            manager,
-            LocationManager.NETWORK_PROVIDER,
-            NETWORK_TIMEOUT_MS
-        )
-
-        if (network != null) {
-            return HybridLocationSnapshot(network, wifi)
-        }
-
-        return HybridLocationSnapshot(
-            NativeLocationProvider.bestLastKnown(
-                manager,
-                LAST_KNOWN_MAX_AGE_MS
+        // Respaldo: caché del servicio o última conocida de cualquier proveedor.
+        val fallback = LocationFixSelector.best(
+            listOf(
+                LocationWatcher.fix(LocationWatcher.cached(appContext)),
+                LocationWatcher.fix(NativeLocationProvider.lastKnown(manager))
             ),
-            wifi
-        )
+            nowMs = System.currentTimeMillis()
+        )?.value
+
+        return HybridLocationSnapshot(fallback, wifi)
     }
 
     @SuppressLint("MissingPermission")

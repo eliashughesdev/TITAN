@@ -8,11 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.location.LocationManagerCompat
 import com.titanmdm.agent.admin.TitanDeviceAdminReceiver
 import com.titanmdm.agent.lock.LockScreenController
 import com.titanmdm.agent.launcher.TitanLauncherActivity
@@ -44,7 +46,9 @@ object KioskController {
         val statusBarLocked: Boolean,
         val systemKeysLocked: Boolean,
         val locationGranted: Boolean,
-        val backgroundLocationGranted: Boolean
+        val backgroundLocationGranted: Boolean,
+        /** Interruptor "Ubicación" del sistema (sin él no hay GPS ni red). */
+        val locationServicesEnabled: Boolean
     )
 
     /** Bloqueos efectivos: política web + liberación del técnico (KIOSK_MODE). */
@@ -99,6 +103,8 @@ object KioskController {
         if (dpm != null && dpm.isDeviceOwnerApp(app.packageName)) {
             runCatching { grantLocationPermissions(dpm, admin, app.packageName) }
                 .onFailure { Log.w(TAG, "No fue posible conceder permisos de ubicación.", it) }
+            runCatching { enableLocationServices(dpm, admin, app) }
+                .onFailure { Log.w(TAG, "No fue posible activar la ubicación del sistema.", it) }
 
             // Token del PIN remoto (LOCK_DEVICE con PIN temporal).
             LockScreenController.ensureResetToken(app)
@@ -139,7 +145,8 @@ object KioskController {
             locationGranted = granted(app, Manifest.permission.ACCESS_FINE_LOCATION) ||
                 granted(app, Manifest.permission.ACCESS_COARSE_LOCATION),
             backgroundLocationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-                granted(app, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                granted(app, Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+            locationServicesEnabled = isLocationServicesEnabled(app)
         )
     }
 
@@ -256,6 +263,37 @@ object KioskController {
                 permission,
                 DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
             )
+        }
+    }
+
+    fun isLocationServicesEnabled(context: Context): Boolean =
+        context.getSystemService(LocationManager::class.java)
+            ?.let { runCatching { LocationManagerCompat.isLocationEnabled(it) }.getOrDefault(false) }
+            ?: false
+
+    /**
+     * Device Owner: enciende el interruptor de ubicación del sistema.
+     * Android 11+: setLocationEnabled. Android 8.x: ajuste seguro
+     * LOCATION_MODE (alta precisión). Android 9-10 no ofrece una API para
+     * el Device Owner: la consola verá el estado y TI lo activa una vez.
+     */
+    private fun enableLocationServices(
+        dpm: DevicePolicyManager,
+        admin: ComponentName,
+        context: Context
+    ) {
+        if (isLocationServicesEnabled(context)) return
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                dpm.setLocationEnabled(admin, true)
+
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.P ->
+                @Suppress("DEPRECATION")
+                dpm.setSecureSetting(
+                    admin,
+                    Settings.Secure.LOCATION_MODE,
+                    Settings.Secure.LOCATION_MODE_HIGH_ACCURACY.toString()
+                )
         }
     }
 

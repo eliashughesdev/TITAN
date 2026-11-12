@@ -165,6 +165,38 @@ public sealed class DeviceLocationService
             }
         }
 
+        /*
+         * El agente reenvía su última posición conocida en cada heartbeat
+         * mientras no consiga una nueva (interiores, sin GPS). La misma
+         * posición con la misma hora no se vuelve a guardar: solo se
+         * confirma que el equipo sigue reportando.
+         */
+        var alreadyStored =
+            await _db.DeviceLocations
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.DeviceId == device.Id &&
+                        x.CapturedAtUtc == capturedAt &&
+                        x.Latitude == latitudeValue &&
+                        x.Longitude == longitudeValue,
+                    cancellationToken);
+
+        if (alreadyStored)
+        {
+            await UpsertLocationStateAsync(
+                device,
+                DeviceCaptureState.Reported,
+                DateTime.UtcNow,
+                source,
+                cancellationToken);
+
+            await _db.SaveChangesAsync(
+                cancellationToken);
+
+            return;
+        }
+
         var location =
             new DeviceLocation(
                 device.OrganizationId,

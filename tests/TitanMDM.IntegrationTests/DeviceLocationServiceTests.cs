@@ -12,6 +12,40 @@ namespace TitanMDM.IntegrationTests;
 public sealed class DeviceLocationServiceTests
 {
     [Fact]
+    public async Task HeartbeatRepitiendoLaUltimaPosicion_NoDuplicaFilas_YUnaNuevaSiSeGuarda()
+    {
+        await using var db = Open();
+        var device = await SeedDeviceAsync(db);
+        var service = CreateService(db);
+
+        const string lastKnown =
+            """
+            { "latitude": 19.4326, "longitude": -99.1332, "accuracyMeters": 30,
+              "source": "AndroidAgent-Heartbeat", "status": "OK",
+              "capturedAtUtc": "2026-11-12T08:00:00Z" }
+            """;
+
+        // Equipo en interiores: el agente reenvía la misma posición.
+        await service.ProcessLocationAsync(device.Id, lastKnown);
+        await service.ProcessLocationAsync(device.Id, lastKnown);
+
+        Assert.Single(db.DeviceLocations);
+        Assert.Equal(
+            DeviceCaptureState.Reported,
+            Assert.Single(db.DeviceLocationStates).CaptureState);
+
+        await service.ProcessLocationAsync(
+            device.Id,
+            """
+            { "latitude": 19.4330, "longitude": -99.1335, "accuracyMeters": 8,
+              "source": "AndroidAgent-Heartbeat", "status": "OK",
+              "capturedAtUtc": "2026-11-12T08:05:00Z" }
+            """);
+
+        Assert.Equal(2, db.DeviceLocations.Count());
+    }
+
+    [Fact]
     public async Task OnDemandReport_IsAlwaysPersisted_EvenWhenPolicyDisabled()
     {
         await using var db = Open();
