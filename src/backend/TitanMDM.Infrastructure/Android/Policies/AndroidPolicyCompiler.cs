@@ -804,12 +804,39 @@ public sealed class AndroidPolicyCompiler
                 });
         }
 
+        // Play Store debe estar en la política: en modo WHITELIST Google
+        // oculta com.android.vending si no se declara, y sin él no baja
+        // ninguna app de Managed Play. Es infraestructura del sistema: no
+        // cuenta como mosaico del launcher ni como app del agente.
+        var playStoreListed =
+            compiledApps
+                .OfType<JsonObject>()
+                .Any(x =>
+                    string.Equals(
+                        GetString(x, "packageName", string.Empty),
+                        PlayStorePackage,
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (!playStoreListed)
+        {
+            compiledApps.Add(
+                new JsonObject
+                {
+                    ["packageName"] = PlayStorePackage,
+                    ["installType"] = "AVAILABLE"
+                });
+        }
+
         if (compiledApps.Count > 0)
         {
             policy["applications"] =
                 compiledApps;
         }
     }
+
+    /// <summary>Google Play Store (Managed Play).</summary>
+    public const string PlayStorePackage =
+        "com.android.vending";
 
     private const string DefaultLauncherPackage =
         "com.titanmdm.agent";
@@ -1090,6 +1117,17 @@ public sealed class AndroidPolicyCompiler
 
             if (appInstallType == "BLOCKED")
                 continue;
+
+            // Play Store añadida por defecto (AVAILABLE): no es un mosaico
+            // del launcher. Si TI la fuerza explícitamente, sí se muestra.
+            if (appInstallType == "AVAILABLE" &&
+                string.Equals(
+                    appPackage,
+                    PlayStorePackage,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
             if (appInstallType == "KIOSK")
             {

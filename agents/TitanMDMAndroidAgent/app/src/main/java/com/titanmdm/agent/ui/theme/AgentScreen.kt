@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -47,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -98,6 +100,8 @@ fun TitanAgentScreen(
 
                 EnrollmentCard(
                     state = state,
+                    onServerChanged =
+                        viewModel::updateServerUrl,
                     onTokenChanged =
                         viewModel::updateEnrollmentToken,
                     onRegister =
@@ -291,6 +295,7 @@ private val HeaderGreen = Color(0xFF16A36A)
 @Composable
 private fun EnrollmentCard(
     state: AgentUiState,
+    onServerChanged: (String) -> Unit,
     onTokenChanged: (String) -> Unit,
     onRegister: () -> Unit,
     onScanned: (String, Boolean) -> Boolean
@@ -390,6 +395,28 @@ private fun EnrollmentCard(
                     value = server
                 )
             }
+
+            OutlinedTextField(
+                value =
+                    state.serverUrlInput,
+                onValueChange =
+                    onServerChanged,
+                label = {
+                    Text("Servidor TitanMDM")
+                },
+                placeholder = {
+                    Text("http://172.21.20.14:8020")
+                },
+                singleLine = true,
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Uri
+                    ),
+                enabled =
+                    !state.registering,
+                modifier =
+                    Modifier.fillMaxWidth()
+            )
 
             OutlinedTextField(
                 value =

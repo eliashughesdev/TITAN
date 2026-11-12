@@ -749,8 +749,16 @@ public sealed class SoftwareDeploymentService
                             (x.CommandType ==
                                 "APPLY_LAUNCHER_POLICY"
                              &&
-                             x.CreatedAtUtc >
-                                now.AddDays(-30))
+                             (x.CreatedAtUtc >
+                                now.AddDays(-30)
+                              ||
+                              _dbContext.DevicePolicyAssignments
+                                  .Any(assignment =>
+                                      assignment.DeviceId ==
+                                          deviceId
+                                      &&
+                                      assignment.OrganizationId ==
+                                          device.OrganizationId)))
                         ),
                     cancellationToken);
 

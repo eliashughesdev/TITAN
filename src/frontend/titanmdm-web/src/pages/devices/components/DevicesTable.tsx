@@ -8,6 +8,7 @@ import {
   RefreshCw,
   ShieldAlert,
   Smartphone,
+  Trash2,
   Wifi,
   WifiOff,
 } from 'lucide-react'
@@ -30,6 +31,8 @@ type Props = {
   onOpenDevice: (device: DeviceListItem) => void
   /** Alias editado en la fila: el contenedor actualiza su lista. */
   onAliasChanged?: (deviceId: string, alias: string | null) => void
+  onDeleteDevice?: (device: DeviceListItem) => void
+  deletingId?: string | null
 }
 
 const statuses: Record<string, string> = {
@@ -82,6 +85,8 @@ export function DevicesTable({
   isAndroidWorkspace,
   onOpenDevice,
   onAliasChanged,
+  onDeleteDevice,
+  deletingId,
 }: Props) {
   const [selected, setSelected] = useState<string[]>([])
 
@@ -163,7 +168,7 @@ export function DevicesTable({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const columns = isWindowsWorkspace ? 8 : 9
+  const columns = (isWindowsWorkspace ? 8 : 9) + (onDeleteDevice ? 1 : 0)
 
   return (
     <div className="wit">
@@ -218,6 +223,7 @@ export function DevicesTable({
               <th>Cumplimiento</th>
               {!isWindowsWorkspace && <th>Batería</th>}
               <th>Última comunicación</th>
+              {onDeleteDevice && <th>Acciones</th>}
             </tr>
           </thead>
 
@@ -370,6 +376,19 @@ export function DevicesTable({
                     'Sin comunicación',
                   )}
                 </td>
+                {onDeleteDevice && (
+                  <td>
+                    <button
+                      type="button"
+                      className="devices-delete-button"
+                      disabled={isLoading || deletingId === device.id}
+                      onClick={() => onDeleteDevice(device)}
+                    >
+                      <Trash2 size={14} />
+                      {deletingId === device.id ? 'Eliminando...' : 'Eliminar'}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

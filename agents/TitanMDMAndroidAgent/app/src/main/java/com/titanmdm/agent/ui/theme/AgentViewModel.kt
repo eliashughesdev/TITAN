@@ -32,6 +32,9 @@ data class AgentUiState(
 
     val enrollmentToken: String = "",
 
+    /** Servidor editable para la inscripcion manual. */
+    val serverUrlInput: String = "",
+
     /** Servidor leido del QR; null = el configurado en el agente. */
     val enrollmentServer: String? = null,
 
@@ -157,6 +160,16 @@ class AgentViewModel(
 
     private var wedgeParseJob: Job? = null
 
+    fun updateServerUrl(value: String) {
+
+        _uiState.value =
+            _uiState.value.copy(
+                serverUrlInput = value,
+                error = null,
+                message = null
+            )
+    }
+
     /**
      * QR leido por camara o por el lector Honeywell.
      * @param autoRegister true solo para la camara del propio agente; las
@@ -197,6 +210,7 @@ class AgentViewModel(
         _uiState.value =
             _uiState.value.copy(
                 enrollmentToken = payload.token,
+                serverUrlInput = server ?: _uiState.value.serverUrlInput,
                 enrollmentServer = server,
                 error = null,
                 message = server?.let { "QR leído. Servidor: $it" } ?: "Token leído."
@@ -272,6 +286,13 @@ class AgentViewModel(
                         ipAddress =
                             inventory.ipAddress,
 
+                        // "Actualizar" no borra lo que el técnico ya escribió.
+                        serverUrlInput =
+                            _uiState.value.serverUrlInput.ifBlank {
+                                runCatching { AgentConfig.normalizedBaseUrl() }
+                                    .getOrDefault("")
+                            },
+
                         activeServer =
                             runCatching { AgentConfig.normalizedBaseUrl() }.getOrNull()
                     )
@@ -318,6 +339,22 @@ class AgentViewModel(
             return
         }
 
+        val serverUrl =
+            _uiState.value
+                .serverUrlInput
+                .trim()
+                .takeIf { it.isNotEmpty() }
+
+        if (serverUrl != null) {
+            AgentConfig.validateServerUrl(serverUrl).onFailure {
+                _uiState.value =
+                    _uiState.value.copy(
+                        error = it.message
+                    )
+                return
+            }
+        }
+
         viewModelScope.launch {
 
             _uiState.value =
@@ -332,7 +369,7 @@ class AgentViewModel(
                     registrationRepository
                         .register(
                             token,
-                            _uiState.value.enrollmentServer
+                            serverUrl
                         )
             ) {
 
@@ -347,6 +384,10 @@ class AgentViewModel(
                             enrollmentToken = "",
 
                             enrollmentServer = null,
+
+                            serverUrlInput =
+                                runCatching { AgentConfig.normalizedBaseUrl() }
+                                    .getOrDefault(_uiState.value.serverUrlInput),
 
                             activeServer =
                                 runCatching { AgentConfig.normalizedBaseUrl() }.getOrNull(),

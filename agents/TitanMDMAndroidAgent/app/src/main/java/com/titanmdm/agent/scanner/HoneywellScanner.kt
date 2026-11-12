@@ -65,8 +65,14 @@ object HoneywellScanner {
             // Entrega por Intent (no teclado): evita la doble entrada.
             putBoolean("DPR_DATA_INTENT", true)
             putString("DPR_DATA_INTENT_ACTION", ACTION_BARCODE)
-            // El QR de inscripcion debe leerse aunque el perfil lo tenga apagado.
+            // Misma categoria que el IntentFilter del receptor.
+            putString("DPR_DATA_INTENT_CATEGORY", Intent.CATEGORY_DEFAULT)
+            // El QR de inscripcion debe leerse aunque el perfil lo tenga apagado
+            // (BarcodeReader.PROPERTY_QR_CODE_ENABLED del SDK de Honeywell).
             putBoolean("DEC_QR_ENABLED", true)
+            // Sin pitido de lectura fallida (PROPERTY_NOTIFICATION_BAD_READ_ENABLED):
+            // el operador solo oye el tono de exito al capturar el QR.
+            putBoolean("NTF_BAD_READ_ENABLED", false)
             // El gatillo fisico dispara la lectura sin que la app lo controle.
             putString("TRIG_CONTROL_MODE", "autoControl")
         }
@@ -116,6 +122,9 @@ object HoneywellScanner {
             IntentFilter().apply {
                 addAction(ACTION_BARCODE)
                 addAction(ACTION_BARCODE_GENERIC)
+                // El Data Collection Service exige una categoria no vacia;
+                // sin ella el broadcast no llega al receptor en algunos equipos.
+                addCategory(Intent.CATEGORY_DEFAULT)
             },
             ContextCompat.RECEIVER_EXPORTED
         )

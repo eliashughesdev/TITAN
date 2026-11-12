@@ -577,19 +577,14 @@ public sealed class AndroidPolicyPublisher
             ?? throw new InvalidOperationException(
                 "El recurso del launcher no pertenece a esta organización.");
 
-        if (!Uri.TryCreate(_options.LauncherAssetBaseUrl, UriKind.Absolute, out var baseUri) ||
-            baseUri.Scheme != Uri.UriSchemeHttps)
+        if (!LauncherResourceUrlRules.TryCreateDistributionUri(
+                _options.LauncherAssetBaseUrl,
+                $"api/device/launcher-assets/{asset.Id:D}.{asset.Format}",
+                out var normalized,
+                out var error))
         {
             throw new InvalidOperationException(
-                "LauncherAssetBaseUrl debe ser HTTPS público para distribuir el recurso.");
-        }
-
-        var download = new Uri(
-            baseUri,
-            $"api/device/launcher-assets/{asset.Id:D}.{asset.Format}");
-        if (!LauncherResourceUrlRules.TryValidate(download.ToString(), out var normalized, out var error))
-        {
-            throw new InvalidOperationException(error ?? "La URL de distribución del recurso no es válida.");
+                error ?? "LauncherAssetBaseUrl no es válida para distribuir el recurso.");
         }
 
         configuration[key] = normalized;
@@ -616,9 +611,17 @@ public sealed class AndroidPolicyPublisher
                     x => x.Id == organizationId,
                     cancellationToken);
 
+        var assetHost = Uri.TryCreate(
+                _options.LauncherAssetBaseUrl,
+                UriKind.Absolute,
+                out var assetBase)
+            ? assetBase.IdnHost
+            : string.Empty;
+
         var authorizedHosts =
             _options.LauncherResourceHosts
                 .Append(organization?.PrimaryDomain ?? string.Empty)
+                .Append(assetHost)
                 .ToArray();
 
         if (authorizedHosts.All(string.IsNullOrWhiteSpace))

@@ -16,8 +16,8 @@ android {
         minSdk = 26
         targetSdk = 37
 
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner =
             "androidx.test.runner.AndroidJUnitRunner"
@@ -26,7 +26,7 @@ android {
         buildConfigField(
             "String",
             "AGENT_VERSION",
-            "\"1.0.2\""
+            "\"1.0.3\""
         )
     }
 
@@ -55,10 +55,23 @@ android {
         .map { it.trim().equals("true", ignoreCase = true) }
         .getOrElse(false)
 
+    /*
+     * Servidor de fabrica del APK de pruebas (se instala en equipos reales,
+     * no en el emulador): el que el agente propone en la inscripcion manual.
+     * -PtitanDebugApiUrl=http://<IP>:8020/ para otro servidor.
+     */
+    val debugApiUrl = providers.gradleProperty("titanDebugApiUrl")
+        .orElse("http://172.21.20.14:8020/")
+        .get()
+        .trim()
+    require(debugApiUrl.startsWith("http") && !debugApiUrl.contains('"') && !debugApiUrl.contains('\\')) {
+        "titanDebugApiUrl debe ser una URL http(s) valida"
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "TITAN_API_BASE_URL", "\"http://10.0.2.2:8020/\"")
+            buildConfigField("String", "TITAN_API_BASE_URL", "\"$debugApiUrl\"")
             buildConfigField("boolean", "ALLOW_LAN_HTTP", "true")
             manifestPlaceholders["allowCleartext"] = "true"
         }

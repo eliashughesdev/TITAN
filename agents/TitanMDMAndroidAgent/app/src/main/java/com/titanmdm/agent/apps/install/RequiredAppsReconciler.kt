@@ -28,7 +28,7 @@ object RequiredAppsReconciler {
     fun pending(context: Context): List<PolicyApp> {
         val installer = SilentPackageInstaller(context.applicationContext)
         return TitanServerAppStore.read(context)
-            .filter { it.required }
+            .filter { it.available }
             .filter { AppInstallPlanner.plan(it, installer.installedVersionCode(it.packageName)) == AppAction.Install }
     }
 

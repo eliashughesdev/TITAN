@@ -19,6 +19,14 @@ export interface DeviceQueryParameters {
   pageSize?: number
 }
 
+/** Respuesta de DELETE /devices/{id}: el borrado local siempre se hizo. */
+export interface DeviceRemovalResult {
+  deviceId: string
+  googleManaged: boolean
+  googleDeleted: boolean
+  googleError: string | null
+}
+
 export const devicesApi = {
   async getDevices(
     parameters:
@@ -68,6 +76,15 @@ export const devicesApi = {
           },
         )
 
+    return response.data
+  },
+
+  async deleteDevice(
+    deviceId: string,
+  ): Promise<DeviceRemovalResult> {
+    const response = await apiClient.delete(
+      `/devices/${deviceId}`,
+    )
     return response.data
   },
 

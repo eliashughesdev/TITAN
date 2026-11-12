@@ -4,8 +4,9 @@ import com.titanmdm.agent.BuildConfig
 
 object AgentConfig {
     const val AGENT_NAME = "TitanMDM Android Agent"
-    const val AGENT_VERSION = "1.0.0"
-    const val AGENT_VERSION_CODE = 1
+    /** Versión real del APK (build.gradle.kts): la que ve la consola. */
+    const val AGENT_VERSION = BuildConfig.AGENT_VERSION
+    const val AGENT_VERSION_CODE = BuildConfig.VERSION_CODE
     const val PLATFORM = "Android"
     const val CONNECT_TIMEOUT_SECONDS = 30L
     const val READ_TIMEOUT_SECONDS = 30L

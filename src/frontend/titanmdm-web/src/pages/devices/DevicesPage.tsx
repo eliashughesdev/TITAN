@@ -49,6 +49,18 @@ import {
   useDevicesInventory,
 } from './hooks/useDevicesInventory'
 
+import {
+  devicesApi,
+} from '../../api/devicesApi'
+
+import {
+  Permissions,
+} from '../../auth/permissions'
+
+import {
+  getDevicesErrorMessage,
+} from './utils/devicesPage.utils'
+
 import { AndroidPolicyAppOrchestrator } from './components/AndroidPolicyAppOrchestrator'
 import './DevicesPage.css'
 import './WindowsDevicesPremium.css'
@@ -71,6 +83,11 @@ export function DevicesPage() {
     hasPermission,
   } =
     useAuth()
+
+  const canDeleteDevices =
+    hasPermission(Permissions.devices.delete)
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const canManageAndroid =
     hasPermission(
@@ -295,6 +312,29 @@ export function DevicesPage() {
     )
   }
 
+  async function removeDevice(device: DeviceListItem) {
+    const label = device.alias?.trim() || device.deviceName
+    const typed = window.prompt(
+      `Se borrará ${label} de TitanMDM con su historial (ubicaciones, comandos, sesiones remotas). Si está en Android Management también se elimina en Google, lo que restablece el equipo.\n\nUn equipo con el agente TitanMDM queda sin gestión: restablézcalo de fábrica para volver a inscribirlo.\n\nEscribe ELIMINAR para confirmar.`,
+    )
+    if (typed?.trim().toUpperCase() !== 'ELIMINAR') return
+
+    setDeletingId(device.id)
+    try {
+      const result = await devicesApi.deleteDevice(device.id)
+      await inventory.loadDevices()
+      if (result.googleError) {
+        window.alert(`${label} se eliminó de TitanMDM. ${result.googleError}`)
+      }
+    } catch (error) {
+      window.alert(
+        getDevicesErrorMessage(error, 'No se pudo eliminar el dispositivo.'),
+      )
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   /* ============================================================
      REFRESH
      ============================================================ */
@@ -486,6 +526,12 @@ export function DevicesPage() {
           }
           onOpenDevice={
             openDevice
+          }
+          deletingId={deletingId}
+          onDeleteDevice={
+            isAndroidWorkspace && canDeleteDevices
+              ? device => void removeDevice(device)
+              : undefined
           }
         />
 

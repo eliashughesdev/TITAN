@@ -350,6 +350,10 @@ public static class InfrastructureServiceExtensions
             IDeviceAliasService,
             TitanMDM.Infrastructure.Devices.DeviceAliasService>();
 
+        services.AddScoped<
+            IDeviceRemovalService,
+            TitanMDM.Infrastructure.Devices.DeviceRemovalService>();
+
         // ============================================================
         // DEVICES
         // ============================================================

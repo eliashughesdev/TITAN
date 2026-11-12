@@ -32,13 +32,17 @@ public sealed class DevicesController
     private readonly IDeviceAliasService?
         _aliasService;
 
+    private readonly IDeviceRemovalService?
+        _removalService;
+
     private const string DevicesUpdatePermission =
         "devices.update";
 
     public DevicesController(
         IDeviceQueryService deviceQueryService,
         IScopeAccessService scopeAccessService,
-        IDeviceAliasService? aliasService = null)
+        IDeviceAliasService? aliasService = null,
+        IDeviceRemovalService? removalService = null)
     {
         _deviceQueryService =
             deviceQueryService;
@@ -48,6 +52,9 @@ public sealed class DevicesController
 
         _aliasService =
             aliasService;
+
+        _removalService =
+            removalService;
     }
 
     // ============================================================
@@ -93,6 +100,46 @@ public sealed class DevicesController
         catch (ArgumentException exception)
         {
             return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [HttpDelete("{deviceId:guid}")]
+    public async Task<IActionResult> DeleteDevice(
+        Guid deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!HasPermission("devices.delete"))
+            return Forbid();
+
+        var context = GetSecurityContext();
+        if (context is null)
+            return Unauthorized();
+
+        if (_removalService is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        if (!await _scopeAccessService.CanAccessDeviceAsync(
+                context.Value.OrganizationId,
+                context.Value.UserId,
+                deviceId,
+                cancellationToken))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var result = await _removalService.RemovePermanentlyAsync(
+                context.Value.OrganizationId,
+                context.Value.UserId,
+                deviceId,
+                cancellationToken);
+
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new { message = exception.Message });
         }
     }
 

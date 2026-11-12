@@ -8,6 +8,40 @@ public sealed class AndroidPolicyCompilerLauncherTests
     private readonly AndroidPolicyCompiler _compiler = new();
 
     [Fact]
+    public void PlayStore_SeDeclaraEnLaPoliticaPeroNoEsMosaicoDelLauncher()
+    {
+        const string configuration =
+            """
+            {
+              "android": {
+                "launcher": { "enabled": true },
+                "applications": {
+                  "packages": [
+                    { "packageName": "com.acme.wms", "installType": "FORCE_INSTALLED" }
+                  ]
+                }
+              }
+            }
+            """;
+
+        var result = _compiler.Compile(configuration);
+
+        Assert.True(result.IsValid);
+        var policy = Assert.IsType<JsonObject>(result.GooglePolicy);
+        var applications = Assert.IsType<JsonArray>(policy["applications"]);
+        Assert.Contains(
+            applications.OfType<JsonObject>(),
+            app => app["packageName"]!.GetValue<string>() == AndroidPolicyCompiler.PlayStorePackage &&
+                   app["installType"]!.GetValue<string>() == "AVAILABLE");
+
+        var allowedApps = JsonNode.Parse(
+            GetLauncherManagedConfiguration(result)["titan_allowed_apps"]!.GetValue<string>()) as JsonArray;
+        Assert.DoesNotContain(
+            allowedApps!.OfType<JsonObject>(),
+            app => app["packageName"]!.GetValue<string>() == AndroidPolicyCompiler.PlayStorePackage);
+    }
+
+    [Fact]
     public void Launcher_EmitsManagedConfigurationAndHomeActivity()
     {
         const string configuration =

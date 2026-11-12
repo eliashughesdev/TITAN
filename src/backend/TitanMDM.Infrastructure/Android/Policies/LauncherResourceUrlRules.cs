@@ -104,6 +104,50 @@ public static class LauncherResourceUrlRules
         return true;
     }
 
+    /// <summary>
+    /// URL de distribución generada desde LauncherAssetBaseUrl.
+    /// En on-premise acepta HTTP hacia localhost, IP privada o la IP
+    /// pública del servidor TitanMDM. No acepta file:, credenciales ni data:.
+    /// </summary>
+    public static bool TryCreateDistributionUri(
+        string? baseUrl,
+        string relativePath,
+        out string? normalized,
+        out string? error)
+    {
+        normalized = null;
+        error = null;
+
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttp &&
+             baseUri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(baseUri.UserInfo) ||
+            string.IsNullOrWhiteSpace(baseUri.IdnHost))
+        {
+            error =
+                "LauncherAssetBaseUrl debe ser una URL HTTP o HTTPS absoluta del servidor TitanMDM.";
+            return false;
+        }
+
+        var download = new Uri(baseUri, relativePath);
+        if (!HasAllowedExtension(download.AbsolutePath))
+        {
+            error = "El recurso debe ser PNG, JPEG o WebP.";
+            return false;
+        }
+
+        if (IsBlockedDistributionHost(download.IdnHost))
+        {
+            error = "LauncherAssetBaseUrl apunta a un destino no autorizado.";
+            return false;
+        }
+
+        normalized = download.GetComponents(
+            UriComponents.HttpRequestUrl,
+            UriFormat.UriEscaped);
+        return normalized.Length <= MaxLength;
+    }
+
     public static bool HostIsAuthorized(
         string normalizedUrl,
         IEnumerable<string>? authorizedHosts)
@@ -138,6 +182,12 @@ public static class LauncherResourceUrlRules
         var path = Uri.UnescapeDataString(absolutePath);
         return AllowedExtensions.Any(extension =>
             path.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsBlockedDistributionHost(string host)
+    {
+        var normalized = host.Trim().TrimEnd('.').ToLowerInvariant();
+        return normalized is "metadata" or "metadata.google.internal";
     }
 
     private static bool IsPublicHost(string host)

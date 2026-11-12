@@ -68,6 +68,8 @@ public static class AgentApplicationPlanner
             .Where(app =>
                 app.PackageName.Length > 0 &&
                 !string.Equals(app.PackageName, AgentPackageName, StringComparison.Ordinal) &&
+                // Play Store: app del sistema, el agente no la instala desde el repositorio.
+                !string.Equals(app.PackageName, AndroidPolicyCompiler.PlayStorePackage, StringComparison.OrdinalIgnoreCase) &&
                 (RequiredInstallTypes.Contains(app.InstallType) ||
                  string.Equals(app.InstallType, AvailableInstallType, StringComparison.OrdinalIgnoreCase)))
             .GroupBy(app => app.PackageName, StringComparer.Ordinal)
