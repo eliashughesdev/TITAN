@@ -8,6 +8,8 @@
     Produce en -OutputDir:
       web\   build de Vite (incluye web.config para IIS)
       api\   dotnet publish Release win-x64 (framework-dependent)
+      ponches\ codigo Python de Ponches / Fiorella (sin .venv, .env ni datos)
+      agent\ APK del agente Android (deploy\app-debug.apk)
       deploy\ scripts y plantillas de instalacion
 
     No toca IIS ni servicios: el paquete se copia al servidor y alli se
@@ -31,6 +33,8 @@ $ErrorActionPreference = "Stop"
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $frontendDir = Join-Path $root "src\frontend\titanmdm-web"
 $apiProject = Join-Path $root "src\backend\TitanMDM.Api\TitanMDM.Api.csproj"
+$ponchesDir = Join-Path $root "integrations\ponches\backend"
+$agentApk = Join-Path $root "deploy\app-debug.apk"
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -41,12 +45,25 @@ $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $webOut = Join-Path $OutputDir "web"
 $apiOut = Join-Path $OutputDir "api"
 $deployOut = Join-Path $OutputDir "deploy"
+$ponchesOut = Join-Path $OutputDir "ponches"
+$agentOut = Join-Path $OutputDir "agent"
 
 function Invoke-Step {
     param([string]$Title, [scriptblock]$Action)
 
     Write-Host "`n=== $Title ===" -ForegroundColor Cyan
-    & $Action
+
+    # npm/dotnet escriben avisos en stderr; con la salida redirigida,
+    # PowerShell 5.1 los convertiria en errores. Manda el codigo de salida.
+    $global:LASTEXITCODE = 0
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Action 2>&1 | ForEach-Object { "$_" }
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
 
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "$Title fallo (ExitCode=$LASTEXITCODE)."
@@ -113,6 +130,35 @@ Copy-Item (Join-Path $PSScriptRoot "appsettings.Production.json") (Join-Path $ap
 
 if (-not (Test-Path (Join-Path $apiOut "TitanMDM.Api.exe"))) {
     throw "No se genero TitanMDM.Api.exe."
+}
+
+# ------------------------------------------------------------
+# PONCHES / FIORELLA (Python)
+# ------------------------------------------------------------
+# Solo codigo: el .venv se crea en el servidor; .env (credenciales de
+# BioTime) y data\ (estado local) nunca viajan en el paquete.
+
+Write-Host "`n=== Ponches: codigo Python ===" -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $ponchesOut -Force | Out-Null
+& robocopy.exe (Join-Path $ponchesDir "app") (Join-Path $ponchesOut "app") /E /XD __pycache__ /XF *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "robocopy fallo copiando Ponches (codigo $LASTEXITCODE)." }
+$global:LASTEXITCODE = 0
+Copy-Item (Join-Path $ponchesDir "requirements.txt") $ponchesOut -Force
+
+if (-not (Test-Path (Join-Path $ponchesOut "app\main.py"))) {
+    throw "El paquete de Ponches no contiene app\main.py."
+}
+
+# ------------------------------------------------------------
+# AGENTE ANDROID
+# ------------------------------------------------------------
+
+if (Test-Path $agentApk) {
+    New-Item -ItemType Directory -Path $agentOut -Force | Out-Null
+    Copy-Item $agentApk $agentOut -Force
+}
+else {
+    Write-Warning "No existe $agentApk; el paquete no incluye el APK del agente."
 }
 
 # ------------------------------------------------------------

@@ -341,6 +341,17 @@ builder.Services
         configuration.GetSection(
             PonchesOptions.SectionName));
 
+// Python (Ponches / Fiorella) supervisado por el API: lo lanza si no está
+// corriendo, lo reinicia si cae y lo termina al detener el API.
+builder.Services
+    .AddOptions<PythonServiceOptions>()
+    .Bind(
+        configuration.GetSection(
+            PythonServiceOptions.SectionName));
+
+builder.Services.AddHostedService<
+    PythonServiceSupervisor>();
+
 // ----------------------------------------------------------------------------
 // PONCHES CACHE
 //

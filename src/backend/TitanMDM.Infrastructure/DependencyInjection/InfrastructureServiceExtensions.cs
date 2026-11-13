@@ -65,6 +65,9 @@ public static class InfrastructureServiceExtensions
             this IServiceCollection services,
             IConfiguration configuration)
     {
+        SoftwarePackageStorage.Configure(
+            configuration["SoftwarePackages:StoragePath"]);
+
         // ============================================================
         // DATABASE
         // ============================================================

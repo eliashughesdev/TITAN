@@ -8,8 +8,22 @@ public static class SoftwarePackageStorage
 {
     public const string ApkPackageType = "APK";
 
-    public static string Root { get; } =
+    /// <summary>
+    /// Almacén de paquetes. Por defecto App_Data\software junto al binario;
+    /// en producción <c>SoftwarePackages:StoragePath</c> lo lleva fuera de
+    /// la carpeta publicada (el instalador la reemplaza en cada versión).
+    /// </summary>
+    public static string Root { get; private set; } =
         Path.Combine(AppContext.BaseDirectory, "App_Data", "software");
+
+    /// <summary>Se llama una vez al registrar la infraestructura.</summary>
+    public static void Configure(string? storagePath)
+    {
+        if (!string.IsNullOrWhiteSpace(storagePath))
+        {
+            Root = Path.GetFullPath(storagePath);
+        }
+    }
 
     /// <summary>Ruta absoluta del paquete; rechaza rutas fuera del almacén.</summary>
     public static string GetFullPath(SoftwarePackage package)

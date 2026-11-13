@@ -132,3 +132,10 @@ class Settings(BaseSettings):
 
 settings = Settings()
 os.environ.setdefault("APP_ENV", settings.APP_ENV)
+
+# Clave OpenRouter propia de Fiorella. La entrega el supervisor de .NET
+# (PythonServiceSupervisor) y tiene prioridad sobre OPENROUTER_API_KEY del
+# .env; todos los módulos de Fiorella leen OPENROUTER_API_KEY.
+_fiorella_openrouter_key = os.getenv("FIORELLA_OPENROUTER_KEY", "").strip()
+if _fiorella_openrouter_key:
+    os.environ["OPENROUTER_API_KEY"] = _fiorella_openrouter_key

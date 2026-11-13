@@ -15,7 +15,12 @@
        entorno del servicio (HKLM\...\Services\TitanMDM.Api\Environment).
     5. Crea Application Pool (No Managed Code) y sitio IIS que sirve el
        frontend y hace reverse proxy de /api y /hubs al servicio.
-    6. Opcional: registra Ponches (Python/uvicorn) con NSSM.
+    6. Ponches / Fiorella (Python). Por defecto (-PonchesMode Supervised)
+       el propio TitanMDM.Api lo lanza, lo reinicia si cae y lo termina al
+       detenerse (PythonServiceSupervisor); este script crea el .venv en
+       InstallRoot\ponches. -PonchesMode Nssm conserva el servicio NSSM.
+       Los datos (adjuntos, APK, recursos del launcher) viven en
+       %ProgramData%\TitanMDM y sobreviven a las actualizaciones.
     7. Verifica /api/health/ready a traves de IIS.
 
     Idempotente: re-ejecutarlo actualiza la version instalada.
@@ -51,6 +56,11 @@ param(
     [string]$SecretsFile = "",
     [string]$AspNetCoreEnvironment = "Production",
 
+    [ValidateSet("Supervised", "Nssm", "None")]
+    [string]$PonchesMode = "Supervised",
+    # Python 3.11+ del servidor para crear el .venv (por defecto: py -3 o python).
+    [string]$PythonExe = "",
+    # Solo -PonchesMode Nssm: carpeta externa con .venv propio.
     [string]$PonchesDir = "",
     [string]$NssmPath = "",
     [int]$PonchesPort = 8127,
@@ -68,6 +78,22 @@ $apiTarget = Join-Path $InstallRoot "api"
 $logsTarget = Join-Path $InstallRoot "logs"
 $dataRoot = Join-Path $env:ProgramData "TitanMDM"
 $apiExe = Join-Path $apiTarget "TitanMDM.Api.exe"
+$ponchesSource = Join-Path $PackageDir "ponches"
+$ponchesTarget = Join-Path $InstallRoot "ponches"
+$agentSource = Join-Path $PackageDir "agent\app-debug.apk"
+$agentTarget = Join-Path $InstallRoot "agent"
+
+# Datos persistentes: fuera de api\ (robocopy /MIR la reemplaza en cada version).
+$storage = [ordered]@{
+    "HelpdeskAttachments__StoragePath" = (Join-Path $dataRoot "helpdesk-attachments")
+    "SoftwarePackages__StoragePath" = (Join-Path $dataRoot "software")
+    "AndroidManagement__LauncherAssetRoot" = (Join-Path $dataRoot "launcher-assets")
+}
+$legacyAppData = [ordered]@{
+    "helpdesk-attachments" = "HelpdeskAttachments__StoragePath"
+    "software" = "SoftwarePackages__StoragePath"
+    "launcher-assets" = "AndroidManagement__LauncherAssetRoot"
+}
 
 if ([string]::IsNullOrWhiteSpace($ServiceAccount)) {
     $ServiceAccount = "NT SERVICE\$ServiceName"
@@ -189,6 +215,19 @@ if (Test-Path $apiTarget) {
 Write-Step "Copiando archivos a $InstallRoot"
 
 New-Item -ItemType Directory -Path $webTarget, $apiTarget, $logsTarget, $dataRoot -Force | Out-Null
+foreach ($path in $storage.Values) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
+
+# Versiones anteriores guardaban los datos en api\App_Data: se migran una
+# vez, antes de que /MIR los elimine.
+foreach ($folder in $legacyAppData.Keys) {
+    $legacy = Join-Path $apiTarget "App_Data\$folder"
+    $target = $storage[$legacyAppData[$folder]]
+    if ((Test-Path $legacy) -and -not (Get-ChildItem $target -Force -ErrorAction SilentlyContinue)) {
+        Write-Host "Migrando $legacy -> $target"
+        & robocopy.exe $legacy $target /E /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "robocopy fallo migrando $legacy (codigo $LASTEXITCODE)." }
+    }
+}
 
 foreach ($pair in @(@($webSource, $webTarget), @($apiSource, $apiTarget))) {
     # /MIR elimina archivos obsoletos; robocopy < 8 = exito.
@@ -196,6 +235,56 @@ foreach ($pair in @(@($webSource, $webTarget), @($apiSource, $apiTarget))) {
 
     if ($LASTEXITCODE -ge 8) {
         throw "robocopy fallo copiando $($pair[0]) (codigo $LASTEXITCODE)."
+    }
+}
+
+if (Test-Path $agentSource) {
+    New-Item -ItemType Directory -Path $agentTarget -Force | Out-Null
+    Copy-Item $agentSource $agentTarget -Force
+}
+
+# Ponches supervisado: codigo nuevo; .venv, .env y data\ se conservan.
+if ($PonchesMode -eq "Supervised") {
+    if (-not (Test-Path (Join-Path $ponchesSource "app\main.py"))) {
+        throw "El paquete no contiene ponches\app (genere con Publish-TitanMDM.ps1) o use -PonchesMode None."
+    }
+
+    New-Item -ItemType Directory -Path $ponchesTarget, (Join-Path $ponchesTarget "data") -Force | Out-Null
+    & robocopy.exe (Join-Path $ponchesSource "app") (Join-Path $ponchesTarget "app") /MIR /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy fallo copiando Ponches (codigo $LASTEXITCODE)." }
+    Copy-Item (Join-Path $ponchesSource "requirements.txt") $ponchesTarget -Force
+
+    $venvDir = Join-Path $ponchesTarget ".venv"
+    $venvPython = Join-Path $venvDir "Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        Write-Step "Creando entorno virtual de Python en $venvDir"
+        if ($PythonExe) {
+            Invoke-Native $PythonExe @("-m", "venv", $venvDir) | Out-Null
+        }
+        elseif (Get-Command py.exe -ErrorAction SilentlyContinue) {
+            Invoke-Native "py.exe" @("-3", "-m", "venv", $venvDir) | Out-Null
+        }
+        elseif (Get-Command python.exe -ErrorAction SilentlyContinue) {
+            Invoke-Native "python.exe" @("-m", "venv", $venvDir) | Out-Null
+        }
+        else {
+            throw "No se encontro Python 3 en el servidor. Instalelo para todos los usuarios o use -PythonExe."
+        }
+    }
+
+    Write-Step "Instalando dependencias de Ponches (pip)"
+    Invoke-Native $venvPython @("-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", (Join-Path $ponchesTarget "requirements.txt")) | Out-Null
+
+    if (-not (Test-Path (Join-Path $ponchesTarget ".env"))) {
+        Write-Warning "Falta $ponchesTarget\.env (DB_SERVER, DB_NAME, DB_AUTH... de BioTime). Fiorella responde, pero los ponches no hasta crearlo."
+    }
+
+    # Un servicio NSSM previo competiria por el mismo puerto.
+    $legacyPonches = Get-Service "TitanMDM.Ponches" -ErrorAction SilentlyContinue
+    if ($legacyPonches) {
+        Write-Host "Deshabilitando el servicio NSSM TitanMDM.Ponches: ahora lo supervisa $ServiceName."
+        Stop-Service $legacyPonches.Name -Force -ErrorAction SilentlyContinue
+        Set-Service $legacyPonches.Name -StartupType Disabled
     }
 }
 
@@ -246,12 +335,30 @@ foreach ($grant in @(
     Invoke-Native icacls.exe @($grant[0], "/grant", "${ServiceAccount}:$($grant[1])", "/T", "/Q") | Out-Null
 }
 
+if ($PonchesMode -eq "Supervised") {
+    # Python corre con la cuenta del servicio: lee su codigo y escribe en data\.
+    Invoke-Native icacls.exe @($ponchesTarget, "/grant", "${ServiceAccount}:(OI)(CI)RX", "/T", "/Q") | Out-Null
+    Invoke-Native icacls.exe @((Join-Path $ponchesTarget "data"), "/grant", "${ServiceAccount}:(OI)(CI)M", "/T", "/Q") | Out-Null
+}
+
+if (Test-Path $agentTarget) {
+    Invoke-Native icacls.exe @($agentTarget, "/grant", "${ServiceAccount}:(OI)(CI)RX", "/T", "/Q") | Out-Null
+}
+
 # Variables de entorno del servicio (secretos fuera de appsettings).
 $environmentValues = [ordered]@{
     "ASPNETCORE_ENVIRONMENT" = $AspNetCoreEnvironment
     "DOTNET_ENVIRONMENT" = $AspNetCoreEnvironment
     "DataProtection__KeyRingPath" = (Join-Path $dataRoot "DataProtectionKeys")
     "Ponches__BaseUrl" = "http://127.0.0.1:$PonchesPort"
+    "PythonService__Enabled" = $(if ($PonchesMode -eq "Supervised") { "true" } else { "false" })
+    "PythonService__WorkingDirectory" = $ponchesTarget
+}
+
+foreach ($name in $storage.Keys) { $environmentValues[$name] = $storage[$name] }
+
+if (Test-Path (Join-Path $agentTarget "app-debug.apk")) {
+    $environmentValues["AndroidProvisioning__ApkPath"] = (Join-Path $agentTarget "app-debug.apk")
 }
 
 if ($HostName) {
@@ -327,7 +434,11 @@ Start-Service $ServiceName
 # 5. PONCHES (opcional, NSSM)
 # ============================================================
 
-if ($PonchesDir) {
+if ($PonchesMode -eq "Nssm") {
+    if (-not $PonchesDir) {
+        throw "-PonchesMode Nssm requiere -PonchesDir (carpeta con .venv propio)."
+    }
+
     $pythonExe = Join-Path $PonchesDir ".venv\Scripts\python.exe"
 
     if (-not (Test-Path $pythonExe)) {
