@@ -112,6 +112,10 @@ public sealed class AndroidPolicyCompiler
             googlePolicy,
             errors);
 
+        FinalizeFactoryApplications(
+            googlePolicy,
+            warnings);
+
         if (errors.Count > 0)
         {
             return AndroidPolicyCompilationResult.Failure(
@@ -793,7 +797,7 @@ public sealed class AndroidPolicyCompiler
             if (alreadyExists)
                 continue;
 
-            compiledApps.Add(
+            var compiledApp =
                 new JsonObject
                 {
                     ["packageName"] =
@@ -801,7 +805,28 @@ public sealed class AndroidPolicyCompiler
 
                     ["installType"] =
                         installType
-                });
+                };
+
+            // Ajustes por app que TI puede fijar; si faltan, se completan
+            // con valores desatendidos en FinalizeFactoryApplications.
+            var permissionPolicy =
+                GetString(package, "defaultPermissionPolicy", string.Empty)
+                    .Trim()
+                    .ToUpperInvariant();
+
+            if (permissionPolicy is "PROMPT" or "GRANT" or "DENY")
+                compiledApp["defaultPermissionPolicy"] = permissionPolicy;
+
+            var autoUpdateMode =
+                GetString(package, "autoUpdateMode", string.Empty)
+                    .Trim()
+                    .ToUpperInvariant();
+
+            if (autoUpdateMode is "AUTO_UPDATE_DEFAULT" or "AUTO_UPDATE_POSTPONED" or "AUTO_UPDATE_HIGH_PRIORITY")
+                compiledApp["autoUpdateMode"] = autoUpdateMode;
+
+            compiledApps.Add(
+                compiledApp);
         }
 
         // Play Store debe estar en la política: en modo WHITELIST Google
@@ -834,9 +859,172 @@ public sealed class AndroidPolicyCompiler
         }
     }
 
+    /// <summary>
+    /// Política que se envía a Android Management en modo fábrica: Play Store
+    /// forzada (si queda AVAILABLE, el resto no sale de pendiente), permisos
+    /// concedidos, y un tope de objetos para que el patch no sea rechazado.
+    /// </summary>
+    private static void FinalizeFactoryApplications(
+        JsonObject policy,
+        ICollection<string> warnings)
+    {
+        if (policy["applications"] is not JsonArray applications ||
+            applications.Count == 0)
+        {
+            return;
+        }
+
+        var byName = new Dictionary<string, JsonObject>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in applications.OfType<JsonObject>())
+        {
+            var name = GetString(node, "packageName", string.Empty).Trim();
+            if (name.Length == 0)
+                continue;
+
+            if (!byName.TryGetValue(name, out var existing) ||
+                InstallStrength(GetString(node, "installType", string.Empty)) >
+                InstallStrength(GetString(existing, "installType", string.Empty)))
+            {
+                byName[name] = node;
+            }
+        }
+
+        if (!byName.ContainsKey(PlayStorePackage))
+        {
+            byName[PlayStorePackage] = new JsonObject
+            {
+                ["packageName"] = PlayStorePackage,
+                ["installType"] = "FORCE_INSTALLED"
+            };
+        }
+
+        var play = byName[PlayStorePackage];
+        var playType = GetString(play, "installType", "AVAILABLE")
+            .ToUpperInvariant();
+
+        if (playType is not ("FORCE_INSTALLED" or "REQUIRED_FOR_SETUP" or "KIOSK"))
+        {
+            if (playType == "BLOCKED")
+            {
+                warnings.Add(
+                    "Android: Play Store no puede quedar bloqueada si hay apps administradas; se fuerza para que no queden pendientes.");
+            }
+
+            play["installType"] = "FORCE_INSTALLED";
+        }
+
+        StampInstallable(play);
+
+        var setup = byName.Values
+            .Where(app => string.Equals(
+                GetString(app, "installType", string.Empty),
+                "REQUIRED_FOR_SETUP",
+                StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(app => string.Equals(
+                GetString(app, "packageName", string.Empty),
+                DefaultLauncherPackage,
+                StringComparison.OrdinalIgnoreCase))
+            .ThenBy(app => GetString(app, "packageName", string.Empty), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        for (var index = MaxRequiredForSetup; index < setup.Count; index++)
+        {
+            var name = GetString(setup[index], "packageName", string.Empty);
+            setup[index]["installType"] = "FORCE_INSTALLED";
+            warnings.Add(
+                $"Android: {name} pasa de REQUIRED_FOR_SETUP a FORCE_INSTALLED para que el aprovisionamiento de fábrica no quede pendiente.");
+        }
+
+        foreach (var app in byName.Values)
+        {
+            var type = GetString(app, "installType", "AVAILABLE")
+                .ToUpperInvariant();
+
+            if (type is "FORCE_INSTALLED" or "PREINSTALLED" or "KIOSK" or "REQUIRED_FOR_SETUP")
+                StampInstallable(app);
+        }
+
+        var ordered = byName.Values
+            .OrderBy(ApplicationRank)
+            .ThenBy(app => GetString(app, "packageName", string.Empty), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ordered.Count > MaxGoogleApplications)
+        {
+            warnings.Add(
+                $"Android: la política supera {MaxGoogleApplications} aplicaciones de Android Management; se omiten {ordered.Count - MaxGoogleApplications}.");
+            ordered = ordered.Take(MaxGoogleApplications).ToList();
+        }
+
+        var capped = new JsonArray();
+        foreach (var app in ordered)
+            capped.Add(app.DeepClone());
+
+        policy["applications"] = capped;
+    }
+
+    /// <summary>
+    /// Valores por defecto para que una app obligatoria se instale y
+    /// actualice sin intervención. Lo que el administrador haya fijado
+    /// explícitamente (p. ej. PROMPT para permisos) se respeta.
+    /// </summary>
+    private static void StampInstallable(JsonObject app)
+    {
+        if (string.IsNullOrWhiteSpace(GetString(app, "autoUpdateMode", string.Empty)))
+            app["autoUpdateMode"] = "AUTO_UPDATE_HIGH_PRIORITY";
+
+        if (string.IsNullOrWhiteSpace(GetString(app, "defaultPermissionPolicy", string.Empty)))
+            app["defaultPermissionPolicy"] = "GRANT";
+    }
+
+    private static int InstallStrength(string installType) =>
+        installType.ToUpperInvariant() switch
+        {
+            "KIOSK" => 6,
+            "REQUIRED_FOR_SETUP" => 5,
+            "FORCE_INSTALLED" => 4,
+            "PREINSTALLED" => 3,
+            "BLOCKED" => 2,
+            "AVAILABLE" => 1,
+            _ => 0
+        };
+
+    private static int ApplicationRank(JsonObject app)
+    {
+        var name = GetString(app, "packageName", string.Empty);
+        if (string.Equals(name, PlayStorePackage, StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (string.Equals(name, DefaultLauncherPackage, StringComparison.OrdinalIgnoreCase))
+            return 1;
+
+        return GetString(app, "installType", string.Empty).ToUpperInvariant() switch
+        {
+            "KIOSK" => 2,
+            "REQUIRED_FOR_SETUP" => 3,
+            "FORCE_INSTALLED" => 4,
+            "PREINSTALLED" => 5,
+            "BLOCKED" => 6,
+            _ => 7
+        };
+    }
+
     /// <summary>Google Play Store (Managed Play).</summary>
     public const string PlayStorePackage =
         "com.android.vending";
+
+    /// <summary>
+    /// Tope de Android Management API. Por encima, el patch se rechaza y
+    /// las apps obligatorias se quedan en pendiente.
+    /// </summary>
+    public const int MaxGoogleApplications = 500;
+
+    /// <summary>
+    /// El asistente de fábrica espera a todas las REQUIRED_FOR_SETUP. Más
+    /// de este tope deja el equipo colgado en pendiente si una no está en Play.
+    /// </summary>
+    public const int MaxRequiredForSetup = 5;
 
     private const string DefaultLauncherPackage =
         "com.titanmdm.agent";

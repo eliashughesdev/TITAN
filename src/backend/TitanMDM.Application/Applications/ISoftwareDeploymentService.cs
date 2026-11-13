@@ -34,6 +34,12 @@ public interface ISoftwareDeploymentService
             Guid deviceId,
             Guid packageId,
             CancellationToken cancellationToken = default);
+
+    Task<SoftwarePackageDownloadDto?>
+        GetApkDownloadByPackageNameAsync(
+            Guid deviceId,
+            string packageName,
+            CancellationToken cancellationToken = default);
 }
 
 public sealed record SoftwarePackageDownloadDto(

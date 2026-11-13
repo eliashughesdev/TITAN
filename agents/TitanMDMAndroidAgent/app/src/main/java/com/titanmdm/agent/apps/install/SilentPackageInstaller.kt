@@ -1,6 +1,7 @@
 package com.titanmdm.agent.apps.install
 
 import android.app.PendingIntent
+import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -78,12 +80,21 @@ class SilentPackageInstaller(context: Context) {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
                 when (status) {
                     PackageInstaller.STATUS_SUCCESS -> result.complete(Outcome.Installed)
-                    PackageInstaller.STATUS_PENDING_USER_ACTION -> result.complete(
-                        Outcome.Failed(
-                            "INSTALL_REQUIRES_USER",
-                            "Android pidió confirmación: el agente no es Device Owner."
-                        )
-                    )
+                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                        if (!canConfirmWithoutTouch()) {
+                            result.complete(
+                                Outcome.Failed(
+                                    "INSTALL_REQUIRES_USER",
+                                    "Android pidió confirmación y no hay Device Owner ni accesibilidad."
+                                )
+                            )
+                        } else {
+                            confirmIntent(intent)?.let { confirm ->
+                                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                runCatching { context.startActivity(confirm) }
+                            }
+                        }
+                    }
                     else -> result.complete(Outcome.Failed("INSTALL_FAILED_$status", message.ifBlank { "Android rechazó la instalación." }))
                 }
             }
@@ -92,6 +103,8 @@ class SilentPackageInstaller(context: Context) {
         ContextCompat.registerReceiver(context, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
         try {
             val sessionId = withContext(Dispatchers.IO) {
+                // APK completo: MODE_INHERIT_EXISTING conservaría splits de la
+                // versión anterior y puede romper actualizaciones.
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                     setAppPackageName(packageName)
                     setInstallReason(PackageManager.INSTALL_REASON_POLICY)
@@ -118,6 +131,7 @@ class SilentPackageInstaller(context: Context) {
                 PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
             )
+            InstallSessionGuard.allow(packageName)
             installer.openSession(sessionId).use { it.commit(pending.intentSender) }
 
             return withTimeoutOrNull(INSTALL_TIMEOUT_MS) { result.await() }
@@ -125,9 +139,29 @@ class SilentPackageInstaller(context: Context) {
         } catch (exception: Exception) {
             return Outcome.Failed("INSTALL_ERROR", exception.message ?: exception.javaClass.simpleName)
         } finally {
+            InstallSessionGuard.clear(packageName)
             runCatching { context.unregisterReceiver(receiver) }
         }
     }
+
+    private fun canConfirmWithoutTouch(): Boolean {
+        val owner = context.getSystemService(DevicePolicyManager::class.java)
+            ?.isDeviceOwnerApp(context.packageName) == true
+        if (owner) return true
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        return enabled.contains(context.packageName + "/" + InstallConfirmationService::class.java.name)
+    }
+
+    private fun confirmIntent(intent: Intent): Intent? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_INTENT)
+        }
 
     private companion object {
         const val ACTION_PREFIX = "com.titanmdm.agent.INSTALL_RESULT"

@@ -10,6 +10,7 @@ import com.titanmdm.agent.core.storage.AgentIdentity
 import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.core.storage.DeviceAliasStore
 import com.titanmdm.agent.enrollment.EnrollmentPayloadParser
+import com.titanmdm.agent.enrollment.auto.LocalProvisionFile
 import com.titanmdm.agent.enrollment.registration.RegistrationRepository
 import com.titanmdm.agent.enrollment.registration.RegistrationResult
 import com.titanmdm.agent.heartbeat.HeartbeatRepository
@@ -126,7 +127,17 @@ class AgentViewModel(
         _uiState.asStateFlow()
 
     init {
+        consumeLocalProvision()
         loadState()
+    }
+
+    /** /sdcard/titan_provision.json: alta masiva sin QR ni cámara. */
+    fun consumeLocalProvision() {
+        if (!LocalProvisionFile.consumeIfPresent(appContext)) return
+        _uiState.value = _uiState.value.copy(
+            message = "Configuración local encontrada. Inscribiendo...",
+            error = null
+        )
     }
 
     /*
@@ -160,6 +171,9 @@ class AgentViewModel(
 
     private var wedgeParseJob: Job? = null
 
+    /** Evita doble alta si el láser entrega la misma lectura por Intent y por teclado. */
+    private var acceptingScan = false
+
     fun updateServerUrl(value: String) {
 
         _uiState.value =
@@ -182,7 +196,7 @@ class AgentViewModel(
 
         // El gatillo puede entregar la misma lectura por dos vias (Intent y
         // teclado); una inscripcion en curso o hecha no se repite.
-        if (_uiState.value.registering || _uiState.value.enrolled) return true
+        if (acceptingScan || _uiState.value.registering || _uiState.value.enrolled) return true
         wedgeParseJob?.cancel()
 
         val payload = EnrollmentPayloadParser.parse(raw)
@@ -216,7 +230,10 @@ class AgentViewModel(
                 message = server?.let { "QR leído. Servidor: $it" } ?: "Token leído."
             )
 
-        if (autoRegister) register()
+        if (autoRegister) {
+            acceptingScan = true
+            register()
+        }
         return true
     }
 
@@ -326,6 +343,7 @@ class AgentViewModel(
 
         if (token.isBlank()) {
 
+            acceptingScan = false
             _uiState.value =
                 _uiState.value.copy(
                     error =
@@ -347,6 +365,7 @@ class AgentViewModel(
 
         if (serverUrl != null) {
             AgentConfig.validateServerUrl(serverUrl).onFailure {
+                acceptingScan = false
                 _uiState.value =
                     _uiState.value.copy(
                         error = it.message
@@ -417,6 +436,7 @@ class AgentViewModel(
 
                 is RegistrationResult.Failure -> {
 
+                    acceptingScan = false
                     _uiState.value =
                         _uiState.value.copy(
                             registering = false,

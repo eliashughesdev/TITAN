@@ -150,7 +150,7 @@ public sealed class ZeroTouchProvisioningTests
         var apps = payload["applications"]!.AsArray().Select(x => x!.AsObject()).ToList();
         var sample = Assert.Single(apps, x => x["packageName"]!.GetValue<string>() == SamplePackage);
         Assert.True(sample["available"]!.GetValue<bool>());
-        Assert.Equal($"/api/device/software-packages/{apk.Id:D}/download", sample["downloadUrl"]!.GetValue<string>());
+        Assert.Equal($"/api/apps/download/{SamplePackage}", sample["downloadUrl"]!.GetValue<string>());
         Assert.Equal(apk.Sha256, sample["sha256"]!.GetValue<string>());
         Assert.Equal(7, sample["versionCode"]!.GetValue<long>());
 

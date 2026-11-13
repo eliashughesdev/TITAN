@@ -32,7 +32,9 @@ public sealed class AndroidPolicyCompilerLauncherTests
         Assert.Contains(
             applications.OfType<JsonObject>(),
             app => app["packageName"]!.GetValue<string>() == AndroidPolicyCompiler.PlayStorePackage &&
-                   app["installType"]!.GetValue<string>() == "AVAILABLE");
+                   app["installType"]!.GetValue<string>() == "FORCE_INSTALLED" &&
+                   app["autoUpdateMode"]!.GetValue<string>() == "AUTO_UPDATE_HIGH_PRIORITY" &&
+                   app["defaultPermissionPolicy"]!.GetValue<string>() == "GRANT");
 
         var allowedApps = JsonNode.Parse(
             GetLauncherManagedConfiguration(result)["titan_allowed_apps"]!.GetValue<string>()) as JsonArray;

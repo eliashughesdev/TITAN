@@ -136,7 +136,7 @@ public static class AgentApplicationPlanner
                 ["required"] = app.Required,
                 ["available"] = true,
                 ["packageId"] = best.Package.Id.ToString("D"),
-                ["downloadUrl"] = $"/api/device/software-packages/{best.Package.Id:D}/download",
+                ["downloadUrl"] = ManagedAppDownload.Url(app.PackageName),
                 ["sha256"] = best.Package.Sha256,
                 ["sizeBytes"] = best.Package.SizeBytes,
                 ["versionCode"] = best.Manifest!.VersionCode,

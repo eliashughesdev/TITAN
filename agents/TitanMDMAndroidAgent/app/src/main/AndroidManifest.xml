@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Internet / API -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -51,9 +52,18 @@
          (reclamar el lector y recibir lecturas). Ignorado en otras marcas. -->
     <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
 
+    <!-- titan_provision.json en /sdcard (enrolamiento masivo sin QR). -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <!-- Lector Honeywell (Data Collection Service): visibilidad de paquete en Android 11+. -->
     <queries>
         <package android:name="com.intermec.datacollectionservice" />
+        <package android:name="com.google.android.gms" />
+        <package android:name="com.android.vending" />
+        <package android:name="com.google.android.apps.work.clouddpc" />
     </queries>
 
     <application
@@ -64,6 +74,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="TitanMDM Agent"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.TitanMDMAndroidAgent"
         android:usesCleartextTraffic="${allowCleartext}">
@@ -100,6 +111,29 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Scan to Intent / Keyboard Wedge: entrega explícita del láser CK65. -->
+        <receiver
+            android:name=".scanner.HoneywellBarcodeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.honeywell.decode.intent.ACTION_BARCODE_DATA" />
+                <action android:name="com.titanmdm.agent.action.HONEYWELL_BARCODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".apps.install.InstallConfirmationService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/install_confirmation_service" />
+        </service>
 
         <receiver
             android:name=".receivers.BootReceiver"

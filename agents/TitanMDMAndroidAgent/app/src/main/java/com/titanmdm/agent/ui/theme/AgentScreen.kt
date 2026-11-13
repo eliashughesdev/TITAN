@@ -27,6 +27,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,7 +66,15 @@ fun TitanAgentScreen(
     val state by
     viewModel.uiState.collectAsState()
 
-    Scaffold { paddingValues ->
+    if (!state.enrolled) {
+        HoneywellEnrollmentCapture(
+            onScanned = viewModel::applyScannedPayload,
+            onResume = viewModel::consumeLocalProvision
+        )
+    }
+
+    LocationPermissionGate(enrolled = state.enrolled) {
+        Scaffold { paddingValues ->
 
         Column(
             modifier = Modifier
@@ -195,6 +208,7 @@ fun TitanAgentScreen(
             )
         }
     }
+    }
 }
 
 @Composable
@@ -292,6 +306,67 @@ private fun AgentHeader(state: AgentUiState) {
 
 private val HeaderGreen = Color(0xFF16A36A)
 
+/**
+ * Gatillo láser en la pantalla de token: ACTION_BARCODE_DATA (lectura
+ * directa o wedge con Data Intent) y ráfaga de teclado. El claim se hace
+ * ya en RESUMED: el observer no recibe el ON_RESUME que ya ocurrió, y sin
+ * claim el CK65 pita error porque el QR sigue apagado.
+ */
+@Composable
+private fun HoneywellEnrollmentCapture(
+    onScanned: (String, Boolean) -> Boolean,
+    onResume: () -> Unit
+) {
+    val context = LocalContext.current
+    val honeywell = remember { HoneywellScanner.info(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val storagePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { onResume() }
+
+    DisposableEffect(honeywell.shouldClaim, lifecycleOwner) {
+        val onLaser: (String) -> Unit = { data ->
+            onScanned(data, EnrollmentPayloadParser.isStructured(data))
+        }
+        val stop = HoneywellScanner.register(context, onLaser)
+        val stopKeystroke = KeystrokeScanner.listen(onLaser)
+
+        val claim = {
+            if (honeywell.shouldClaim) HoneywellScanner.claim(context)
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    claim()
+                    onResume()
+                }
+                Lifecycle.Event.ON_PAUSE -> if (honeywell.shouldClaim) HoneywellScanner.release(context)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            claim()
+        }
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (honeywell.shouldClaim) HoneywellScanner.release(context)
+            stop()
+            stopKeystroke()
+        }
+    }
+
+    LaunchedEffect(honeywell.vendorDevice) {
+        if (!honeywell.vendorDevice || Build.VERSION.SDK_INT > 32) return@LaunchedEffect
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermission.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+}
+
 @Composable
 private fun EnrollmentCard(
     state: AgentUiState,
@@ -309,37 +384,6 @@ private fun EnrollmentCard(
         rememberLauncherForActivityResult(ScanContract()) { result ->
             result.contents?.let { onScanned(it, true) }
         }
-
-    // Gatillo laser: inscripcion desatendida, sin tocar la pantalla. Solo
-    // se acepta un QR con formato TitanMDM (titanmdm://enroll o JSON).
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(honeywell.available, lifecycleOwner) {
-        val onLaser: (String) -> Unit = { data ->
-            onScanned(data, EnrollmentPayloadParser.isStructured(data))
-        }
-        val stop = HoneywellScanner.register(context, onLaser)
-        // Modo teclado (Keystroke): mismo tratamiento que el modo Intent.
-        val stopKeystroke = KeystrokeScanner.listen(onLaser)
-
-        // El Data Collection Service solo entrega al dueño del primer plano:
-        // reclamar en ON_RESUME y soltar en ON_PAUSE.
-        val observer = LifecycleEventObserver { _, event ->
-            if (!honeywell.available) return@LifecycleEventObserver
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> HoneywellScanner.claim(context)
-                Lifecycle.Event.ON_PAUSE -> HoneywellScanner.release(context)
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            if (honeywell.available) HoneywellScanner.release(context)
-            stop()
-            stopKeystroke()
-        }
-    }
 
     // Lector en modo teclado que "escribe" en el campo con el foco: el
     // campo del token lo toma desde el inicio.
@@ -368,9 +412,9 @@ private fun EnrollmentCard(
             Text(
                 text =
                     if (honeywell.available)
-                        "Presiona el gatillo y apunta al QR de inscripción: el equipo se inscribe solo. También puedes usar la cámara o escribir el token."
+                        "Presiona el gatillo y apunta al QR de inscripción: el equipo se inscribe solo. También puedes usar la cámara, escribir el token o copiar titan_provision.json en /sdcard."
                     else
-                        "Escanea el QR generado en Inscripción → Android Agent, o escribe el token."
+                        "Escanea el QR, escribe el token, o copia titan_provision.json en /sdcard para inscribir sin cámara."
             )
 
             Button(

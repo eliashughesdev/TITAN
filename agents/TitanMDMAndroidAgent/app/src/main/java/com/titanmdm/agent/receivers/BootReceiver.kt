@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.titanmdm.agent.enrollment.auto.AutoEnrollment
+import com.titanmdm.agent.enrollment.auto.LocalProvisionFile
 import com.titanmdm.agent.kiosk.KioskController
 import com.titanmdm.agent.lock.LockScreenController
 import com.titanmdm.agent.location.GeofenceRegistrar
@@ -39,7 +40,10 @@ class BootReceiver : BroadcastReceiver() {
                     )
                 }
 
-                // Inscripción por QR que aún no llegó al servidor.
+                // /sdcard/titan_provision.json o un QR que aún no llegó al servidor.
+                LocalProvisionFile.consumeIfPresent(
+                    context.applicationContext
+                )
                 AutoEnrollment.resumeIfPending(
                     context.applicationContext
                 )

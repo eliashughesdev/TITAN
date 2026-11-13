@@ -43,6 +43,10 @@ param(
     [string]$SiteName = "TitanMDM",
     [string]$ServiceName = "TitanMDMService",
     [string]$HostName = "",
+    [int]$HttpPort = 80,
+    [string]$PublicUrl = "",
+    [int]$ApiPort = 8020,
+    [int]$PonchesPort = 8127,
     [string]$CertificateThumbprint = "",
     [string]$SecretsFile = "",
     [ValidateSet("Supervised", "Nssm", "None")]
@@ -129,6 +133,10 @@ $installArgs = @{
     PonchesMode = $PonchesMode
 }
 if ($HostName) { $installArgs.HostName = $HostName }
+if ($PublicUrl) { $installArgs.PublicUrl = $PublicUrl }
+$installArgs.HttpPort = $HttpPort
+$installArgs.ApiPort = $ApiPort
+$installArgs.PonchesPort = $PonchesPort
 if ($CertificateThumbprint) { $installArgs.CertificateThumbprint = $CertificateThumbprint }
 if ($SecretsFile) { $installArgs.SecretsFile = $SecretsFile }
 if ($PythonExe) { $installArgs.PythonExe = $PythonExe }

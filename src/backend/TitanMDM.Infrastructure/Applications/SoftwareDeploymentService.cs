@@ -575,15 +575,25 @@ public sealed class SoftwareDeploymentService
             var deviceId
             in deviceIds)
         {
-            var payload =
+            var androidPackageName =
+                ReadAndroidPackageName(
+                    package);
+
+        var payload =
                 JsonSerializer.Serialize(
                     new
                     {
                         packageId =
                             package.Id,
 
+                        packageName =
+                            androidPackageName,
+
                         downloadUrl =
-                            $"/api/device/software-packages/{package.Id}/download",
+                            androidPackageName is null
+                                ? $"/api/device/software-packages/{package.Id}/download"
+                                : ManagedAppDownload.Url(
+                                    androidPackageName),
 
                         fileName =
                             package.OriginalFileName,
@@ -788,6 +798,184 @@ public sealed class SoftwareDeploymentService
             ContentType:
                 GetContentType(
                     package.PackageType));
+    }
+
+    public async Task<SoftwarePackageDownloadDto?>
+        GetApkDownloadByPackageNameAsync(
+            Guid deviceId,
+            string packageName,
+            CancellationToken cancellationToken = default)
+    {
+        if (
+            deviceId == Guid.Empty
+            ||
+            !ManagedAppDownload.IsValidPackageName(
+                packageName))
+        {
+            return null;
+        }
+
+        var device =
+            await _dbContext
+                .Devices
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.Id == deviceId
+                        &&
+                        !x.IsDeleted,
+                    cancellationToken);
+
+        if (
+            device is null
+            ||
+            device.Platform != DevicePlatform.Android)
+        {
+            return null;
+        }
+
+        var packages =
+            await _dbContext
+                .SoftwarePackages
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == device.OrganizationId
+                    &&
+                    x.IsActive
+                    &&
+                    x.PackageType == SoftwarePackageStorage.ApkPackageType)
+                .ToListAsync(cancellationToken);
+
+        SoftwarePackage? match = null;
+        long versionCode = -1;
+
+        foreach (var candidate in packages)
+        {
+            var path = GetPackageFullPath(candidate);
+            if (!File.Exists(path))
+                continue;
+
+            ApkManifestInfo manifest;
+            try
+            {
+                manifest = ApkInspector.ReadManifest(path);
+                ApkInspector.ReadSigningCertificate(path);
+            }
+            catch (Exception exception) when (
+                exception is InvalidDataException
+                    or IOException
+                    or InvalidOperationException
+                    or CryptographicException)
+            {
+                continue;
+            }
+
+            if (!string.Equals(
+                    manifest.PackageName,
+                    packageName,
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (manifest.VersionCode < versionCode)
+                continue;
+
+            if (
+                manifest.VersionCode == versionCode
+                &&
+                match is not null
+                &&
+                candidate.CreatedAtUtc <= match.CreatedAtUtc)
+            {
+                continue;
+            }
+
+            match = candidate;
+            versionCode = manifest.VersionCode;
+        }
+
+        if (match is null)
+            return null;
+
+        var quotedName = "\"" + packageName + "\"";
+        var packageIdText = match.Id.ToString();
+        var now = DateTime.UtcNow;
+
+        var authorized =
+            await _dbContext
+                .DeviceCommands
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.DeviceId == deviceId
+                        &&
+                        x.OrganizationId == device.OrganizationId
+                        &&
+                        (x.PayloadJson.Contains(quotedName)
+                         ||
+                         x.PayloadJson.Contains(packageIdText))
+                        &&
+                        (
+                            (x.CommandType == "SOFTWARE_INSTALL"
+                             &&
+                             x.ExpiresAtUtc > now)
+                            ||
+                            (x.CommandType == "APPLY_LAUNCHER_POLICY"
+                             &&
+                             (x.CreatedAtUtc > now.AddDays(-30)
+                              ||
+                              _dbContext.DevicePolicyAssignments
+                                  .Any(assignment =>
+                                      assignment.DeviceId == deviceId
+                                      &&
+                                      assignment.OrganizationId == device.OrganizationId)))
+                        ),
+                    cancellationToken);
+
+        if (!authorized)
+            return null;
+
+        var fullPath = GetPackageFullPath(match);
+        if (!File.Exists(fullPath))
+            return null;
+
+        return new SoftwarePackageDownloadDto(
+            fullPath,
+            match.OriginalFileName,
+            GetContentType(match.PackageType));
+    }
+
+    private string? ReadAndroidPackageName(SoftwarePackage package)
+    {
+        if (!string.Equals(
+                package.PackageType,
+                SoftwarePackageStorage.ApkPackageType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        try
+        {
+            var path = GetPackageFullPath(package);
+            if (!File.Exists(path))
+                return null;
+
+            var manifest = ApkInspector.ReadManifest(path);
+            ApkInspector.ReadSigningCertificate(path);
+            return ManagedAppDownload.IsValidPackageName(manifest.PackageName)
+                ? manifest.PackageName
+                : null;
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException
+                or IOException
+                or InvalidOperationException
+                or CryptographicException)
+        {
+            return null;
+        }
     }
 
     private async Task<

@@ -43,6 +43,9 @@ param(
     [string]$SiteName = "TitanMDM",
     [string]$HostName = "",
     [int]$HttpPort = 80,
+    # URL publica completa (p. ej. http://172.21.20.14:8085). Por defecto se
+    # deriva de -HostName y del puerto.
+    [string]$PublicUrl = "",
     [int]$HttpsPort = 443,
     [string]$CertificateThumbprint = "",
 
@@ -135,12 +138,26 @@ foreach ($path in @(
 }
 
 if (Get-Command Get-WindowsFeature -ErrorAction SilentlyContinue) {
+    # Windows Server
     $features = @("Web-Server", "Web-WebSockets", "Web-Static-Content", "Web-Http-Errors", "Web-Stat-Compression")
     $missing = $features | Where-Object { -not (Get-WindowsFeature $_).Installed }
 
     if ($missing) {
         Write-Host "Instalando caracteristicas IIS: $($missing -join ', ')"
         Install-WindowsFeature -Name $missing -IncludeManagementTools | Out-Null
+    }
+}
+elseif (Get-Command Get-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
+    # Windows 10/11: mismas caracteristicas con nombres de cliente.
+    # WebSockets es imprescindible para SignalR (agentes, chats, soporte remoto).
+    $features = @("IIS-WebServer", "IIS-WebSockets", "IIS-StaticContent", "IIS-HttpErrors", "IIS-HttpCompressionStatic", "IIS-ManagementConsole")
+    $missing = $features | Where-Object {
+        (Get-WindowsOptionalFeature -Online -FeatureName $_ -ErrorAction SilentlyContinue).State -ne "Enabled"
+    }
+
+    if ($missing) {
+        Write-Host "Habilitando caracteristicas IIS: $($missing -join ', ')"
+        Enable-WindowsOptionalFeature -Online -FeatureName $missing -All -NoRestart | Out-Null
     }
 }
 
@@ -378,9 +395,19 @@ if (Test-Path (Join-Path $agentTarget "app-debug.apk")) {
     $environmentValues["AndroidProvisioning__ApkPath"] = (Join-Path $agentTarget "app-debug.apk")
 }
 
-if ($HostName) {
+# Sin certificado el sitio es HTTP: forzar HTTPS redirigiria a los
+# agentes y al navegador a un puerto que no existe.
+$environmentValues["Security__RequireHttps"] = if ($CertificateThumbprint) { "true" } else { "false" }
+
+if (-not $PublicUrl -and $HostName) {
     $scheme = if ($CertificateThumbprint) { "https" } else { "http" }
-    $publicUrl = "${scheme}://$HostName"
+    $port = if ($CertificateThumbprint) { $HttpsPort } else { $HttpPort }
+    $standard = ($scheme -eq "https" -and $port -eq 443) -or ($scheme -eq "http" -and $port -eq 80)
+    $PublicUrl = if ($standard) { "${scheme}://$HostName" } else { "${scheme}://${HostName}:$port" }
+}
+
+if ($PublicUrl) {
+    $publicUrl = $PublicUrl.TrimEnd("/")
     $environmentValues["Application__FrontendUrl"] = $publicUrl
     $environmentValues["Cors__AllowedOrigins__0"] = $publicUrl
     $environmentValues["WindowsAgentDistribution__PublicServerUrl"] = $publicUrl

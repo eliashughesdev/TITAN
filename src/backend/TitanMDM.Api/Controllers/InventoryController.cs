@@ -424,7 +424,7 @@ public sealed class InventoryController : ControllerBase
                 HttpMethod.Post,
 
             hasBody:
-                false,
+                true,
 
             deviceOperation:
                 false,
@@ -740,7 +740,7 @@ public sealed class InventoryController : ControllerBase
                 HttpMethod.Post,
 
             hasBody:
-                false,
+                true,
 
             deviceOperation:
                 false,

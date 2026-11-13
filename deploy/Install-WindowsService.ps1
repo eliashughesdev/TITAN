@@ -422,6 +422,9 @@ $merged["ASPNETCORE_ENVIRONMENT"] = $Environment
 $merged["DOTNET_ENVIRONMENT"] = $Environment
 $merged["DataProtection__KeyRingPath"] = (Join-Path $dataRoot "DataProtectionKeys")
 $merged["Ponches__BaseUrl"] = "http://127.0.0.1:$PonchesPort"
+# HTTPS solo si el servicio escucha en https://; si no, la redireccion
+# dejaria sin conexion a los agentes.
+$merged["Security__RequireHttps"] = if ($Urls -match "^https://") { "true" } else { "false" }
 $merged["PythonService__Enabled"] = if ($PonchesMode -eq "Supervised") { "true" } else { "false" }
 $merged["PythonService__WorkingDirectory"] = $ponchesTarget
 foreach ($name in $storage.Keys) { $merged[$name] = $storage[$name] }

@@ -30,9 +30,10 @@ import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.apps.install.RequiredAppsReconciler
 import com.titanmdm.agent.heartbeat.HeartbeatRepository
 import com.titanmdm.agent.heartbeat.HeartbeatResult
+import com.titanmdm.agent.location.LocationReportOutcome
+import com.titanmdm.agent.location.LocationReporter
 import com.titanmdm.agent.location.LocationWatcher
 import com.titanmdm.agent.receivers.HeartbeatWatchdogReceiver
-import com.titanmdm.agent.workers.AgentWorkScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -119,8 +120,15 @@ class AgentForegroundService : Service() {
                         .onFailure { Log.w(TAG, "Reintento de apps obligatorias falló.", it) }
 
                     if (cycle % LOCATION_EVERY_CYCLES == 0) {
+                        // Reporte directo desde el FGS: no depende de WorkManager.
                         runCatching {
-                            AgentWorkScheduler.reportLocationNow(applicationContext)
+                            if (LocationReporter.report(applicationContext) ==
+                                LocationReportOutcome.Retry
+                            ) {
+                                Log.w(TAG, "Ubicación: reintento pendiente.")
+                            }
+                        }.onFailure {
+                            Log.w(TAG, "Reporte de ubicación falló.", it)
                         }
                     }
 

@@ -77,12 +77,23 @@ class PolicyAppInstaller(context: Context) {
             return AppResult(app.packageName, action, false, "NOT_ENROLLED", "El equipo no está inscrito.")
         }
 
-        val downloaded = downloader.download(
-            identity = identity,
-            relativeUrl = app.downloadUrl.orEmpty(),
-            expectedSha256 = app.sha256.orEmpty(),
-            name = app.packageName
-        )
+        if (ManagedGms.hasManagedContainer(context)) {
+            return AppResult(
+                packageName = app.packageName,
+                action = action,
+                success = true,
+                code = "PLAY_MANAGED",
+                message = "Play Store administrado instala ${app.packageName}.",
+                installedVersionCode = installed
+            )
+        }
+
+        val sha = app.sha256.orEmpty()
+        var downloaded: ApkDownloader.Outcome = ApkDownloader.Outcome.Failed("DOWNLOAD_URL", "Sin URL de descarga.")
+        for (relativeUrl in ManagedAppDownload.urls(app.packageName, app.downloadUrl, managedGms = false)) {
+            downloaded = downloader.download(identity, relativeUrl, sha, app.packageName)
+            if (downloaded is ApkDownloader.Outcome.Downloaded) break
+        }
         val file = when (downloaded) {
             is ApkDownloader.Outcome.Downloaded -> downloaded.file
             is ApkDownloader.Outcome.Failed -> return AppResult(app.packageName, action, false, downloaded.code, downloaded.message)

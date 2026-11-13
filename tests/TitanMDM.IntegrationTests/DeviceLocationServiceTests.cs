@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Location;
@@ -127,6 +128,85 @@ public sealed class DeviceLocationServiceTests
             """);
 
         Assert.Single(db.DeviceLocations);
+    }
+
+    [Fact]
+    public async Task ManualEnrollmentHeartbeat_StoresCoordinates_WithoutPolicy()
+    {
+        await using var db = Open();
+        var device = await SeedDeviceAsync(db);
+        var service = CreateService(db);
+
+        await service.ProcessLocationAsync(
+            device.Id,
+            """
+            { "latitude": 19.4326, "longitude": -99.1332,
+              "accuracyMeters": 12, "source": "AndroidAgent-Heartbeat",
+              "status": "OK",
+              "capturedAtUtc": "2026-11-12T08:00:00Z" }
+            """);
+
+        var location = Assert.Single(db.DeviceLocations);
+        Assert.Equal(device.Id, location.DeviceId);
+        Assert.Equal(19.4326, location.Latitude);
+        Assert.Equal(-99.1332, location.Longitude);
+        Assert.Equal("AndroidAgent-Heartbeat", location.Source);
+        Assert.Equal(
+            DeviceCaptureState.Reported,
+            Assert.Single(db.DeviceLocationStates).CaptureState);
+    }
+
+    [Fact]
+    public async Task FactoryEnrollmentProactiveWifiReport_ResolvesCoordinates()
+    {
+        await using var db = Open();
+        var device = await SeedDeviceAsync(db);
+        db.LocationReportingPolicies.Add(
+            new LocationReportingPolicy(
+                device.OrganizationId,
+                isEnabled: true,
+                reportingIntervalMinutes: 15,
+                retentionDays: 30));
+        await db.SaveChangesAsync();
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Inventory:WifiAccessPoints:0:Bssid"] =
+                        "AA:BB:CC:DD:EE:FF",
+                    ["Inventory:WifiAccessPoints:0:Latitude"] =
+                        "19.4326",
+                    ["Inventory:WifiAccessPoints:0:Longitude"] =
+                        "-99.1332",
+                    ["Inventory:WifiAccessPoints:0:Label"] =
+                        "Almacen central"
+                })
+            .Build();
+
+        var service = CreateService(
+            db,
+            wifiAccessPoints:
+                new WifiAccessPointDirectory(configuration));
+
+        await service.ProcessLocationAsync(
+            device.Id,
+            """
+            { "source": "AndroidAgent-Proactive-WifiBssid",
+              "status": "WIFI_ONLY",
+              "bssid": "aa-bb-cc-dd-ee-ff",
+              "rssi": -61 }
+            """);
+
+        var location = Assert.Single(db.DeviceLocations);
+        Assert.Equal(19.4326, location.Latitude);
+        Assert.Equal(-99.1332, location.Longitude);
+        Assert.Equal(
+            "AndroidAgent-Proactive-WifiBssid-WifiBssid",
+            location.Source);
+        Assert.Equal(
+            DeviceCaptureState.Reported,
+            Assert.Single(db.DeviceLocationStates).CaptureState);
     }
 
     [Fact]
@@ -875,12 +955,14 @@ public sealed class DeviceLocationServiceTests
     private static DeviceLocationService CreateService(
         TitanMdmDbContext db,
         StubNotifier? notifier = null,
-        StubDispatcher? automation = null)
+        StubDispatcher? automation = null,
+        WifiAccessPointDirectory? wifiAccessPoints = null)
     {
         return new DeviceLocationService(
             db,
             automation ?? new StubDispatcher(),
-            notifier);
+            notifier,
+            wifiAccessPoints);
     }
 
     private static FleetLocationFilters EmptyFilters()

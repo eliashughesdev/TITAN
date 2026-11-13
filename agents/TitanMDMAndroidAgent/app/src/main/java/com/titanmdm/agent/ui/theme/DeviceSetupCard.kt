@@ -21,7 +21,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -120,13 +119,8 @@ fun DeviceSetupCard(enrolled: Boolean) {
         foreground.launch(permissions.toTypedArray())
     }
 
-    // Al inscribirse se solicita la ubicación una vez, sin esperar al operador.
-    LaunchedEffect(enrolled) {
-        if (enrolled && !status.locationGranted && !status.deviceOwner) {
-            askedForeground = true
-            requestForeground()
-        }
-    }
+    // La solicitud obligatoria de permisos la hace LocationPermissionGate
+    // en la inscripción manual; aquí solo quedan los accesos manuales.
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
