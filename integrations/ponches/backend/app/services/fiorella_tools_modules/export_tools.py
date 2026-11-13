@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 
+from app.services.json_store import DATA_DIR
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ from app.services.fiorella_tools import (
 EXPORT_DIR = Path(
     os.getenv(
         "FIORELLA_EXPORT_DIR",
-        "data/fiorella_exports",
+        str(DATA_DIR / "fiorella_exports"),
     )
 )
 

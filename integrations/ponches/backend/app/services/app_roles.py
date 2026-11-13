@@ -13,7 +13,7 @@ from app.core.permissions import (
 )
 from app.services.app_users import ALL_SCREENS
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from app.services.json_store import DATA_DIR
 ROLES_FILE = DATA_DIR / "app_roles.json"
 
 PROTECTED_ROLE_IDS = frozenset({"super_admin", "admin"})

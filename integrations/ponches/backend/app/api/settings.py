@@ -1,4 +1,5 @@
 import json
+from app.services.json_store import DATA_DIR
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -12,11 +13,22 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-FILE = (
+# Ajustes del panel (formato propio, distinto de services/app_settings.py).
+# Antes se guardaban en integrations/ponches/data/app_settings.json; si el
+# archivo nuevo aun no existe, se toma ese como valor inicial.
+FILE = DATA_DIR / "panel_settings.json"
+LEGACY_FILE = (
     Path(__file__).resolve().parents[3]
     / "data"
     / "app_settings.json"
 )
+
+if not FILE.exists() and LEGACY_FILE.exists():
+    try:
+        FILE.parent.mkdir(parents=True, exist_ok=True)
+        FILE.write_text(LEGACY_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    except OSError:
+        pass
 
 DEFAULTS = {
     "company_name": "César Iglesias",

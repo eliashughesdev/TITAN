@@ -36,7 +36,13 @@ param(
     [switch]$EnableEntra,
     [switch]$SkipPython,
     [switch]$SkipBuild,
-    [switch]$NoReclaim
+    [switch]$NoReclaim,
+    # Con TitanMDMService instalado y en marcha, el stack se acopla a el:
+    # usa su Python (puerto 8137) y no ejecuta procesos en segundo plano,
+    # para no duplicar correos, tickets ni automatizaciones sobre la misma
+    # base. -Standalone ignora el servicio (solo si esta detenido).
+    [int]$ServicePythonPort = 8137,
+    [switch]$Standalone
 )
 
 $ErrorActionPreference = "Stop"
@@ -395,6 +401,18 @@ try {
         }
     }
 
+    # Modo acoplado al servicio de produccion local.
+    $serviceMode = $false
+    $titanService = Get-Service -Name "TitanMDMService" -ErrorAction SilentlyContinue
+    if ($titanService -and $titanService.Status -eq "Running") {
+        if ($Standalone) {
+            throw "TitanMDMService esta en marcha: detengalo antes de usar -Standalone (dos instancias duplicarian correos y automatizaciones)."
+        }
+        $serviceMode = $true
+        $SkipPython = $true
+        Write-Host "[INFO] TitanMDMService activo: el stack usa su Python ($ServicePythonPort) y no ejecuta procesos en segundo plano." -ForegroundColor Cyan
+    }
+
     if (-not $SkipPython -and -not (Test-Path $pythonExe)) {
         Write-Warning "No existe $pythonExe. Ponches se omitira (crea el venv e instala requirements.txt)."
         $SkipPython = $true
@@ -454,11 +472,29 @@ try {
     Set-TitanEnvironment "ASPNETCORE_ENVIRONMENT" "Development"
     Set-TitanEnvironment "DOTNET_ENVIRONMENT" "Development"
     Set-TitanEnvironment "EntraLogin__Enabled" $(if ($EnableEntra) { "true" } else { "false" })
-    Set-TitanEnvironment "Ponches__BaseUrl" "http://127.0.0.1:$PythonPort"
-    Set-TitanEnvironment "Ponches__IntegrationKey" $integrationKey
     Set-TitanEnvironment "Ponches__TimeoutSeconds" "180"
-    Set-TitanEnvironment "TITAN_PONCHES_INTEGRATION_KEY" $integrationKey
     Set-TitanEnvironment "PYTHONIOENCODING" "utf-8"
+
+    if ($serviceMode) {
+        # Python del servicio; la clave de integracion es la de los
+        # user-secrets (la misma que usa el servicio).
+        Set-TitanEnvironment "Ponches__BaseUrl" "http://127.0.0.1:$ServicePythonPort"
+        Set-TitanEnvironment "BackgroundWorkers__Enabled" "false"
+    }
+    else {
+        Set-TitanEnvironment "Ponches__BaseUrl" "http://127.0.0.1:$PythonPort"
+        Set-TitanEnvironment "Ponches__IntegrationKey" $integrationKey
+        Set-TitanEnvironment "TITAN_PONCHES_INTEGRATION_KEY" $integrationKey
+    }
+
+    # Archivos compartidos con TitanMDMService: adjuntos, APK y recursos
+    # del launcher en un solo lugar, vean lo mismo ambas instancias.
+    $sharedData = Join-Path $env:ProgramData "TitanMDM"
+    Set-TitanEnvironment "HelpdeskAttachments__StoragePath" (Join-Path $sharedData "helpdesk-attachments")
+    Set-TitanEnvironment "SoftwarePackages__StoragePath" (Join-Path $sharedData "software")
+    Set-TitanEnvironment "AndroidManagement__LauncherAssetRoot" (Join-Path $sharedData "launcher-assets")
+    # Datos de Ponches (relojes, colaboradores, ajustes) compartidos con el servicio.
+    Set-TitanEnvironment "PONCHES_DATA_DIR" (Join-Path $sharedData "ponches-data")
 
     # --------------------------------------------------------
     # 4. PYTHON / PONCHES (opcional, no bloqueante)

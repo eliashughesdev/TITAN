@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+from app.services.json_store import DATA_DIR
 DEVICES_FILE = DATA_DIR / "devices_inventory.json"
 COLLAB_FILE = DATA_DIR / "collaborators.json"
 ROLES_FILE = DATA_DIR / "app_roles.json"

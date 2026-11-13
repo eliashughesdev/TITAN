@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 from datetime import date
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from app.services.json_store import DATA_DIR
 FILE = DATA_DIR / "rotating_schedules.json"
 
 

@@ -28,6 +28,13 @@ public sealed class PythonServiceOptions
     public string PythonExecutable { get; init; } =
         ".venv\\Scripts\\python.exe";
 
+    /// <summary>
+    /// Carpeta de datos de Ponches (JSON y SQLite). Vacía: la del código
+    /// (backend\data). En producción, %ProgramData%\TitanMDM\ponches-data,
+    /// compartida con el stack de desarrollo.
+    /// </summary>
+    public string DataDirectory { get; init; } = string.Empty;
+
     /// <summary>Módulo ASGI de uvicorn.</summary>
     public string AppModule { get; init; } =
         "app.main:app";

@@ -53,6 +53,7 @@ param(
     [string]$PonchesMode = "Supervised",
     [string]$PythonExe = "",
     [string]$PonchesEnvFile = "",
+    [string]$PonchesDataSource = "",
     [switch]$OpenSiteFirewallPort,
     [string]$SqlServer = "",
     [string[]]$SqlDatabases = @()
@@ -145,6 +146,7 @@ if ($CertificateThumbprint) { $installArgs.CertificateThumbprint = $CertificateT
 if ($SecretsFile) { $installArgs.SecretsFile = $SecretsFile }
 if ($PythonExe) { $installArgs.PythonExe = $PythonExe }
 if ($PonchesEnvFile) { $installArgs.PonchesEnvFile = $PonchesEnvFile }
+if ($PonchesDataSource) { $installArgs.PonchesDataSource = $PonchesDataSource }
 if ($OpenSiteFirewallPort) { $installArgs.OpenSiteFirewallPort = $true }
 if ($SqlServer) {
     $installArgs.SqlServer = $SqlServer
@@ -191,7 +193,9 @@ $checks = @(
     @("IIS AppPool\$SiteName", (Join-Path $InstallRoot "web"), $read, "lectura"),
     @($serviceAccount, (Join-Path $InstallRoot "api"), $read, "lectura"),
     @($serviceAccount, (Join-Path $InstallRoot "logs"), $modify, "escritura"),
-    @($serviceAccount, $dataRoot, $modify, "escritura")
+    @($serviceAccount, (Join-Path $dataRoot "DataProtectionKeys"), $modify, "escritura"),
+    @($serviceAccount, (Join-Path $dataRoot "helpdesk-attachments"), $modify, "escritura"),
+    @($serviceAccount, (Join-Path $dataRoot "ponches-data"), $modify, "escritura")
 )
 
 if ($PonchesMode -eq "Supervised") {

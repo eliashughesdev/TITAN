@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from app.services.json_store import DATA_DIR
 FILE = DATA_DIR / "sync_log.json"
 
 

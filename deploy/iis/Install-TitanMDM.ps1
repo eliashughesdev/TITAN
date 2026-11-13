@@ -73,6 +73,9 @@ param(
     # Opcional: dar acceso SQL (autenticacion integrada) a la cuenta del servicio.
     # .env de Ponches (DB_SERVER, DB_NAME, DB_AUTH...) a copiar si falta.
     [string]$PonchesEnvFile = "",
+    # Datos actuales de Ponches (JSON de relojes, colaboradores...) a copiar
+    # a %ProgramData%\TitanMDM\ponches-data si aun esta vacio.
+    [string]$PonchesDataSource = "",
     # Abre en el firewall el puerto del sitio (agentes de la red local).
     [switch]$OpenSiteFirewallPort,
     [string]$SqlServer = "",
@@ -413,10 +416,30 @@ else {
 # Permisos minimos: lectura del binario, escritura en logs y llaves.
 foreach ($grant in @(
     @($apiTarget, "(OI)(CI)RX"),
-    @($logsTarget, "(OI)(CI)M"),
-    @($dataRoot, "(OI)(CI)M")
+    @($logsTarget, "(OI)(CI)M")
 )) {
     Invoke-Native icacls.exe @($grant[0], "/grant", "${ServiceAccount}:$($grant[1])", "/T", "/Q") | Out-Null
+}
+
+# %ProgramData%\TitanMDM tambien lo usa el agente Windows (identidad del
+# equipo): el servicio solo recibe escritura en sus propias carpetas.
+$ponchesData = Join-Path $dataRoot "ponches-data"
+$apiDataFolders = @(
+    (Join-Path $dataRoot "DataProtectionKeys"),
+    (Join-Path $dataRoot "MailCursors"),
+    $ponchesData
+) + @($storage.Values)
+
+if ($PonchesDataSource -and (Test-Path $PonchesDataSource) -and
+    -not (Get-ChildItem $ponchesData -File -ErrorAction SilentlyContinue)) {
+    Write-Host "Copiando datos de Ponches desde $PonchesDataSource"
+    & robocopy.exe $PonchesDataSource $ponchesData /E /NFL /NDL /NJH /NJS /NP /R:2 /W:2 | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy fallo copiando datos de Ponches (codigo $LASTEXITCODE)." }
+}
+
+foreach ($folder in $apiDataFolders) {
+    New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    Invoke-Native icacls.exe @($folder, "/grant", "${ServiceAccount}:(OI)(CI)M", "/T", "/Q") | Out-Null
 }
 
 if ($PonchesMode -eq "Supervised") {
@@ -442,6 +465,7 @@ $environmentValues = [ordered]@{
     "Ponches__BaseUrl" = "http://127.0.0.1:$PonchesPort"
     "PythonService__Enabled" = $(if ($PonchesMode -eq "Supervised") { "true" } else { "false" })
     "PythonService__WorkingDirectory" = $ponchesTarget
+    "PythonService__DataDirectory" = (Join-Path $dataRoot "ponches-data")
 }
 
 foreach ($name in $storage.Keys) { $environmentValues[$name] = $storage[$name] }

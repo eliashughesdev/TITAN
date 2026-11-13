@@ -259,6 +259,13 @@ public sealed class PythonServiceSupervisor : BackgroundService
         SetIfConfigured(environment, "FIORELLA_OPENROUTER_KEY", _configuration["AI:Fiorella:OpenRouterApiKey"]);
         SetIfConfigured(environment, "OPENROUTER_BASE_URL", _configuration["AI:OpenRouter:BaseUrl"]);
         SetIfConfigured(environment, "FIORELLA_MODEL", _configuration["AI:Fiorella:Model"]);
+
+        if (!string.IsNullOrWhiteSpace(_options.DataDirectory))
+        {
+            var dataDirectory = ResolvePath(_environment.ContentRootPath, _options.DataDirectory);
+            Directory.CreateDirectory(dataDirectory);
+            environment["PONCHES_DATA_DIR"] = dataDirectory;
+        }
     }
 
     private static void SetIfConfigured(
@@ -402,8 +409,12 @@ public sealed class PythonServiceSupervisor : BackgroundService
         }
     }
 
-    private static string ResolvePath(string basePath, string path) =>
-        Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(basePath, path));
+    private static string ResolvePath(string basePath, string path)
+    {
+        // Admite %ProgramData% y similares en la configuración.
+        var expanded = Environment.ExpandEnvironmentVariables(path);
+        return Path.GetFullPath(Path.IsPathRooted(expanded) ? expanded : Path.Combine(basePath, expanded));
+    }
 
     /// <summary>Job Object con KILL_ON_JOB_CLOSE: los hijos mueren con el API.</summary>
     private sealed class WindowsJob : IDisposable

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any
 
 _lock = threading.Lock()
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Carpeta de datos de Ponches (JSON de relojes, colaboradores, ajustes y
+# SQLite del espejo). PONCHES_DATA_DIR permite que el servicio de Windows y
+# el stack de desarrollo compartan la misma (C:\ProgramData\TitanMDM\ponches-data).
+DATA_DIR = Path(
+    os.getenv("PONCHES_DATA_DIR", "").strip()
+    or Path(__file__).resolve().parents[2] / "data"
+).resolve()
 
 
 def data_path(*parts: str) -> Path:

@@ -441,6 +441,41 @@ builder.Services
 // NO AGREGAR builder.Services DESPUÃ‰S DE ESTE PUNTO.
 // ============================================================================
 
+// ----------------------------------------------------------------------------
+// PROCESOS EN SEGUNDO PLANO (una sola instancia activa)
+//
+// Correo de Helpdesk, automatizaciones, enrutamiento, avisos, expiración de
+// comandos y el supervisor de Python no coordinan entre instancias. Si otra
+// instancia (el servicio TitanMDMService) ya los ejecuta sobre la misma base,
+// esta se inicia con BackgroundWorkers:Enabled=false y solo atiende HTTP y
+// SignalR: así no se duplican tickets, correos ni acciones.
+// ----------------------------------------------------------------------------
+
+if (!configuration.GetValue(
+        "BackgroundWorkers:Enabled",
+        true))
+{
+    var ownWorkers =
+        builder.Services
+            .Where(descriptor =>
+                descriptor.ServiceType ==
+                    typeof(IHostedService)
+                &&
+                descriptor.ImplementationType?.Namespace?
+                    .StartsWith(
+                        "TitanMDM",
+                        StringComparison.Ordinal) == true)
+            .ToList();
+
+    foreach (var descriptor in ownWorkers)
+    {
+        builder.Services.Remove(descriptor);
+    }
+
+    Console.WriteLine(
+        $"BackgroundWorkers:Enabled=false: {ownWorkers.Count} procesos en segundo plano desactivados en esta instancia.");
+}
+
 var app =
     builder.Build();
 

@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+from app.services.json_store import DATA_DIR
 FILE = DATA_DIR / "app_settings.json"
 
 DEFAULTS: dict[str, Any] = {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from app.services.json_store import DATA_DIR
 from pathlib import Path
 
 from fastapi import (
@@ -22,7 +23,7 @@ router = APIRouter(
 EXPORT_DIR = Path(
     os.getenv(
         "FIORELLA_EXPORT_DIR",
-        "data/fiorella_exports",
+        str(DATA_DIR / "fiorella_exports"),
     )
 ).resolve()
 
