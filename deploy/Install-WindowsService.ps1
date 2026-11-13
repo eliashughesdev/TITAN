@@ -57,6 +57,11 @@ param(
     [string]$Environment = "Production",
     # Servicio del instalador IIS anterior: sus secretos se migran y se deshabilita.
     [string]$LegacyServiceName = "TitanMDM.Api",
+    # Opcional: dar acceso SQL (autenticacion integrada) a la cuenta del servicio.
+    # .env de Ponches (DB_SERVER, DB_NAME, DB_AUTH...) a copiar si falta.
+    [string]$PonchesEnvFile = "",
+    [string]$SqlServer = "",
+    [string[]]$SqlDatabases = @(),
     [switch]$ValidateOnly,
     [switch]$Uninstall,
     [switch]$SkipHealthCheck
@@ -85,6 +90,42 @@ function Invoke-Native {
     }
 
     return $output
+}
+
+function Grant-SqlAccess {
+    <#
+        Da a la cuenta del servicio acceso a SQL Server con autenticacion
+        integrada: login de Windows + usuario db_owner en cada base (el API
+        aplica migraciones al arrancar). Requiere que quien ejecuta sea
+        sysadmin de la instancia. Idempotente.
+    #>
+    param([string]$Server, [string[]]$Databases, [string]$Account)
+
+    $sqlcmd = (Get-Command sqlcmd.exe -ErrorAction SilentlyContinue).Source
+    if (-not $sqlcmd) {
+        $sqlcmd = Get-ChildItem "$env:ProgramFiles\Microsoft SQL Server" -Recurse -Filter SQLCMD.EXE -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $sqlcmd) {
+        throw "No se encontro sqlcmd.exe para dar acceso SQL a $Account. Instale las herramientas de SQL Server o conceda el acceso manualmente."
+    }
+
+    $login = $Account.Replace("]", "]]")
+    $literal = $Account.Replace("'", "''")
+
+    $statements = @(
+        "IF SUSER_ID(N'$literal') IS NULL CREATE LOGIN [$login] FROM WINDOWS;"
+    )
+    foreach ($database in $Databases | Where-Object { $_ }) {
+        $db = $database.Replace("]", "]]")
+        $statements += "USE [$db]; IF USER_ID(N'$literal') IS NULL CREATE USER [$login] FOR LOGIN [$login]; ALTER ROLE db_owner ADD MEMBER [$login];"
+    }
+
+    foreach ($statement in $statements) {
+        Invoke-Native $sqlcmd @("-S", $Server, "-E", "-C", "-b", "-Q", $statement) | Out-Null
+    }
+
+    Write-Host "Acceso SQL concedido a $Account en $Server ($($Databases -join ', '))."
 }
 
 function Test-Administrator {
@@ -362,6 +403,13 @@ if ($PonchesMode -eq "Supervised") {
         throw "El .venv apunta a un Python instalado por usuario ($(($venvConfig -split '=', 2)[1].Trim())). Instale Python 'para todos los usuarios', borre $venvDir y repita, o use -PythonExe."
     }
 
+    # .env de Ponches (conexion a BioTime). Solo se copia si aun no existe:
+    # en actualizaciones se conserva el del servidor.
+    if ($PonchesEnvFile -and -not (Test-Path (Join-Path $ponchesTarget ".env"))) {
+        if (-not (Test-Path $PonchesEnvFile)) { throw "No existe $PonchesEnvFile." }
+        Copy-Item $PonchesEnvFile (Join-Path $ponchesTarget ".env")
+    }
+
     if (-not (Test-Path (Join-Path $ponchesTarget ".env"))) {
         Write-Warning "Falta $ponchesTarget\.env (DB_SERVER, DB_NAME, DB_AUTH... de BioTime). Fiorella responde, pero los ponches no hasta crearlo."
     }
@@ -406,6 +454,11 @@ foreach ($grant in @(
 if ($PonchesMode -eq "Supervised") {
     Invoke-Native icacls.exe @($ponchesTarget, "/grant", "${ServiceAccount}:(OI)(CI)RX", "/T", "/Q") | Out-Null
     Invoke-Native icacls.exe @((Join-Path $ponchesTarget "data"), "/grant", "${ServiceAccount}:(OI)(CI)M", "/T", "/Q") | Out-Null
+    # .env con credenciales: solo SYSTEM, Administradores y el servicio.
+    $envFile = Join-Path $ponchesTarget ".env"
+    if (Test-Path $envFile) {
+        Invoke-Native icacls.exe @($envFile, "/inheritance:r", "/grant:r", "*S-1-5-18:F", "/grant:r", "*S-1-5-32-544:F", "/grant:r", "${ServiceAccount}:R") | Out-Null
+    }
 }
 
 # ============================================================
@@ -455,6 +508,11 @@ if ($OpenFirewall -and $Urls -notmatch "127\.0\.0\.1|localhost") {
 # ============================================================
 # 7. ARRANQUE Y VERIFICACION
 # ============================================================
+
+if ($SqlServer) {
+    Write-Step "Concediendo acceso SQL a $ServiceAccount"
+    Grant-SqlAccess -Server $SqlServer -Databases $SqlDatabases -Account $ServiceAccount
+}
 
 Write-Step "Iniciando $ServiceName"
 Start-Service $ServiceName

@@ -70,6 +70,13 @@ param(
     [string]$NssmPath = "",
     [int]$PonchesPort = 8127,
 
+    # Opcional: dar acceso SQL (autenticacion integrada) a la cuenta del servicio.
+    # .env de Ponches (DB_SERVER, DB_NAME, DB_AUTH...) a copiar si falta.
+    [string]$PonchesEnvFile = "",
+    # Abre en el firewall el puerto del sitio (agentes de la red local).
+    [switch]$OpenSiteFirewallPort,
+    [string]$SqlServer = "",
+    [string[]]$SqlDatabases = @(),
     [switch]$SkipHealthCheck
 )
 
@@ -102,6 +109,42 @@ $legacyAppData = [ordered]@{
 
 if ([string]::IsNullOrWhiteSpace($ServiceAccount)) {
     $ServiceAccount = "NT SERVICE\$ServiceName"
+}
+
+function Grant-SqlAccess {
+    <#
+        Da a la cuenta del servicio acceso a SQL Server con autenticacion
+        integrada: login de Windows + usuario db_owner en cada base (el API
+        aplica migraciones al arrancar). Requiere que quien ejecuta sea
+        sysadmin de la instancia. Idempotente.
+    #>
+    param([string]$Server, [string[]]$Databases, [string]$Account)
+
+    $sqlcmd = (Get-Command sqlcmd.exe -ErrorAction SilentlyContinue).Source
+    if (-not $sqlcmd) {
+        $sqlcmd = Get-ChildItem "$env:ProgramFiles\Microsoft SQL Server" -Recurse -Filter SQLCMD.EXE -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $sqlcmd) {
+        throw "No se encontro sqlcmd.exe para dar acceso SQL a $Account. Instale las herramientas de SQL Server o conceda el acceso manualmente."
+    }
+
+    $login = $Account.Replace("]", "]]")
+    $literal = $Account.Replace("'", "''")
+
+    $statements = @(
+        "IF SUSER_ID(N'$literal') IS NULL CREATE LOGIN [$login] FROM WINDOWS;"
+    )
+    foreach ($database in $Databases | Where-Object { $_ }) {
+        $db = $database.Replace("]", "]]")
+        $statements += "USE [$db]; IF USER_ID(N'$literal') IS NULL CREATE USER [$login] FOR LOGIN [$login]; ALTER ROLE db_owner ADD MEMBER [$login];"
+    }
+
+    foreach ($statement in $statements) {
+        Invoke-Native $sqlcmd @("-S", $Server, "-E", "-C", "-b", "-Q", $statement) | Out-Null
+    }
+
+    Write-Host "Acceso SQL concedido a $Account en $Server ($($Databases -join ', '))."
 }
 
 function Write-Step([string]$Message) {
@@ -309,6 +352,13 @@ if ($PonchesMode -eq "Supervised") {
     Write-Step "Instalando dependencias de Ponches (pip)"
     Invoke-Native $venvPython @("-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", (Join-Path $ponchesTarget "requirements.txt")) | Out-Null
 
+    # .env de Ponches (conexion a BioTime). Solo se copia si aun no existe:
+    # en actualizaciones se conserva el del servidor.
+    if ($PonchesEnvFile -and -not (Test-Path (Join-Path $ponchesTarget ".env"))) {
+        if (-not (Test-Path $PonchesEnvFile)) { throw "No existe $PonchesEnvFile." }
+        Copy-Item $PonchesEnvFile (Join-Path $ponchesTarget ".env")
+    }
+
     if (-not (Test-Path (Join-Path $ponchesTarget ".env"))) {
         Write-Warning "Falta $ponchesTarget\.env (DB_SERVER, DB_NAME, DB_AUTH... de BioTime). Fiorella responde, pero los ponches no hasta crearlo."
     }
@@ -373,6 +423,11 @@ if ($PonchesMode -eq "Supervised") {
     # Python corre con la cuenta del servicio: lee su codigo y escribe en data\.
     Invoke-Native icacls.exe @($ponchesTarget, "/grant", "${ServiceAccount}:(OI)(CI)RX", "/T", "/Q") | Out-Null
     Invoke-Native icacls.exe @((Join-Path $ponchesTarget "data"), "/grant", "${ServiceAccount}:(OI)(CI)M", "/T", "/Q") | Out-Null
+    # .env con credenciales: solo SYSTEM, Administradores y el servicio.
+    $envFile = Join-Path $ponchesTarget ".env"
+    if (Test-Path $envFile) {
+        Invoke-Native icacls.exe @($envFile, "/inheritance:r", "/grant:r", "*S-1-5-18:F", "/grant:r", "*S-1-5-32-544:F", "/grant:r", "${ServiceAccount}:R") | Out-Null
+    }
 }
 
 if (Test-Path $agentTarget) {
@@ -476,6 +531,11 @@ if ($OpenApiFirewallPort -and $ApiBindAddress -ne "127.0.0.1") {
     }
 }
 
+if ($SqlServer) {
+    Write-Step "Concediendo acceso SQL a $ServiceAccount"
+    Grant-SqlAccess -Server $SqlServer -Databases $SqlDatabases -Account $ServiceAccount
+}
+
 Write-Step "Iniciando $ServiceName"
 Start-Service $ServiceName
 (Get-Service $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(60))
@@ -576,6 +636,15 @@ if ($CertificateThumbprint) {
 Set-WebConfigurationProperty -PSPath "IIS:\Sites\$SiteName" -Filter "system.webServer/webSocket" -Name enabled -Value $true
 
 Start-Website -Name $SiteName
+
+if ($OpenSiteFirewallPort) {
+    foreach ($sitePort in @($HttpPort) + $(if ($CertificateThumbprint) { @($HttpsPort) } else { @() })) {
+        $ruleName = "TitanMDM sitio $sitePort"
+        if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $sitePort -Action Allow | Out-Null
+        }
+    }
+}
 
 # ============================================================
 # 7. VERIFICACION

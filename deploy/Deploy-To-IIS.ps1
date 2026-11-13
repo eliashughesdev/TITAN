@@ -51,7 +51,11 @@ param(
     [string]$SecretsFile = "",
     [ValidateSet("Supervised", "Nssm", "None")]
     [string]$PonchesMode = "Supervised",
-    [string]$PythonExe = ""
+    [string]$PythonExe = "",
+    [string]$PonchesEnvFile = "",
+    [switch]$OpenSiteFirewallPort,
+    [string]$SqlServer = "",
+    [string[]]$SqlDatabases = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -140,6 +144,12 @@ $installArgs.PonchesPort = $PonchesPort
 if ($CertificateThumbprint) { $installArgs.CertificateThumbprint = $CertificateThumbprint }
 if ($SecretsFile) { $installArgs.SecretsFile = $SecretsFile }
 if ($PythonExe) { $installArgs.PythonExe = $PythonExe }
+if ($PonchesEnvFile) { $installArgs.PonchesEnvFile = $PonchesEnvFile }
+if ($OpenSiteFirewallPort) { $installArgs.OpenSiteFirewallPort = $true }
+if ($SqlServer) {
+    $installArgs.SqlServer = $SqlServer
+    $installArgs.SqlDatabases = $SqlDatabases
+}
 
 & (Join-Path $OutputDir "deploy\Install-TitanMDM.ps1") @installArgs
 
