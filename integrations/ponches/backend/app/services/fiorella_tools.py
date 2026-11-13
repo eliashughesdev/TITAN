@@ -20,9 +20,39 @@ def allowed(user: dict[str, Any], permission: str) -> bool:
     return has_permission(user, permission)
 
 
+# Operación interna -> (qué permite, permiso de TitanMDM que la concede).
+# Sirve para que Fiorella explique con precisión por qué se niega.
+OPERATION_LABELS: dict[str, tuple[str, str]] = {
+    "attendance.read": ("consultar ponches y asistencia", "Ponches: ver empleados / historial"),
+    "collaborators.read": ("consultar colaboradores", "Ponches: ver colaboradores"),
+    "devices.read": ("consultar el estado de los relojes", "Ponches: ver relojes"),
+    "reports.export": ("exportar reportes a Excel", "Ponches: exportar"),
+    "zk.push": ("enviar colaboradores a los relojes", "Ponches: sincronizar colaboradores"),
+    "zk.clone": ("clonar colaboradores entre relojes", "Ponches: sincronizar colaboradores"),
+    "zk.delete": ("eliminar colaboradores de los relojes", "Ponches: sincronizar colaboradores"),
+}
+
+
+def denied(user: dict[str, Any], permission: str) -> dict[str, Any]:
+    """Negativa estructurada: el modelo la explica al usuario sin inventar."""
+    action, titan_permission = OPERATION_LABELS.get(
+        permission,
+        (f"la operación {permission}", "el permiso correspondiente de Ponches"),
+    )
+    return {
+        "ok": False,
+        "error": "permission_denied",
+        "permission": permission,
+        "message": (
+            f"Tu rol no tiene autorización para {action}. "
+            f"Un administrador de TitanMDM puede concederla con el permiso «{titan_permission}»."
+        ),
+    }
+
+
 def tool_punch_summary(user: dict[str, Any]) -> dict[str, Any]:
     if not allowed(user, "attendance.read"):
-        return {"ok": False, "error": "Sin permiso."}
+        return denied(user, "attendance.read")
     db = test_connection()
     if db.get("status") != "online":
         return {"ok": False, "error": "SQL Server no está disponible."}
@@ -51,7 +81,7 @@ def tool_punch_summary(user: dict[str, Any]) -> dict[str, Any]:
 
 def tool_search_employee(user: dict[str, Any], query: str, limit: int = 20):
     if not allowed(user, "attendance.read"):
-        return {"ok": False, "error": "Sin permiso."}
+        return denied(user, "attendance.read")
     limit = max(1, min(int(limit), 100))
     q = str(query or "").strip()
     if not q:
@@ -81,10 +111,7 @@ def tool_search_punches(
     limit: int = 100,
 ):
     if not allowed(user, "attendance.read"):
-        return {
-            "ok": False,
-            "error": "Sin permiso.",
-        }
+        return denied(user, "attendance.read")
 
     limit = max(
         1,
@@ -179,7 +206,7 @@ def tool_search_punches(
 
 def tool_device_health(user: dict[str, Any]):
     if not allowed(user, "devices.read"):
-        return {"ok": False, "error": "Sin permiso."}
+        return denied(user, "devices.read")
     try:
         from app.api.routes.records_clocks import device_health
         result = device_health.__wrapped__(user) if hasattr(device_health, "__wrapped__") else device_health(user)
@@ -202,7 +229,7 @@ def tool_device_health(user: dict[str, Any]):
 
 def tool_data_analysis(user: dict[str, Any], days: int = 14):
     if not allowed(user, "attendance.read"):
-        return {"ok": False, "error": "Sin permiso."}
+        return denied(user, "attendance.read")
     days = max(2, min(int(days), 90))
     rows = fetch_all(
         """
@@ -274,8 +301,10 @@ def execute_zkteco_action(user: dict[str, Any], tool_name: str, args: dict[str, 
         "zkteco_clone_employee": "zk.clone",
         "zkteco_delete_employee": "zk.delete",
     }.get(tool_name)
-    if not permission or not allowed(user, permission):
-        return {"ok": False, "error": "Sin permiso para esta acción."}
+    if not permission:
+        return {"ok": False, "error": f"Herramienta desconocida: {tool_name}"}
+    if not allowed(user, permission):
+        return denied(user, permission)
 
     if tool_name == "zkteco_push_employee":
         from app.services.collaborators import get_collab

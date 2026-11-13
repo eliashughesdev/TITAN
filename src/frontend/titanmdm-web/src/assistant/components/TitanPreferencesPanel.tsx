@@ -8,7 +8,6 @@ import {
   MousePointer2,
   Moon,
   RotateCcw,
-  Rocket,
   Sparkles,
   Volume2,
   X,
@@ -34,7 +33,6 @@ export function TitanPreferencesPanel({
     setProactiveComments,
     setFollowPointer,
     setReducedMotion,
-    setAllowFlight,
     setSoundEnabled,
 
     resetPreferences,
@@ -73,8 +71,8 @@ export function TitanPreferencesPanel({
               size={16}
             />
           }
-          title="Comportamiento contextual"
-          description="Titan puede reaccionar a lo que ocurre en el módulo actual."
+          title="Flotación y gestos"
+          description="Levitación suave en reposo y gestos al pensar o responder."
           checked={
             preferences.autonomousBehavior
           }
@@ -89,29 +87,13 @@ export function TitanPreferencesPanel({
               size={16}
             />
           }
-          title="Reaccionar al puntero"
-          description="Titan podrá mirar y, ocasionalmente, acercarse al cursor."
+          title="Seguir el puntero con la mirada"
+          description="Los ojos de Titan acompañan al cursor; Titan no se desplaza por la pantalla."
           checked={
             preferences.followPointer
           }
           onChange={
             setFollowPointer
-          }
-        />
-
-        <PreferenceToggle
-          icon={
-            <Rocket
-              size={16}
-            />
-          }
-          title="Permitir vuelo"
-          description="Usa las turbinas cuando un desplazamiento dirigido sea largo."
-          checked={
-            preferences.allowFlight
-          }
-          onChange={
-            setAllowFlight
           }
         />
 

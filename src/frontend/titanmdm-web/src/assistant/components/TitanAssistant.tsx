@@ -1,117 +1,70 @@
-import { MessageCircle, Settings2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Minus, MessageCircle, Settings2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { AnimatePresence, motion, type Transition } from 'motion/react'
+
 import {
   useTitanAssistant,
   type TitanAnimationState,
-  type TitanPosition,
 } from '../context/TitanAssistantContext'
-import {
-  TitanMovementEngine,
-  type TitanMovementSnapshot,
-} from '../engine/TitanMovementEngine'
+import { useOptionalWorkspace } from '../../workspace/WorkspaceContext'
+import { isTitanExcluded, resolveTitanTheme } from '../config/titanTheme'
+import { useTitanPresence } from '../hooks/useTitanPresence'
 import { TitanAvatarCanvas } from './TitanAvatarCanvas'
 import { TitanSpeechBubble } from './TitanSpeechBubble'
 import { TitanPreferencesPanel } from './TitanPreferencesPanel'
 import { TitanAgentChatPanel } from './TitanAgentChatPanel'
 import '../styles/titan-assistant.css'
 
-const WIDTH = 130
-const HEIGHT = 190
-const MARGIN = 14
+/*
+ * Titan vive acoplado en la esquina inferior derecha y no recorre la
+ * pantalla: nunca tapa el área de trabajo. Mientras el usuario escribe
+ * se vuelve translúcido y deja pasar los clics; bajo un diálogo se
+ * aparta; puede minimizarse a una burbuja. Alt+T lo abre en cualquier
+ * momento. Todos los cambios usan muelles (spring) con inercia.
+ */
 
-type Side = 'left' | 'right'
+const MINIMIZED_KEY = 'titanmdm:titan-minimized'
 
-const EXPRESSIVE_ANIMATIONS:
-  ReadonlySet<TitanAnimationState> =
-  new Set([
-    'thinking',
-    'talking',
-    'error',
-    'success',
-    'warning',
-    'pointing',
-  ])
+const EXPRESSIVE_ANIMATIONS: ReadonlySet<TitanAnimationState> = new Set([
+  'thinking',
+  'talking',
+  'error',
+  'success',
+  'warning',
+  'pointing',
+])
 
-const ASSISTANT_PRIORITIES:
-  ReadonlySet<string> =
-  new Set([
-    'assistant',
-    'contextual',
-    'user',
-    'critical',
-  ])
+const ASSISTANT_PRIORITIES: ReadonlySet<string> = new Set([
+  'assistant',
+  'contextual',
+  'user',
+  'critical',
+])
 
-function edgePosition(
-  side: Side,
-  level: 'bottom' | 'middle' = 'bottom',
-  peek = false,
-): TitanPosition {
-  const y = level === 'middle'
-    ? Math.max(85, Math.round(window.innerHeight * 0.48) - HEIGHT / 2)
-    : Math.max(85, window.innerHeight - HEIGHT - 24)
+const DOCK_SPRING: Transition = { type: 'spring', stiffness: 170, damping: 22, mass: 0.9 }
 
-  return {
-    x: side === 'right'
-      ? window.innerWidth - (peek ? 65 : WIDTH + MARGIN)
-      : peek ? -65 : MARGIN,
-    y,
+type DockMode = 'active' | 'translucent' | 'hidden'
+
+function readMinimized(): boolean {
+  try {
+    return window.localStorage.getItem(MINIMIZED_KEY) === 'true'
+  } catch {
+    return false
   }
 }
 
-function hasBlockingOverlay(): boolean {
-  return Boolean(
-    document.querySelector(
-      '[role="dialog"], [aria-modal="true"], ' +
-      '[role="menu"], [data-titan-blocking="true"]',
-    ),
-  )
-}
-
-function isSpaceOccupied(position: TitanPosition): boolean {
-  const samples = [
-    [position.x + 38, position.y + 42],
-    [position.x + 65, position.y + 95],
-    [position.x + 64, position.y + 155],
-  ]
-
-  return samples.some(([x, y]) => {
-    if (
-      x < 0 || y < 0 ||
-      x >= window.innerWidth ||
-      y >= window.innerHeight
-    ) {
-      return false
-    }
-
-    return document.elementsFromPoint(x, y).some((element) => {
-      if (element.closest('.titan-assistant')) return false
-
-      return Boolean(element.closest(
-        'button, a, input, textarea, select, ' +
-        '[role="dialog"], [role="menu"], ' +
-        '[data-titan-blocking="true"]',
-      ))
-    })
-  })
-}
-
-function visualState(
-  snapshot: TitanMovementSnapshot,
-): TitanAnimationState {
-  switch (snapshot.state) {
-    case 'walking':
-      return 'walking'
-    case 'prepare-takeoff':
-      return 'prepare-takeoff'
-    case 'takeoff':
-      return 'takeoff'
-    case 'flying':
-      return 'flying'
-    case 'landing':
-      return 'landing'
-    default:
-      return 'idle'
+function storeMinimized(value: boolean): void {
+  try {
+    window.localStorage.setItem(MINIMIZED_KEY, String(value))
+  } catch {
+    // Preferencia opcional del navegador.
   }
+}
+
+const DOCK_TARGETS: Record<DockMode, { opacity: number; scale: number; y: number }> = {
+  active: { opacity: 1, scale: 1, y: 0 },
+  translucent: { opacity: 0.22, scale: 0.84, y: 14 },
+  hidden: { opacity: 0, scale: 0.78, y: 26 },
 }
 
 export function TitanAssistant() {
@@ -120,358 +73,205 @@ export function TitanAssistant() {
     page,
     preferences,
     runtime,
-    setPosition,
-    setVelocity,
-    setDirection,
-    setAnimation,
     say,
     clearMessage,
   } = useTitanAssistant()
 
-  const rootRef = useRef<HTMLDivElement>(null)
-  const engineRef = useRef<TitanMovementEngine | null>(null)
-  const sideRef = useRef<Side>('right')
-  const levelRef = useRef<'bottom' | 'middle'>('bottom')
-  const peekRef = useRef(false)
-
-  const [snapshot, setSnapshot] = useState<TitanMovementSnapshot | null>(
-    null,
+  const workspace = useOptionalWorkspace()
+  const theme = useMemo(
+    () => resolveTitanTheme(workspace?.activeModule),
+    [workspace?.activeModule],
   )
-  const [animation, setVisualAnimation] =
-    useState<TitanAnimationState>('idle')
+
+  const { typing, overlay } = useTitanPresence()
   const [chatOpen, setChatOpen] = useState(false)
-  const [preferencesOpen, setPreferencesOpen] = useState(false)
-  const [blocked, setBlocked] = useState(false)
-  const [pointer, setPointer] = useState({ x: 0, y: 0 })
+  // Las preferencias se abren para la pantalla actual: al navegar se cierran.
+  const [preferencesAt, setPreferencesAt] = useState<string | null>(null)
+  const preferencesOpen = preferencesAt === page.pathname
+  const setPreferencesOpen = useCallback(
+    (open: boolean | ((current: boolean) => boolean)) => {
+      setPreferencesAt(current => {
+        const isOpen = current === page.pathname
+        const next = typeof open === 'function' ? open(isOpen) : open
+        return next ? page.pathname : null
+      })
+    },
+    [page.pathname],
+  )
+  const [minimized, setMinimized] = useState(readMinimized)
+  const [hovered, setHovered] = useState(false)
 
-  const moveWithinEdge = useCallback((
-    level: 'bottom' | 'middle',
-    peek = false,
-  ) => {
-    const engine = engineRef.current
-    if (!engine) return
+  const excluded = isTitanExcluded(page.pathname, workspace?.activeWorkspaceId)
+  const panelOpen = chatOpen || preferencesOpen
 
-    const target = edgePosition(sideRef.current, level, peek)
-
-    levelRef.current = level
-    peekRef.current = peek
-
-    if (preferences.reducedMotion) {
-      engine.setPosition(target)
-      return
-    }
-
-    // La trayectoria mantiene X junto al borde.
-    // El motor mueve piernas y brazos según la velocidad.
-    engine.moveTo(target, { allowFlight: false })
-  }, [preferences.reducedMotion])
-
-  useEffect(() => {
-    const initial = edgePosition('right')
-    const engine = new TitanMovementEngine(initial)
-
-    engine.setAllowFlight(false)
-
-    engine.setListener((next) => {
-      setSnapshot(next)
-      setVisualAnimation(
-        peekRef.current && !next.moving
-          ? 'peeking'
-          : visualState(next),
-      )
-
-      if (rootRef.current) {
-        rootRef.current.style.transform =
-          `translate3d(${next.position.x}px, ` +
-          `${next.position.y}px, 0)`
-      }
-    })
-
-    engine.setArrivalListener((next) => {
-      setPosition(next.position)
-      setVelocity({ x: 0, y: 0 })
-      setDirection(next.direction)
-
-      const arrivedState: TitanAnimationState =
-        peekRef.current ? 'peeking' : 'idle'
-
-      setVisualAnimation(arrivedState)
-      setAnimation(arrivedState, 'autonomous')
-    })
-
-    engineRef.current = engine
-    setSnapshot(engine.getSnapshot())
-    setPosition(initial)
-
-    return () => {
-      engine.destroy()
-      engineRef.current = null
-    }
-  }, [
-    setAnimation,
-    setDirection,
-    setPosition,
-    setVelocity,
-  ])
-
-  useEffect(() => {
-    const onResize = () => {
-      engineRef.current?.setPosition(
-        edgePosition(
-          sideRef.current,
-          levelRef.current,
-          peekRef.current,
-        ),
-      )
-    }
-
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+  const setMinimizedPersisted = useCallback((value: boolean) => {
+    setMinimized(value)
+    storeMinimized(value)
   }, [])
 
+  const openChat = useCallback(() => {
+    setMinimizedPersisted(false)
+    setPreferencesOpen(false)
+    setChatOpen(true)
+  }, [setMinimizedPersisted, setPreferencesOpen])
+
+  // Disponible siempre: Alt+T abre la conversación desde cualquier pantalla.
   useEffect(() => {
-    // Cada pantalla comienza con Titan apartado en el borde inferior.
-    sideRef.current = 'right'
-    levelRef.current = 'bottom'
-    peekRef.current = false
-
-    engineRef.current?.stop()
-    engineRef.current?.setPosition(
-      edgePosition('right', 'bottom'),
-    )
-  }, [page.pathname])
-
-  useEffect(() => {
-    const onPointerMove = (event: PointerEvent) => {
-      setPointer({ x: event.clientX, y: event.clientY })
-    }
-
-    window.addEventListener('pointermove', onPointerMove, {
-      passive: true,
-    })
-
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (
-      !preferences.autonomousBehavior ||
-      preferences.reducedMotion ||
-      preferences.doNotDisturb ||
-      chatOpen ||
-      preferencesOpen
-    ) {
-      return
-    }
-
-    const interval = window.setInterval(() => {
-      if (hasBlockingOverlay()) return
-
-      const nextLevel =
-        levelRef.current === 'bottom' ? 'middle' : 'bottom'
-
-      const target = edgePosition(
-        sideRef.current,
-        nextLevel,
-        false,
-      )
-
-      // Si ese tramo lateral contiene controles, se queda
-      // donde está y puede asomarse sin invadir el formulario.
-      if (isSpaceOccupied(target)) {
-        moveWithinEdge(levelRef.current, true)
-        return
-      }
-
-      moveWithinEdge(nextLevel, false)
-    }, 18000)
-
-    return () => window.clearInterval(interval)
-  }, [
-    chatOpen,
-    preferencesOpen,
-    preferences.autonomousBehavior,
-    preferences.reducedMotion,
-    preferences.doNotDisturb,
-    moveWithinEdge,
-  ])
-
-  useEffect(() => {
-    const checkSpace = () => {
-      if (chatOpen || preferencesOpen) {
-        setBlocked(false)
-        return
-      }
-
-      const current = engineRef.current?.getSnapshot().position
-
-      if (!current) return
-
-      if (hasBlockingOverlay()) {
-        engineRef.current?.stop()
-        setBlocked(true)
-        return
-      }
-
-      if (!isSpaceOccupied(current)) {
-        setBlocked(false)
-        return
-      }
-
-      const alternative = edgePosition(
-        sideRef.current,
-        levelRef.current,
-        true,
-      )
-
-      if (!isSpaceOccupied(alternative)) {
-        engineRef.current?.setPosition(alternative)
-        peekRef.current = true
-        setBlocked(false)
-      } else {
-        setBlocked(true)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 't') {
+        event.preventDefault()
+        if (chatOpen) {
+          setChatOpen(false)
+        } else {
+          openChat()
+        }
       }
     }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [chatOpen, openChat])
 
-    checkSpace()
-    const interval = window.setInterval(checkSpace, 1500)
-    return () => window.clearInterval(interval)
-  }, [page.pathname, chatOpen, preferencesOpen])
+  const quiet =
+    minimized ||
+    typing ||
+    overlay ||
+    panelOpen ||
+    preferences.doNotDisturb ||
+    !preferences.proactiveComments
 
   useEffect(() => {
-    if (
-      !user ||
-      !preferences.proactiveComments ||
-      preferences.doNotDisturb ||
-      blocked ||
-      chatOpen
-    ) {
-      return
-    }
+    if (!user || quiet) return
 
     const timer = window.setTimeout(() => {
-      if (
-        document.activeElement?.matches(
-          'input, textarea, select',
-        )
-      ) {
-        return
-      }
-
-      say(
-        `Hola, ${user.firstName}. Estoy disponible si necesitas ayuda.`,
-        'contextual',
-      )
+      say(`Hola, ${user.firstName}. Estoy disponible si necesitas ayuda.`, 'contextual')
     }, 3500)
 
     return () => window.clearTimeout(timer)
-  }, [
-    user?.id,
-    page.pathname,
-    blocked,
-    chatOpen,
-    preferences.proactiveComments,
-    preferences.doNotDisturb,
-    say,
-  ])
+  }, [user, page.pathname, quiet, say])
 
-  if (!user || !preferences.visible) return null
+  if (!user || !preferences.visible || excluded) return null
 
-  const position = snapshot?.position ?? edgePosition('right')
+  const mode: DockMode =
+    overlay && !panelOpen
+      ? 'hidden'
+      : typing && !panelOpen && !hovered
+        ? 'translucent'
+        : 'active'
 
-  // Los estados expresivos del asistente (pensando, hablando,
-  // error) solo se muestran mientras la prioridad activa es del
-  // asistente; el desplazamiento autónomo conserva su animación.
-  const avatarAnimation =
+  const avatarAnimation: TitanAnimationState =
     ASSISTANT_PRIORITIES.has(runtime.priority) &&
     EXPRESSIVE_ANIMATIONS.has(runtime.animation)
       ? runtime.animation
-      : animation
+      : preferences.doNotDisturb
+        ? 'sleeping'
+        : 'idle'
+
+  const transition: Transition = preferences.reducedMotion ? { duration: 0 } : DOCK_SPRING
+
+  const style = {
+    '--titan-accent': theme.accent,
+    '--titan-led': theme.led,
+    '--titan-glow': theme.glow,
+  } as CSSProperties
 
   return (
     <div
-      ref={rootRef}
-      className={[
-        'titan-assistant',
-        'titan-assistant--refined',
-        blocked && !chatOpen && !preferencesOpen
-          ? 'titan-assistant--blocked'
-          : '',
-      ].filter(Boolean).join(' ')}
-      style={{
-        transform:
-          `translate3d(${position.x}px, ${position.y}px, 0)`,
-      }}
+      className="titan-dock"
+      data-mode={mode}
+      data-minimized={minimized}
+      style={style}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
-      {runtime.message && !blocked && (
-        <TitanSpeechBubble
-          message={runtime.message}
-          onClose={clearMessage}
-        />
+      {runtime.message && mode === 'active' && !minimized && !panelOpen && (
+        <TitanSpeechBubble message={runtime.message} onClose={clearMessage} />
       )}
 
       {preferencesOpen && (
-        <TitanPreferencesPanel
-          onClose={() => setPreferencesOpen(false)}
-        />
+        <TitanPreferencesPanel onClose={() => setPreferencesOpen(false)} />
       )}
 
-      {chatOpen && (
-        <TitanAgentChatPanel
-          onClose={() => setChatOpen(false)}
-        />
-      )}
+      {chatOpen && <TitanAgentChatPanel onClose={() => setChatOpen(false)} />}
 
-      <div className="titan-assistant__toolbar">
-        <button
-          type="button"
-          aria-label="Abrir conversación con Titan"
-          onClick={() => {
-            peekRef.current = false
-            engineRef.current?.setPosition(
-              edgePosition(sideRef.current, levelRef.current),
-            )
-            setChatOpen((value) => !value)
-            setPreferencesOpen(false)
-          }}
-        >
-          <MessageCircle size={16} />
-        </button>
+      <AnimatePresence initial={false} mode="popLayout">
+        {minimized ? (
+          <motion.button
+            key="orb"
+            type="button"
+            className="titan-dock__orb"
+            aria-label={`Mostrar a Titan (${theme.label}) · Alt+T`}
+            title="Mostrar a Titan · Alt+T"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: mode === 'hidden' ? 0 : mode === 'translucent' ? 0.5 : 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6 }}
+            transition={transition}
+            whileHover={preferences.reducedMotion ? undefined : { scale: 1.08 }}
+            whileTap={preferences.reducedMotion ? undefined : { scale: 0.94 }}
+            onClick={() => setMinimizedPersisted(false)}
+          >
+            <TitanAvatarCanvas
+              animation={avatarAnimation}
+              variant="head"
+              followPointer={preferences.followPointer}
+              reducedMotion={preferences.reducedMotion}
+            />
+          </motion.button>
+        ) : (
+          <motion.div
+            key="titan"
+            className="titan-dock__body"
+            initial={{ opacity: 0, scale: 0.7, y: 30 }}
+            animate={DOCK_TARGETS[mode]}
+            exit={{ opacity: 0, scale: 0.7, y: 30 }}
+            transition={transition}
+          >
+            <div className="titan-dock__toolbar" role="toolbar" aria-label="Titan">
+              <button type="button" aria-label="Conversar con Titan (Alt+T)" title="Conversar · Alt+T" onClick={() => (chatOpen ? setChatOpen(false) : openChat())}>
+                <MessageCircle size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label="Preferencias de Titan"
+                title="Preferencias"
+                onClick={() => {
+                  setPreferencesOpen(value => !value)
+                  setChatOpen(false)
+                }}
+              >
+                <Settings2 size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label="Minimizar a Titan"
+                title="Minimizar"
+                onClick={() => {
+                  setChatOpen(false)
+                  setPreferencesOpen(false)
+                  setMinimizedPersisted(true)
+                }}
+              >
+                <Minus size={15} />
+              </button>
+            </div>
 
-        <button
-          type="button"
-          aria-label="Preferencias de Titan"
-          onClick={() => {
-            peekRef.current = false
-            engineRef.current?.setPosition(
-              edgePosition(sideRef.current, levelRef.current),
-            )
-            setPreferencesOpen((value) => !value)
-            setChatOpen(false)
-          }}
-        >
-          <Settings2 size={16} />
-        </button>
-      </div>
-
-      <TitanAvatarCanvas
-        animation={avatarAnimation}
-        velocity={snapshot?.velocity ?? { x: 0, y: 0 }}
-        direction={snapshot?.direction ?? runtime.direction}
-        pointerX={pointer.x}
-        pointerY={pointer.y}
-        reducedMotion={preferences.reducedMotion}
-        onClick={() => {
-          peekRef.current = false
-          engineRef.current?.setPosition(
-            edgePosition(sideRef.current, levelRef.current),
-          )
-          setChatOpen((value) => !value)
-          setPreferencesOpen(false)
-        }}
-      />
+            <motion.button
+              type="button"
+              className="titan-dock__avatar"
+              aria-label={`Abrir Titan Assistant · ${theme.label}`}
+              whileHover={preferences.reducedMotion ? undefined : { scale: 1.04 }}
+              whileTap={preferences.reducedMotion ? undefined : { scale: 0.96 }}
+              transition={transition}
+              onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+            >
+              <TitanAvatarCanvas
+                animation={avatarAnimation}
+                followPointer={preferences.followPointer}
+                reducedMotion={preferences.reducedMotion}
+              />
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -211,6 +211,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 }
 
+/** Igual que useWorkspace, pero devuelve null fuera del proveedor. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOptionalWorkspace(): WorkspaceContextValue | null {
+  return useContext(WorkspaceContext) ?? null
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useWorkspace(): WorkspaceContextValue {
   const context = useContext(WorkspaceContext)

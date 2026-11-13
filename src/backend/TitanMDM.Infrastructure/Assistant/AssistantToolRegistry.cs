@@ -57,6 +57,26 @@ public sealed class AssistantToolRegistry
             .ToList();
     }
 
+    public IReadOnlyList<AssistantToolDescriptor> DescribeUnauthorized(
+        AssistantPrincipal principal)
+    {
+        return _tools
+            .Values
+            .Where(
+                tool =>
+                    !IsAuthorized(
+                        tool.Descriptor,
+                        principal))
+            .Select(
+                tool =>
+                    tool.Descriptor)
+            .OrderBy(
+                descriptor =>
+                    descriptor.Name,
+                    StringComparer.Ordinal)
+            .ToList();
+    }
+
     public async Task<AssistantToolResult> ExecuteAsync(
         string toolName,
         AssistantToolContext context,

@@ -222,7 +222,9 @@ public sealed class AssistantOrchestrator
             BuildSystemPrompt(
                 principal,
                 toolContext,
-                tools);
+                tools,
+                _toolRegistry.DescribeUnauthorized(
+                    principal));
 
         var messages =
             BuildHistory(
@@ -562,7 +564,8 @@ public sealed class AssistantOrchestrator
     private static string BuildSystemPrompt(
         AssistantPrincipal principal,
         AssistantToolContext toolContext,
-        IReadOnlyList<AssistantToolDescriptor> tools)
+        IReadOnlyList<AssistantToolDescriptor> tools,
+        IReadOnlyList<AssistantToolDescriptor> unauthorizedTools)
     {
         var builder =
             new StringBuilder();
@@ -576,7 +579,14 @@ public sealed class AssistantOrchestrator
         builder.AppendLine(
             $"- Usuario: {principal.DisplayName}");
         builder.AppendLine(
+            $"- Espacio de trabajo: {toolContext.Workspace ?? "inicio"}");
+        builder.AppendLine(
             $"- Módulo actual: {toolContext.Module ?? "desconocido"}");
+        if (toolContext.Route is not null)
+        {
+            builder.AppendLine(
+                $"- Pantalla: {toolContext.Route}");
+        }
         builder.AppendLine(
             $"- Alcance de organización: {(toolContext.Scope.OrganizationWide ? "total" : "por sitio")}");
         builder.AppendLine(
@@ -599,6 +609,26 @@ public sealed class AssistantOrchestrator
                     $"- {tool.Name}: {tool.Description}");
             }
         }
+
+        if (unauthorizedTools.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine(
+                "HERRAMIENTAS QUE EL ROL DEL USUARIO NO PUEDE USAR:");
+
+            foreach (var tool in unauthorizedTools)
+            {
+                builder.AppendLine(
+                    $"- {tool.Title} (requiere: {string.Join(", ", tool.RequiredPermissions)})");
+            }
+
+            builder.AppendLine(
+                "Si te pide algo que solo resuelven estas herramientas, explica con cortesía que su rol no tiene ese permiso y que un administrador puede concederlo. No lo intentes por otra vía.");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(
+            "Ajusta la ayuda al espacio de trabajo y la pantalla actuales.");
 
         builder.AppendLine();
         builder.AppendLine(

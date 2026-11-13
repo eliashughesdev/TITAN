@@ -35,6 +35,7 @@ import {
   useTitanAssistant,
   type TitanAnimationState,
 } from '../context/TitanAssistantContext'
+import { useOptionalWorkspace } from '../../workspace/WorkspaceContext'
 import '../styles/titan-agent-chat.css'
 
 type Connection =
@@ -128,6 +129,12 @@ export function TitanAgentChatPanel({
     setAnimation,
     clearMessage,
   } = useTitanAssistant()
+
+  // Contexto de cada mensaje: módulo, espacio de trabajo y pantalla.
+  // Los permisos no viajan desde el navegador: el backend los toma del
+  // token y solo ofrece al modelo las herramientas autorizadas.
+  const activeWorkspaceId =
+    useOptionalWorkspace()?.activeWorkspaceId ?? null
 
   const [capabilities, setCapabilities] =
     useState<TitanCapabilities | null>(null)
@@ -290,6 +297,8 @@ export function TitanAgentChatPanel({
               conversationId,
               message,
               module: page.module,
+              workspace: activeWorkspaceId,
+              route: page.pathname,
             },
             controller.signal,
           )
@@ -364,6 +373,8 @@ export function TitanAgentChatPanel({
       sending,
       conversationId,
       page.module,
+      page.pathname,
+      activeWorkspaceId,
       addLine,
       setAvatar,
     ],

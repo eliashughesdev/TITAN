@@ -192,6 +192,57 @@ public sealed class AssistantOrchestratorTests
     }
 
     [Fact]
+    public async Task ExecuteTurn_PromptIncluyeContextoYExplicaHerramientasNoAutorizadas()
+    {
+        var tool =
+            new StubTool(
+                new AssistantToolDescriptor(
+                    "devices.list",
+                    "Listar dispositivos",
+                    "desc",
+                    AssistantToolKind.Read,
+                    new[] { "devices.view" }));
+
+        var provider =
+            new ScriptedProvider(
+                "{\"toolCalls\":[],\"answer\":\"Tu rol no permite ver dispositivos.\"}");
+
+        var orchestrator =
+            CreateOrchestrator(
+                provider,
+                new IAssistantTool[] { tool });
+
+        var principal =
+            Principal();
+
+        var context =
+            Context(principal) with
+            {
+                Workspace = "android",
+                Route = "/devices",
+            };
+
+        await orchestrator.ExecuteTurnAsync(
+            principal,
+            context,
+            new AssistantTurnRequest(
+                null,
+                "Muéstrame los dispositivos",
+                "devices"));
+
+        var prompt =
+            provider.Requests[0].SystemPrompt;
+
+        Assert.Contains("Espacio de trabajo: android", prompt);
+        Assert.Contains("Pantalla: /devices", prompt);
+        Assert.Contains("NO PUEDE USAR", prompt);
+        Assert.Contains("Listar dispositivos (requiere: devices.view)", prompt);
+
+        // El nombre técnico no se ofrece: el modelo no puede invocarla.
+        Assert.DoesNotContain("- devices.list:", prompt);
+    }
+
+    [Fact]
     public async Task ExecuteTurn_WrapsToolDataAsUntrusted()
     {
         const string payload =

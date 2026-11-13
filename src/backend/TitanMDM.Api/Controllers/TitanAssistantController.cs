@@ -161,7 +161,9 @@ public sealed class TitanAssistantController
                 module,
                 HttpContext.Connection
                     .RemoteIpAddress
-                    ?.ToString());
+                    ?.ToString(),
+                SanitizeWorkspace(request.Workspace),
+                SanitizeRoute(request.Route));
 
         try
         {
@@ -292,5 +294,45 @@ public sealed class TitanAssistantController
     public sealed record AssistantMessageRequest(
         Guid? ConversationId,
         string? Message,
-        string? Module);
+        string? Module,
+        string? Workspace = null,
+        string? Route = null);
+
+    private static readonly HashSet<string> KnownWorkspaces =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "windows",
+            "android",
+            "inventory",
+            "helpdesk",
+            "administration",
+            "ponches",
+        };
+
+    /*
+     * El espacio de trabajo y la ruta llegan del navegador y se incluyen
+     * en el prompt: solo valores conocidos / caracteres de ruta seguros.
+     * Los permisos NUNCA se toman del cliente: salen del token.
+     */
+    private static string? SanitizeWorkspace(string? value)
+    {
+        var trimmed = value?.Trim();
+        return trimmed is not null && KnownWorkspaces.Contains(trimmed)
+            ? trimmed.ToLowerInvariant()
+            : null;
+    }
+
+    private static string? SanitizeRoute(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed) ||
+            trimmed.Length > 120 ||
+            trimmed[0] != '/' ||
+            !trimmed.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '-' or '_'))
+        {
+            return null;
+        }
+
+        return trimmed;
+    }
 }

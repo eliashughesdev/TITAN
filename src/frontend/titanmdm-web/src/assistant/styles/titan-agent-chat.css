@@ -8,9 +8,10 @@
   --chat-line: #e1e9f6;
   --chat-surface: #f8fbff;
 
-  --chat-blue: #2b63e8;
-  --chat-blue-deep: #1f4fd0;
-  --chat-blue-soft: #eef4ff;
+  /* Color del módulo activo (WorkspaceContext publica estas variables). */
+  --chat-blue: var(--workspace-primary, #2b63e8);
+  --chat-blue-deep: var(--workspace-primary-dark, #1f4fd0);
+  --chat-blue-soft: var(--workspace-soft, #eef4ff);
 
   --chat-ok: #1fa971;
   --chat-warn: #d9902a;

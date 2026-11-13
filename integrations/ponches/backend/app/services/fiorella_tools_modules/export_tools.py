@@ -11,6 +11,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from app.services.fiorella_tools import (
+    allowed,
+    denied,
     tool_search_punches,
 )
 
@@ -86,6 +88,10 @@ def export_punches_excel(
         ),
         5000,
     )
+
+    # Exportar exige su propio permiso, no solo poder consultar.
+    if not allowed(user, "reports.export"):
+        return denied(user, "reports.export")
 
     # --------------------------------------------------------
     # Obtener datos usando la tool existente

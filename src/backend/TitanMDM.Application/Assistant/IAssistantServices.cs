@@ -22,6 +22,15 @@ public interface IAssistantToolRegistry
         AssistantPrincipal principal);
 
     /// <summary>
+    /// Herramientas registradas que el rol del usuario NO puede usar.
+    /// Solo informa al modelo para que explique la negativa; nunca
+    /// habilita su ejecución.
+    /// </summary>
+    IReadOnlyList<AssistantToolDescriptor> DescribeUnauthorized(
+        AssistantPrincipal principal) =>
+        Array.Empty<AssistantToolDescriptor>();
+
+    /// <summary>
     /// Ejecuta una herramienta revalidando nombre y permisos
     /// en el backend. Una herramienta desconocida o no
     /// autorizada devuelve un resultado fallido, nunca ejecuta.

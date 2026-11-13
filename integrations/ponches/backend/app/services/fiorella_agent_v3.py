@@ -85,6 +85,13 @@ def _history_messages(
     return messages
 
 
+from app.services.fiorella_action_guard import (  # noqa: E402
+    RETRY_INSTRUCTION,
+    evaluate,
+    honest_answer,
+)
+
+
 async def procesar_mensaje_usuario(
     user: dict[str, Any],
     message: str,
@@ -156,100 +163,66 @@ async def procesar_mensaje_usuario(
     ]
 
     tools_used: list[str] = []
+    tool_records: list[dict[str, Any]] = []
 
     try:
-        response = await generate(
-            messages,
-            use_tools=True,
+        raw, used_model, tool_action = await _model_turn(
+            messages=messages,
+            user=user,
+            tools_used=tools_used,
+            tool_records=tool_records,
+            user_message=message,
         )
-
-        if not response.choices:
-            raise RuntimeError(
-                "OpenRouter no devolvió choices."
-            )
-
-        assistant_message = (
-            response.choices[0].message
-        )
-
-        native_calls = (
-            getattr(
-                assistant_message,
-                "tool_calls",
-                None,
-            )
-            or []
-        )
-
-        assistant_content = str(
-            getattr(
-                assistant_message,
-                "content",
-                "",
-            )
-            or ""
-        )
-
-        log.info(
-            "Fiorella assistant response: "
-            "content=%r tool_calls=%s",
-            assistant_content,
-            len(native_calls),
-        )
-        
-        tool_action = None
-        if native_calls:
-            raw, final_response, tool_action = (
-                await run_native_tool_calls(
-                assistant_message=assistant_message,
-                messages=messages,
-                user=user,
-                tools_used=tools_used,
-                user_message=message,
-            )
-        )
-
-            used_model = actual_model(
-                final_response,
-            )
-
-        else:
-            text_calls = parse_text_tool_calls(
-                assistant_content,
-            )
-
-            if text_calls:
-                raw, final_response, tool_action = (
-                    await run_text_tool_calls(
-                        assistant_content=assistant_content,
-                        messages=messages,
-                        user=user,
-                        tools_used=tools_used,
-                        user_message=message,
-                    )
-                )
-
-                used_model = actual_model(
-                    final_response,
-                )
-
-            else:
-                raw = assistant_content
-                used_model = actual_model(
-                    response,
-                )
 
         parsed = parse_response(
             raw,
         )
 
+        answer = str(
+            parsed.get(
+                "respuesta",
+                "Entendido.",
+            )
+        )
+
+        # Respuestas fantasma: el texto afirma una acción que el backend
+        # no ejecutó. Sin ninguna tool, se le pide al modelo una vez que
+        # la ejecute de verdad; si sigue sin hacerlo, se responde con
+        # honestidad (y, si hubo negativa por permisos, se explica).
+        verdict = evaluate(answer, tool_records)
+
+        if verdict.phantom and not tools_used:
+            log.warning(
+                "Fiorella afirmó una acción sin herramienta; se reintenta."
+            )
+            messages.append({"role": "assistant", "content": raw})
+            messages.append({"role": "system", "content": RETRY_INSTRUCTION})
+
+            raw, used_model, tool_action = await _model_turn(
+                messages=messages,
+                user=user,
+                tools_used=tools_used,
+                tool_records=tool_records,
+                user_message=message,
+            )
+            parsed = parse_response(raw)
+            answer = str(parsed.get("respuesta", "Entendido."))
+            verdict = evaluate(answer, tool_records)
+
+        verified = not verdict.phantom
+
+        if not verified:
+            log.warning(
+                "Fiorella: respuesta descartada por afirmar una acción no ejecutada. tools=%s",
+                tools_used,
+            )
+            answer = honest_answer(verdict)
+            parsed["animacion"] = "alert"
+            parsed["action"] = None
+            tool_action = None
+
         result = {
-            "respuesta": str(
-                parsed.get(
-                    "respuesta",
-                    "Entendido.",
-                )
-            ),
+            "respuesta": answer,
             "animacion": str(
                 parsed.get(
                     "animacion",
@@ -262,6 +235,7 @@ async def procesar_mensaje_usuario(
                     "action",
                 )
             ),
+            "verified": verified,
             "conversation_id": conversation_id,
             "tools_used": tools_used,
             "provider": "openrouter",
@@ -348,6 +322,103 @@ async def procesar_mensaje_usuario(
                 else None
             ),
         }
+
+
+async def _model_turn(
+    *,
+    messages: list[dict[str, Any]],
+    user: dict[str, Any],
+    tools_used: list[str],
+    tool_records: list[dict[str, Any]],
+    user_message: str,
+) -> tuple[str, Any, dict[str, Any] | None]:
+    """Una vuelta del modelo: respuesta directa o tools + respuesta final."""
+    message = user_message
+
+    response = await generate(
+        messages,
+        use_tools=True,
+    )
+
+    if not response.choices:
+        raise RuntimeError(
+            "OpenRouter no devolvió choices."
+        )
+
+    assistant_message = (
+        response.choices[0].message
+    )
+
+    native_calls = (
+        getattr(
+            assistant_message,
+            "tool_calls",
+            None,
+        )
+        or []
+    )
+
+    assistant_content = str(
+        getattr(
+            assistant_message,
+            "content",
+            "",
+        )
+        or ""
+    )
+
+    log.info(
+        "Fiorella assistant response: "
+        "content=%r tool_calls=%s",
+        assistant_content,
+        len(native_calls),
+    )
+    
+    tool_action = None
+    if native_calls:
+        raw, final_response, tool_action = (
+            await run_native_tool_calls(
+            assistant_message=assistant_message,
+            messages=messages,
+            user=user,
+            tools_used=tools_used,
+            user_message=message,
+            tool_records=tool_records,
+        )
+    )
+
+        used_model = actual_model(
+            final_response,
+        )
+
+    else:
+        text_calls = parse_text_tool_calls(
+            assistant_content,
+        )
+
+        if text_calls:
+            raw, final_response, tool_action = (
+                await run_text_tool_calls(
+                    assistant_content=assistant_content,
+                    messages=messages,
+                    user=user,
+                    tools_used=tools_used,
+                    user_message=message,
+                    tool_records=tool_records,
+                )
+            )
+
+            used_model = actual_model(
+                final_response,
+            )
+
+        else:
+            raw = assistant_content
+            used_model = actual_model(
+                response,
+            )
+
+    return raw, used_model, tool_action
 
 
 procesar_mensaje_usuario_v3 = procesar_mensaje_usuario

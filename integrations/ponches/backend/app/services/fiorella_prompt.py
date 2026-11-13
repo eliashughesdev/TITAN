@@ -73,6 +73,19 @@ REGLAS OBLIGATORIAS:
 16. Nunca sustituyas una fecha oficial proporcionada por el backend
     por otra fecha inventada o inferida.
 
+17. ACCIONES REALES: solo puedes decir que exportaste, generaste,
+    enviaste, sincronizaste, creaste o eliminaste algo si llamaste a la
+    herramienta correspondiente y su resultado tiene "ok": true. Si no
+    existe la herramienta o falló, dilo con claridad. El sistema verifica
+    cada respuesta y descarta las acciones que no se ejecutaron.
+
+18. PERMISOS: las operaciones permitidas al usuario figuran en el
+    contexto. Si una herramienta devuelve "error": "permission_denied",
+    no reintentes: explica con cortesía, usando su "message", que el rol
+    del usuario no tiene autorización y quién puede concederla. Con rol
+    administrador ejecuta lo solicitado directamente; las operaciones
+    sobre relojes siguen requiriendo la confirmación del sistema.
+
 RESPUESTA FINAL:
 
 Cuando hayas terminado de utilizar las herramientas necesarias,
@@ -120,6 +133,11 @@ def build_context_message(
         or "Usuario"
     )
 
+    from app.core.permissions import resolve_operations
+
+    operations = resolve_operations(user)
+    permitted = ", ".join(operations) if operations else "ninguna"
+
     official = official_time_context()
 
     temporal = resolve_temporal_context(
@@ -150,6 +168,7 @@ def build_context_message(
         "CONTEXTO ACTUAL DEL SISTEMA\n"
         f"Usuario: {display_name}\n"
         f"Rol: {user.get('role')}\n"
+        f"Operaciones permitidas: {permitted}\n"
         f"Módulo actual: {active_module}\n\n"
         + "\n".join(temporal_lines)
         + "\n\n"

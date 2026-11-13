@@ -75,6 +75,7 @@ async def run_native_tool_calls(
     ],
     tools_used: list[str],
     user_message: str,
+    tool_records: list[dict[str, Any]] | None = None,
 ) -> tuple[
     str,
     Any,
@@ -95,9 +96,11 @@ async def run_native_tool_calls(
     )
 
 
+    # Si el llamador pasa tool_records, recibe los mismos resultados
+    # (verificación de acciones en fiorella_action_guard).
     tool_results: list[
         dict[str, Any]
-    ] = []
+    ] = tool_records if tool_records is not None else []
 
     backend_action: dict[str, Any] | None = None
 
@@ -272,6 +275,7 @@ async def run_text_tool_calls(
     ],
     tools_used: list[str],
     user_message: str,
+    tool_records: list[dict[str, Any]] | None = None,
 ) -> tuple[
     str,
     Any,
@@ -293,9 +297,11 @@ async def run_text_tool_calls(
         )
 
 
+    # Si el llamador pasa tool_records, recibe los mismos resultados
+    # (verificación de acciones en fiorella_action_guard).
     tool_results: list[
         dict[str, Any]
-    ] = []
+    ] = tool_records if tool_records is not None else []
 
     backend_action: dict[str, Any] | None = None
 

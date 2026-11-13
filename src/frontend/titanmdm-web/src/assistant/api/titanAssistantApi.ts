@@ -88,7 +88,12 @@ export interface TitanConversation {
 export interface TitanTurnRequest {
   conversationId?: string | null
   message: string
+  /** Pantalla funcional (dashboard, devices, policies...). */
   module?: string | null
+  /** Espacio de trabajo activo (windows, android, inventory, helpdesk...). */
+  workspace?: string | null
+  /** Ruta actual, para ayuda contextual. */
+  route?: string | null
 }
 
 export function toolKindOf(

@@ -60,7 +60,9 @@ public sealed record AssistantToolContext(
     AuthorizationScopeSnapshot Scope,
     IReadOnlyCollection<Guid> AccessibleSiteIds,
     string? Module,
-    string? IpAddress = null);
+    string? IpAddress = null,
+    string? Workspace = null,
+    string? Route = null);
 
 /// <summary>
 /// Descripción pública de una herramienta. El backend es

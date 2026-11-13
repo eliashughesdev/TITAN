@@ -212,6 +212,8 @@ describe('TitanAgentChatPanel', () => {
         conversationId: null,
         message: 'cuantos dispositivos',
         module: 'devices',
+        workspace: null,
+        route: '/devices',
       },
       expect.any(AbortSignal),
     )
