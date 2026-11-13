@@ -46,7 +46,9 @@ param(
     [int]$HttpsPort = 443,
     [string]$CertificateThumbprint = "",
 
-    [string]$ServiceName = "TitanMDM.Api",
+    [string]$ServiceName = "TitanMDMService",
+    # Nombre usado por versiones anteriores: se migran sus secretos y se deshabilita.
+    [string]$LegacyServiceName = "TitanMDM.Api",
     [string]$ServiceAccount = "",
     [System.Management.Automation.PSCredential]$ServiceCredential,
     [string]$ApiBindAddress = "127.0.0.1",
@@ -183,6 +185,21 @@ if ($allowed -notmatch "HTTP_X_FORWARDED_PROTO") {
 # ============================================================
 
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+# Instalaciones anteriores registraban el servicio como TitanMDM.Api.
+$legacyService = $null
+if ($LegacyServiceName -and $LegacyServiceName -ne $ServiceName) {
+    $legacyService = Get-Service -Name $LegacyServiceName -ErrorAction SilentlyContinue
+}
+
+if ($legacyService) {
+    Write-Step "Deshabilitando el servicio anterior $LegacyServiceName (sus secretos pasan a $ServiceName)"
+    if ($legacyService.Status -ne "Stopped") {
+        Stop-Service $LegacyServiceName -Force
+        (Get-Service $LegacyServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(60))
+    }
+    Set-Service $LegacyServiceName -StartupType Disabled
+}
 
 if ($existingService -and $existingService.Status -ne "Stopped") {
     Write-Step "Deteniendo servicio $ServiceName"
@@ -390,9 +407,15 @@ if ($SecretsFile) {
 $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
 $existingEnvironment = @((Get-ItemProperty $serviceKey -Name Environment -ErrorAction SilentlyContinue).Environment)
 
+$legacyEnvironment = @()
+if ($legacyService) {
+    $legacyEnvironment = @((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$LegacyServiceName" -Name Environment -ErrorAction SilentlyContinue).Environment)
+}
+
 # Conservar valores previos no redefinidos (actualizaciones sin -SecretsFile).
+# Orden: servicio anterior < servicio actual < valores de esta instalacion.
 $merged = [ordered]@{}
-foreach ($line in $existingEnvironment) {
+foreach ($line in @($legacyEnvironment) + @($existingEnvironment)) {
     if ($line -match "^([^=]+)=(.*)$") { $merged[$Matches[1]] = $Matches[2] }
 }
 foreach ($name in $environmentValues.Keys) { $merged[$name] = $environmentValues[$name] }

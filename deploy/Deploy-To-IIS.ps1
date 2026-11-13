@@ -41,7 +41,7 @@ param(
     [switch]$Install,
     [string]$InstallRoot = "C:\inetpub\TitanMDM",
     [string]$SiteName = "TitanMDM",
-    [string]$ServiceName = "TitanMDM.Api",
+    [string]$ServiceName = "TitanMDMService",
     [string]$HostName = "",
     [string]$CertificateThumbprint = "",
     [string]$SecretsFile = "",

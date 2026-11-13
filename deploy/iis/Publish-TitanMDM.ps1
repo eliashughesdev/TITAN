@@ -169,6 +169,9 @@ Get-ChildItem $PSScriptRoot -File |
     Where-Object { $_.Name -ne "Publish-TitanMDM.ps1" } |
     Copy-Item -Destination $deployOut -Force
 
+# Instalacion como servicio de Windows sin IIS (usa ..\api y ..\ponches del paquete).
+Copy-Item (Join-Path $root "deploy\Install-WindowsService.ps1") $deployOut -Force
+
 $commit = (& git -C $root rev-parse --short HEAD 2>$null)
 
 @{

@@ -8,11 +8,11 @@ Navegador / Agentes ──HTTPS──► IIS (sitio TitanMDM)
                                  ├─ /api/*       → ARR proxy → 127.0.0.1:8020
                                  └─ /hubs/*      → ARR proxy (WebSockets) → 127.0.0.1:8020
                                                      │
-                       Servicio Windows TitanMDM.Api (Kestrel, .NET 10)
+                       Servicio Windows TitanMDMService (Kestrel, .NET 10)
                                                      │
                                 SQL Server (TitanMdmDatabase / ItamDatabase)
                        Python Ponches/Fiorella (uvicorn 127.0.0.1:8127), proceso hijo
-                       supervisado por TitanMDM.Api (PythonServiceSupervisor)
+                       supervisado por TitanMDMService (PythonServiceSupervisor)
 ```
 
 El API escucha solo en loopback. IIS es el único punto de entrada público y se encarga del TLS, la compresión y las cabeceras de seguridad. Si los agentes ya instalados apuntan a `http://servidor:8020`, instale con `-ApiBindAddress 0.0.0.0 -OpenApiFirewallPort` o reconfigúrelos con la URL pública de IIS.
@@ -41,6 +41,23 @@ El API escucha solo en loopback. IIS es el único punto de entrada público y se
     -CertificateThumbprint <huella> -SecretsFile C:\TitanMDM-Secrets\titanmdm.secrets.json
 ```
 
+## Solo servicio de Windows (sin IIS)
+
+`deploy\Install-WindowsService.ps1` instala el API como **TitanMDMService**: toma el binario Release (el `api\` del paquete o `dotnet publish -c Release` desde el repositorio), lo copia a `%ProgramFiles%\TitanMDMpi`, prepara Python en `%ProgramFiles%\TitanMDM\ponches` y registra el servicio con `sc.exe`:
+
+- Inicio **automático** con Windows (`-StartupType AutomaticDelayed` para retrasarlo).
+- Recuperación: reinicio a los 5 s, 15 s y 60 s, con el contador a cero cada 24 h, también si el proceso termina con error.
+- Cuenta virtual `NT SERVICE\TitanMDMService` con permisos mínimos.
+- Al arrancar el servicio, el API lanza Python. Si Python cae, lo reinicia, y al detener el servicio lo termina sin dejar huérfanos.
+
+```powershell
+.\deploy\Install-WindowsService.ps1 -ValidateOnly                       # comprueba sin cambiar nada
+.\deploy\Install-WindowsService.ps1 -SecretsFile C:\TitanMDM-Secrets	itanmdm.secrets.json -OpenFirewall
+.\deploy\Install-WindowsService.ps1 -Uninstall                          # quita el servicio, conserva datos
+```
+
+Si existe el servicio de versiones anteriores (`TitanMDM.Api`), ambos instaladores copian sus secretos al nuevo servicio y lo deshabilitan, para que no compitan por el puerto.
+
 ## 1. Generar el paquete (en la máquina de build)
 
 ```powershell
@@ -51,7 +68,7 @@ El script verifica los tipos del frontend, construye Vite (incluye `public\web.c
 
 ## 2. Secretos
 
-Copie `titanmdm.secrets.example.json` **fuera del repositorio**, por ejemplo a `C:\TitanMDM-Secrets\titanmdm.secrets.json`, y complételo. El instalador guarda esos valores como variables de entorno del servicio, en `HKLM\SYSTEM\CurrentControlSet\Services\TitanMDM.Api\Environment`, con ACL restringida a SYSTEM y Administradores. Nunca quedan en `appsettings`.
+Copie `titanmdm.secrets.example.json` **fuera del repositorio**, por ejemplo a `C:\TitanMDM-Secrets\titanmdm.secrets.json`, y complételo. El instalador guarda esos valores como variables de entorno del servicio, en `HKLM\SYSTEM\CurrentControlSet\Services\TitanMDMService\Environment`, con ACL restringida a SYSTEM y Administradores. Nunca quedan en `appsettings`.
 
 Claves obligatorias: `ConnectionStrings__TitanMdmDatabase`, `Jwt__SigningKey` (al menos 32 caracteres), `Jwt__Issuer` y `Jwt__Audience`.
 
@@ -80,20 +97,20 @@ El supervisor no hereda a Python los secretos del API (`ConnectionStrings__*`, `
 
 El script es idempotente: vuelva a ejecutarlo con un paquete nuevo para actualizar. Antes de copiar respalda la versión anterior en `InstallRoot\backup\` y conserva los 5 respaldos más recientes. En una actualización `-SecretsFile` es opcional, porque se conservan los valores ya guardados.
 
-### Servicio `TitanMDM.Api`
+### Servicio `TitanMDMService`
 
 - Usa el soporte nativo de .NET (`UseWindowsService`). El content root es la carpeta publicada.
 - Inicio automático retrasado. Ante un fallo se reinicia a los 10 s, 30 s y 60 s.
-- Corre con la cuenta virtual `NT SERVICE\TitanMDM.Api`. Para SQL con autenticación integrada:
+- Corre con la cuenta virtual `NT SERVICE\TitanMDMService`. Para SQL con autenticación integrada:
   - SQL en otro servidor: conceda acceso a la cuenta de equipo `DOMINIO\SERVIDOR$`.
-  - SQL local: conceda acceso al login `NT SERVICE\TitanMDM.Api`.
+  - SQL local: conceda acceso al login `NT SERVICE\TitanMDMService`.
   - También puede usar `-ServiceCredential` con una gMSA o cuenta de servicio.
 - Los logs van al Visor de eventos, en *Aplicación*, con origen `TitanMDM.Api`.
 - Si no hay SQL disponible al arrancar, el servicio termina con un mensaje explícito y el SCM lo reintenta.
 
 ### Python (Ponches / Fiorella)
 
-- `-PonchesMode Supervised` (por defecto): el código va a `InstallRoot\ponches` y TitanMDM.Api lo lanza al arrancar. Si Python cae, se reinicia a los 5 s, con espera creciente hasta 60 s si cae al arrancar. Al detener el servicio se termina el proceso. Además, un Job Object de Windows evita procesos huérfanos aunque el API muera de golpe. Si ya hay algo escuchando en el puerto (stack de desarrollo, servicio NSSM), no lanza otra instancia.
+- `-PonchesMode Supervised` (por defecto): el código va a `InstallRoot\ponches` y TitanMDMService lo lanza al arrancar. Si Python cae, se reinicia a los 5 s, con espera creciente hasta 60 s si cae al arrancar. Al detener el servicio se termina el proceso. Además, un Job Object de Windows evita procesos huérfanos aunque el API muera de golpe. Si ya hay algo escuchando en el puerto (stack de desarrollo, servicio NSSM), no lanza otra instancia.
 - En cada actualización se conservan `.venv`, `.env` y `data\`. Si existía el servicio NSSM `TitanMDM.Ponches`, se detiene y se deshabilita.
 - `-PonchesMode Nssm -PonchesDir ... -NssmPath ...`: modo anterior, con servicio separado.
 - `-PonchesMode None`: sin Python. Helpdesk, MDM e ITAM siguen funcionando.
@@ -111,7 +128,7 @@ En producción el frontend y el API comparten origen gracias al proxy de IIS, as
 ```powershell
 Invoke-WebRequest http://127.0.0.1:8020/api/health/ready      # directo
 Invoke-WebRequest https://titanmdm.empresa.local/api/health/ready  # vía IIS
-Get-Service TitanMDM.Api
+Get-Service TitanMDMService
 Invoke-WebRequest http://127.0.0.1:8127/        # Python (supervisado por el API)
 Get-WinEvent -ProviderName TitanMDM.Api -MaxEvents 50 | Where-Object Message -like "*Python*"
 ```
@@ -119,8 +136,8 @@ Get-WinEvent -ProviderName TitanMDM.Api -MaxEvents 50 | Where-Object Message -li
 ## Rollback
 
 ```powershell
-Stop-Service TitanMDM.Api
+Stop-Service TitanMDMService
 robocopy C:\inetpub\TitanMDM\backup\<fecha>\api C:\inetpub\TitanMDM\api /MIR
 robocopy C:\inetpub\TitanMDM\backup\<fecha>\web C:\inetpub\TitanMDM\web /MIR
-Start-Service TitanMDM.Api
+Start-Service TitanMDMService
 ```
